@@ -1,0 +1,33 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <defs>
+    <linearGradient id="bgGrad512" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#0f172a"/>
+      <stop offset="50%" stop-color="#1e1b4b"/>
+      <stop offset="100%" stop-color="#090d16"/>
+    </linearGradient>
+    <linearGradient id="goldGrad512" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#fbbf24"/>
+      <stop offset="100%" stop-color="#d97706"/>
+    </linearGradient>
+    <linearGradient id="meshGrad512" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#38bdf8"/>
+      <stop offset="100%" stop-color="#818cf8"/>
+    </linearGradient>
+  </defs>
+  <rect width="512" height="512" rx="100" fill="url(#bgGrad512)"/>
+  <!-- Mesh interconnected nodes -->
+  <circle cx="150" cy="170" r="28" fill="url(#meshGrad512)"/>
+  <circle cx="362" cy="170" r="28" fill="url(#meshGrad512)"/>
+  <circle cx="256" cy="350" r="36" fill="url(#goldGrad512)"/>
+  <circle cx="256" cy="190" r="22" fill="#38bdf8"/>
+  <!-- Mesh links -->
+  <line x1="150" y1="170" x2="256" y2="190" stroke="#60a5fa" stroke-width="8" stroke-dasharray="10 6"/>
+  <line x1="362" y1="170" x2="256" y2="190" stroke="#60a5fa" stroke-width="8" stroke-dasharray="10 6"/>
+  <line x1="150" y1="170" x2="256" y2="350" stroke="#fbbf24" stroke-width="8"/>
+  <line x1="362" y1="170" x2="256" y2="350" stroke="#fbbf24" stroke-width="8"/>
+  <line x1="256" y1="190" x2="256" y2="350" stroke="#38bdf8" stroke-width="8"/>
+  <!-- Crown inside center node -->
+  <path d="M 236 330 L 246 312 L 256 324 L 266 312 L 276 330 Z" fill="#ffffff"/>
+  <text x="256" y="445" text-anchor="middle" fill="#f8fafc" font-family="system-ui, sans-serif" font-weight="900" font-size="44" letter-spacing="4">SAS4ERP</text>
+  <text x="256" y="475" text-anchor="middle" fill="#94a3b8" font-family="system-ui, sans-serif" font-weight="600" font-size="18" letter-spacing="1">OFFLINE &amp; MESH RESILIENT</text>
+</svg>

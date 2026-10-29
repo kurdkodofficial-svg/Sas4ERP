@@ -1,0 +1,113 @@
+<!doctype html>
+<html lang="en" dir="ltr">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>SAS4ERP - Holding Multi-Company ERP</title>
+    <meta name="description" content="Enterprise Multi-Company & Multi-Project Holding ERP with Trilingual Support (English, Kurdish, Arabic), Holding Owner Approvals, Live Gate Scanner Automation, and Video Meetings." />
+    <meta property="og:title" content="SAS4ERP - Holding Multi-Company ERP" />
+    <meta property="og:description" content="Enterprise Multi-Company & Multi-Project Holding ERP with Trilingual Support (English, Kurdish, Arabic), Holding Owner Approvals, Live Gate Scanner Automation, and Video Meetings." />
+    <meta property="og:type" content="website" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <link rel="manifest" href="/manifest.json" />
+    <meta name="theme-color" content="#0f172a" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <link rel="apple-touch-icon" href="/icon-192.svg" />
+    <script>
+      // Suppress Vite HMR WebSocket connection errors as per environment instructions:
+      // "HMR: Disabled. Ignore WebSocket errors."
+      (function() {
+        var originalError = console.error;
+        var originalWarn = console.warn;
+        function isViteWsError(args) {
+          for (var i = 0; i < args.length; i++) {
+            var str = String((args[i] && (args[i].message || args[i].stack || args[i])) || '');
+            if (str.includes('[vite]') || str.includes('WebSocket') || str.includes('websocket')) {
+              return true;
+            }
+          }
+          return false;
+        }
+        console.error = function() {
+          if (isViteWsError(arguments)) return;
+          return originalError.apply(console, arguments);
+        };
+        console.warn = function() {
+          if (isViteWsError(arguments)) return;
+          return originalWarn.apply(console, arguments);
+        };
+
+        window.addEventListener('unhandledrejection', function(event) {
+          var reason = event.reason;
+          var msg = String((reason && (reason.message || reason.stack || reason)) || '');
+          if (msg.includes('WebSocket') || msg.includes('websocket') || msg.includes('[vite]')) {
+            event.preventDefault();
+            event.stopImmediatePropagation();
+          }
+        }, true);
+
+        window.addEventListener('error', function(event) {
+          var msg = String(event.message || '');
+          if (msg.includes('WebSocket') || msg.includes('websocket') || msg.includes('[vite]')) {
+            event.preventDefault();
+            event.stopImmediatePropagation();
+          }
+        }, true);
+
+        // Stub WebSocket if Vite client attempts to connect to vite-hmr
+        if (typeof window !== 'undefined' && window.WebSocket) {
+          var OriginalWS = window.WebSocket;
+          var DummyWS = function(url, protocols) {
+            var isHmr = false;
+            if (typeof url === 'string' && (url.includes('vite') || url.includes('/vite-hmr'))) isHmr = true;
+            if (protocols === 'vite-hmr' || (Array.isArray(protocols) && protocols.includes('vite-hmr'))) isHmr = true;
+            if (isHmr) {
+              var target = new EventTarget();
+              target.readyState = 1; // OPEN
+              target.url = url;
+              target.protocol = protocols || '';
+              target.send = function() {};
+              target.close = function() {};
+              target.onopen = null;
+              target.onmessage = null;
+              target.onerror = null;
+              target.onclose = null;
+              return target;
+            }
+            return new OriginalWS(url, protocols);
+          };
+          DummyWS.prototype = OriginalWS.prototype;
+          DummyWS.CONNECTING = 0;
+          DummyWS.OPEN = 1;
+          DummyWS.CLOSING = 2;
+          DummyWS.CLOSED = 3;
+          window.WebSocket = DummyWS;
+        }
+      })();
+    </script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=Vazirmatn:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+  </head>
+  <body class="bg-[#F4F7FA] text-slate-800 antialiased selection:bg-blue-600 selection:text-white">
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+    <script>
+      // Register SAS4ERP Offline PWA Service Worker
+      if ('serviceWorker' in navigator && window.location.protocol.startsWith('http')) {
+        window.addEventListener('load', function() {
+          navigator.serviceWorker.register('/sw.js')
+            .then(function(reg) {
+              console.log('[SAS4ERP] PWA Offline Service Worker registered:', reg.scope);
+            })
+            .catch(function(err) {
+              console.log('[SAS4ERP] Service Worker note:', err);
+            });
+        });
+      }
+    </script>
+  </body>
+</html>
+

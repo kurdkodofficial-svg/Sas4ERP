@@ -1,0 +1,32 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 192 192" width="192" height="192">
+  <defs>
+    <linearGradient id="bgGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#0f172a"/>
+      <stop offset="50%" stop-color="#1e1b4b"/>
+      <stop offset="100%" stop-color="#1e293b"/>
+    </linearGradient>
+    <linearGradient id="goldGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#fbbf24"/>
+      <stop offset="100%" stop-color="#d97706"/>
+    </linearGradient>
+    <linearGradient id="meshGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#38bdf8"/>
+      <stop offset="100%" stop-color="#6366f1"/>
+    </linearGradient>
+  </defs>
+  <rect width="192" height="192" rx="40" fill="url(#bgGrad)"/>
+  <!-- Mesh interconnected nodes symbol -->
+  <circle cx="56" cy="64" r="10" fill="url(#meshGrad)"/>
+  <circle cx="136" cy="64" r="10" fill="url(#meshGrad)"/>
+  <circle cx="96" cy="132" r="12" fill="url(#goldGrad)"/>
+  <circle cx="96" cy="74" r="8" fill="#38bdf8"/>
+  <!-- Mesh links -->
+  <line x1="56" y1="64" x2="96" y2="74" stroke="#60a5fa" stroke-width="3" stroke-dasharray="4 2"/>
+  <line x1="136" y1="64" x2="96" y2="74" stroke="#60a5fa" stroke-width="3" stroke-dasharray="4 2"/>
+  <line x1="56" y1="64" x2="96" y2="132" stroke="#fbbf24" stroke-width="3"/>
+  <line x1="136" y1="64" x2="96" y2="132" stroke="#fbbf24" stroke-width="3"/>
+  <line x1="96" y1="74" x2="96" y2="132" stroke="#38bdf8" stroke-width="3"/>
+  <!-- Crown on bottom center node -->
+  <path d="M 88 124 L 92 116 L 96 122 L 100 116 L 104 124 Z" fill="#fbbf24"/>
+  <text x="96" y="170" text-anchor="middle" fill="#f8fafc" font-family="system-ui, sans-serif" font-weight="900" font-size="16" letter-spacing="2">SAS4ERP</text>
+</svg>

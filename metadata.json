@@ -1,0 +1,6 @@
+{
+  "name": "SAS4ERP",
+  "description": "Enterprise Multi-Company & Multi-Project Holding ERP with Trilingual Support (English, Kurdish, Arabic), Holding Owner Approvals, Live Gate Scanner Automation, Video Meetings, and Full Departmental Management.",
+  "requestFramePermissions": ["camera", "microphone"],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
