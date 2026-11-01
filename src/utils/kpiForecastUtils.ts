@@ -15,6 +15,8 @@ export interface ForecastPoint {
 export interface SectorForecastResult {
   sectorId: string;
   sectorName: string;
+  sectorNameKu?: string;
+  sectorNameAr?: string;
   sectorCode: string;
   color: string;
   currentMonthSpentUSD: number;
@@ -212,6 +214,8 @@ export const computeSpendingForecast = (
     return {
       sectorId: sec.id,
       sectorName: sec.name,
+      sectorNameKu: sec.nameKu,
+      sectorNameAr: sec.nameAr,
       sectorCode: sec.code,
       color: sec.color,
       currentMonthSpentUSD: secLastSpent,

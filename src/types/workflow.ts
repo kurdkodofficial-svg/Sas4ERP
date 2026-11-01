@@ -148,3 +148,45 @@ export interface GMEvaluationResult {
   isOverAmountThreshold: boolean;
 }
 
+export type OfficialSealScope = 'HOLDING' | 'COMPANY' | 'PROJECT' | 'DEPARTMENT';
+export type OfficialSealShape = 'CIRCULAR' | 'DOUBLE_RING' | 'OVAL' | 'RECTANGULAR';
+
+export interface OfficialSealTemplate {
+  id: string;
+  name: string;
+  nameKu?: string;
+  nameAr?: string;
+  scope: OfficialSealScope;
+  entityId: string;
+  entityName: string;
+  entityNameKu?: string;
+  departmentName?: string;
+  shape: OfficialSealShape;
+  colorHex: string;
+  centerEmblem: 'CROWN' | 'SHIELD' | 'BUILDING' | 'EAGLE' | 'SCALES' | 'CHECK';
+  statusBadgeText: string;
+  registrationNumber?: string;
+  establishedYear?: string;
+  customImageDataUrl?: string;
+  rotationDeg?: number;
+  createdAt: string;
+}
+
+export interface DigitalSignatureData {
+  signatureDataUrl: string;
+  signatureType: 'DRAW' | 'TYPE' | 'UPLOAD' | 'SAVED';
+  sealDataUrl?: string;
+  sealTemplateId?: string;
+  sealScope: OfficialSealScope;
+  signerName: string;
+  signerRole: string;
+  encryptedTimestamp: string;
+  uniqueKey: string;
+  certificateSerial: string;
+  securityHash: string;
+  signaturePosition: { x: number; y: number };
+  sealPosition: { x: number; y: number };
+  badgePosition: { x: number; y: number };
+  isVerified: boolean;
+  pinVerified: boolean;
+}

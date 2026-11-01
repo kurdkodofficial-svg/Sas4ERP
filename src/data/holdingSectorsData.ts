@@ -11,6 +11,8 @@ export const getHoldingSectorsData = (companies: Company[] = [], projects: Proje
       nameKu: 'کەرتی بیناسازی و ژێرخانی گشتی',
       nameAr: 'قطاع الإنشاءات والبنية التحتية',
       description: 'Major civil works, roads, bridges, reinforced concrete, and heavy foundation engineering.',
+      descriptionKu: 'پرۆژە گەورەکانی بیناسازی، ڕێگاوبان، پردەکان، کۆنکرێتی چەکدار و ئەندازیاری بناغە.',
+      descriptionAr: 'أعمال الهندسة المدنية الكبرى، الطرق، الجسور، الخرسانة المسلحة وهندسة الأساسات.',
       color: '#2563eb', // Royal Blue
       annualBudgetUSD: 42500000,
       spentUSD: 34800000,
@@ -54,6 +56,8 @@ export const getHoldingSectorsData = (companies: Company[] = [], projects: Proje
       nameKu: 'کەرتی وزە، بەرهەمهێنانی کارەبا و سووتەمەنی',
       nameAr: 'قطاع الطاقة وتوليد الكهرباء والوقود',
       description: 'Thermal gas turbines, electrical substations, industrial diesel generation, and grid synchronizers.',
+      descriptionKu: 'تۆڕباینی غازی، وێستگەکانی کارەبا، بەرهەمهێنانی دیزڵی پیشەسازی و هاوئاهەنگکەرەکانی تۆڕ.',
+      descriptionAr: 'توربينات الغاز، المحطات الكهربائية الفرعية، توليد الديزل الصناعي والمزامنة الكهربائية.',
       color: '#eab308', // Amber / Yellow
       annualBudgetUSD: 28000000,
       spentUSD: 24200000,
@@ -95,6 +99,8 @@ export const getHoldingSectorsData = (companies: Company[] = [], projects: Proje
       nameKu: 'کەرتی نیشتەجێبوون و پەرەپێدانی بازرگانی',
       nameAr: 'قطاع التطوير العقاري والمجمعات التجارية',
       description: 'Luxury residential towers, mixed-use corporate headquarters, retail plazas, and master planning.',
+      descriptionKu: 'تاوەرە گرانبەهاکانی نیشتەجێبوون، بارەگای بازرگانی، مۆڵەکان و ماستەرپلان.',
+      descriptionAr: 'الأبراج السكنية الفاخرة، مقرات الشركات، المراكز التجارية والتخطيط الرئيسي.',
       color: '#7c3aed', // Purple
       annualBudgetUSD: 36000000,
       spentUSD: 29400000,
@@ -136,6 +142,8 @@ export const getHoldingSectorsData = (companies: Company[] = [], projects: Proje
       nameKu: 'کەرتی لۆجستی، گواستنەوە و دابینکردن',
       nameAr: 'قطاع النقل والخدمات اللوجستية وسلاسل الإمداد',
       description: 'Fleet operations, long-haul trailers, border customs clearance, and automated warehouse hubs.',
+      descriptionKu: 'بەڕێوەبردنی کەشتیگەلی بارهەڵگر، تڕێلە درێژەکان، ڕێکاری گومرگی سنووری و کۆگای ئۆتۆماتیکی.',
+      descriptionAr: 'إدارة أسطول النقل، الشاحنات الثقيلة، التخليص الجمركي الحدودي والمستودعات المؤتمتة.',
       color: '#0284c7', // Sky / Cyan Blue
       annualBudgetUSD: 19500000,
       spentUSD: 15900000,
@@ -177,6 +185,8 @@ export const getHoldingSectorsData = (companies: Company[] = [], projects: Proje
       nameKu: 'کەرتی پیشەسازی، بەرهەمهێنان و کەرەستە',
       nameAr: 'قطاع التصنيع الصناعي وإنتاج المواد',
       description: 'Pre-cast concrete fabrication, structural steel fabrication, plastic piping, and industrial assembly.',
+      descriptionKu: 'بەرهەمهێنانی کۆنکرێتی پێشوەخت، دروستکردنی پەیکەری ئاسن، بۆڕی پلاستیک و داڕشتنی پیشەسازی.',
+      descriptionAr: 'تصنيع الخرسانة الجاهزة، الهياكل الفولاذية، الأنابيب البلاستيكية والتجميع الصناعي.',
       color: '#10b981', // Emerald Green
       annualBudgetUSD: 22000000,
       spentUSD: 18700000,
@@ -218,6 +228,8 @@ export const getHoldingSectorsData = (companies: Company[] = [], projects: Proje
       nameKu: 'کەرتی تەکنەلۆژیا، گەیاندن و سیستەمی دیجیتاڵی',
       nameAr: 'قطاع التكنولوجيا والاتصالات والأنظمة الرقمية',
       description: 'Enterprise ERP, fiber-optic distribution, secure server rooms, corporate cybersecurity, and IoT telemetry.',
+      descriptionKu: 'سیستەمی ERPی پێشکەوتوو، تۆڕی فایبەر، ژووری سێرڤەری پارێزراو، ئاسایشی ئەلیکترۆنی و ئینتەرنێتی شتەکان.',
+      descriptionAr: 'منظومة ساس السحابية، توزيع الألياف الضوئية، غرف الخوادم المحمية، الأمن السيبراني وإنترنت الأشياء.',
       color: '#6366f1', // Indigo
       annualBudgetUSD: 12000000,
       spentUSD: 9300000,
@@ -259,6 +271,8 @@ export const getHoldingSectorsData = (companies: Company[] = [], projects: Proje
       nameKu: 'کەرتی کەمپەکان، نیشتەجێبوون و خزمەتگوزاری',
       nameAr: 'قطاع المرافق ومخيمات السكن والخدمات اللوجستية',
       description: 'Camp accommodation for specialists, central industrial catering, site clinics, and 24/7 security perimeter.',
+      descriptionKu: 'نیشتەجێبوونی کەمپی پسپۆڕان، خۆراک و کەیتەرینگی پیشەسازی، کلینیکی مەیدانی و پاسەوانی ۲۴ کاتژمێری.',
+      descriptionAr: 'إعاشة عمال وخبراء المواقع، الإعاشة المركزية، العيادات الميدانية والحراسة الأمنية الشاملة.',
       color: '#f97316', // Orange
       annualBudgetUSD: 8500000,
       spentUSD: 6800000,

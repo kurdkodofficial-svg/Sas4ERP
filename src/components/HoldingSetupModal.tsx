@@ -28,6 +28,8 @@ export const HoldingSetupModal: React.FC = () => {
     restoreSampleData,
     isHoldingSetupOpen,
     setIsHoldingSetupOpen,
+    companies,
+    setActiveTab,
   } = useERP();
 
   const { t, language } = useLanguage();
@@ -412,6 +414,38 @@ export const HoldingSetupModal: React.FC = () => {
                 />
               </div>
             </div>
+          </div>
+
+          {/* Subsidiary Companies Quick Overview & Management */}
+          <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200 flex items-center justify-between gap-3">
+            <div className="flex items-center gap-3">
+              <div className="w-9 h-9 rounded-xl bg-blue-100 text-blue-700 flex items-center justify-center font-bold shrink-0">
+                <Building2 className="w-5 h-5" />
+              </div>
+              <div>
+                <span className="text-xs font-bold text-slate-800 block">
+                  {getUIText(language, { en: 'Subsidiary Companies:', ku: 'کۆمپانیاکانی ئەم هۆڵدینگە:', ar: 'الشركات التابعة للهولدينغ:' })} ({companies.length})
+                </span>
+                <span className="text-[11px] text-slate-500">
+                  {getUIText(language, {
+                    en: 'You can add new companies, edit names, or delete any company anytime.',
+                    ku: 'دەتوانیت هەر کۆمپانیایەک زیاد بکەیت، ناوی بگۆڕیت یان بیسڕیتەوە.',
+                    ar: 'يمكنك إضافة شركات جديدة، تعديل أسمائها، أو حذف أي شركة في أي وقت.'
+                  })}
+                </span>
+              </div>
+            </div>
+
+            <button
+              type="button"
+              onClick={() => {
+                setIsHoldingSetupOpen(false);
+                setActiveTab('companies-projects');
+              }}
+              className="px-3.5 py-2 rounded-xl text-xs font-bold bg-white hover:bg-slate-100 text-blue-700 border border-blue-200 transition shrink-0 cursor-pointer shadow-2xs"
+            >
+              {getUIText(language, { en: 'Manage Companies ➔', ku: 'بەڕێوەبردنی کۆمپانیاکان ➔', ar: 'إدارة الشركات ➔' })}
+            </button>
           </div>
 
           {/* Data Cleanup & Mock Purge Actions */}

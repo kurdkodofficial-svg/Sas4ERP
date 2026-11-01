@@ -46,6 +46,7 @@ import {
 import { useERP } from '../../context/ERPContext';
 import { useLanguage } from '../../context/LanguageContext';
 import { Project, Company } from '../../types/erp';
+import { getUIText, resolveEntityText } from '../../utils/langHelper';
 
 interface Props {
   currencyDisplay?: 'USD' | 'IQD';
@@ -91,9 +92,10 @@ export const ProjectExpenditureBudgetRechartsDashboard: React.FC<Props> = ({
   const formatMoney = (valUSD: number) => {
     if (isIQD) {
       const iqdVal = valUSD * 1310;
-      if (iqdVal >= 1000000000) return `${(iqdVal / 1000000000).toFixed(2)}B ع.د`;
-      if (iqdVal >= 1000000) return `${(iqdVal / 1000000).toFixed(1)}M ع.د`;
-      return `${iqdVal.toLocaleString()} ع.د`;
+      const unit = language === 'en' ? 'IQD' : language === 'ar' ? 'د.ع' : 'ع.د';
+      if (iqdVal >= 1000000000) return `${(iqdVal / 1000000000).toFixed(2)}B ${unit}`;
+      if (iqdVal >= 1000000) return `${(iqdVal / 1000000).toFixed(1)}M ${unit}`;
+      return `${iqdVal.toLocaleString()} ${unit}`;
     }
     if (valUSD >= 1000000) return `$${(valUSD / 1000000).toFixed(2)}M`;
     if (valUSD >= 1000) return `$${(valUSD / 1000).toFixed(0)}k`;
@@ -258,16 +260,17 @@ export const ProjectExpenditureBudgetRechartsDashboard: React.FC<Props> = ({
   const CustomComposedTooltip = ({ active, payload, label }: any) => {
     if (active && payload && payload.length) {
       const data = payload[0].payload;
+      const compDisplayName = language === 'en' ? (data.name || data.nameKu) : (data.nameKu || data.name);
       return (
         <div className="bg-slate-950 text-white p-4 rounded-2xl shadow-2xl border border-slate-800 text-xs space-y-2 min-w-[240px] z-50">
           <div className="flex items-center justify-between pb-2 border-b border-slate-800">
             <div>
               <span className="font-mono font-bold text-blue-400 text-[10px] uppercase">{data.code}</span>
-              <h4 className="font-extrabold text-sm text-white">{data.nameKu || data.name}</h4>
+              <h4 className="font-extrabold text-sm text-white">{compDisplayName}</h4>
               <p className="text-[11px] text-slate-400">{data.generalManager} (GM)</p>
             </div>
             <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-blue-500/20 text-blue-300 border border-blue-400/30">
-              {data.projectCount} پڕۆژە
+              {data.projectCount} {getUIText(language, { en: 'Projects', ku: 'پڕۆژە', ar: 'مشاريع' })}
             </span>
           </div>
 
@@ -275,7 +278,7 @@ export const ProjectExpenditureBudgetRechartsDashboard: React.FC<Props> = ({
             <div className="flex justify-between items-center text-slate-300">
               <span className="flex items-center gap-1.5">
                 <span className="w-2.5 h-2.5 rounded-sm bg-indigo-500" />
-                کۆی بودجەی پڕۆژەکان:
+                {getUIText(language, { en: 'Projects Budget:', ku: 'کۆی بودجەی پڕۆژەکان:', ar: 'إجمالي الميزانية:' })}
               </span>
               <strong className="text-white font-mono">{formatMoney(data.totalProjectBudget)}</strong>
             </div>
@@ -283,7 +286,7 @@ export const ProjectExpenditureBudgetRechartsDashboard: React.FC<Props> = ({
             <div className="flex justify-between items-center text-slate-300">
               <span className="flex items-center gap-1.5">
                 <span className="w-2.5 h-2.5 rounded-sm bg-emerald-500" />
-                کۆی خەرجکراوی ڕاستەقینە:
+                {getUIText(language, { en: 'Actual Spent:', ku: 'کۆی خەرجکراوی ڕاستەقینە:', ar: 'المنصرف الفعلي:' })}
               </span>
               <strong className="text-emerald-400 font-mono">{formatMoney(data.totalProjectSpent)}</strong>
             </div>
@@ -291,13 +294,13 @@ export const ProjectExpenditureBudgetRechartsDashboard: React.FC<Props> = ({
             <div className="flex justify-between items-center text-slate-300">
               <span className="flex items-center gap-1.5">
                 <span className="w-2.5 h-2.5 rounded-sm bg-sky-400" />
-                بڕی ماوە (Variance):
+                {getUIText(language, { en: 'Variance (Remaining):', ku: 'بڕی ماوە (Variance):', ar: 'الفارق المتبقي:' })}
               </span>
               <strong className="text-sky-300 font-mono">{formatMoney(data.remainingBudget)}</strong>
             </div>
 
             <div className="flex justify-between items-center pt-1.5 border-t border-slate-800 text-slate-200">
-              <span>ڕێژەی خەرجکردن (Burn Rate):</span>
+              <span>{getUIText(language, { en: 'Burn Rate:', ku: 'ڕێژەی خەرجکردن (Burn Rate):', ar: 'معدل الاستهلاك:' })}</span>
               <span className={`font-black font-mono px-1.5 py-0.5 rounded text-[11px] ${
                 data.burnRate > 90 ? 'bg-rose-500/30 text-rose-300' : data.burnRate > 75 ? 'bg-amber-500/30 text-amber-300' : 'bg-emerald-500/30 text-emerald-300'
               }`}>
@@ -314,24 +317,25 @@ export const ProjectExpenditureBudgetRechartsDashboard: React.FC<Props> = ({
   const CustomProjectTooltip = ({ active, payload }: any) => {
     if (active && payload && payload.length) {
       const data = payload[0].payload;
+      const projName = language === 'en' ? (data.projectName || data.projectNameKu) : (data.projectNameKu || data.projectName);
       return (
         <div className="bg-slate-950 text-white p-3.5 rounded-2xl shadow-2xl border border-slate-800 text-xs space-y-1.5 min-w-[220px]">
           <span className="font-mono text-[10px] text-indigo-400 uppercase">{data.companyCode} • {data.companyName}</span>
-          <h4 className="font-extrabold text-white text-xs">{data.projectNameKu}</h4>
+          <h4 className="font-extrabold text-white text-xs">{projName}</h4>
           <div className="flex justify-between pt-1 border-t border-slate-800 text-slate-300">
-            <span>بودجە:</span>
+            <span>{getUIText(language, { en: 'Budget:', ku: 'بودجە:', ar: 'الميزانية:' })}</span>
             <span className="font-bold text-white font-mono">{formatMoney(data.budgetUSD)}</span>
           </div>
           <div className="flex justify-between text-slate-300">
-            <span>خەرجکراو:</span>
+            <span>{getUIText(language, { en: 'Spent:', ku: 'خەرجکراو:', ar: 'المنصرف:' })}</span>
             <span className="font-bold text-emerald-400 font-mono">{formatMoney(data.spentUSD)}</span>
           </div>
           <div className="flex justify-between text-slate-300">
-            <span>پێشکەوتنی کار:</span>
+            <span>{getUIText(language, { en: 'Progress:', ku: 'پێشکەوتنی کار:', ar: 'نسبة الإنجاز:' })}</span>
             <span className="font-bold text-blue-400 font-mono">{data.progress}%</span>
           </div>
           <div className="flex justify-between text-slate-300">
-            <span>Burn Rate:</span>
+            <span>{getUIText(language, { en: 'Burn Rate:', ku: 'ڕێژەی خەرجکردن:', ar: 'معدل الاستهلاك:' })}</span>
             <span className="font-bold text-amber-400 font-mono">{data.burnRate}%</span>
           </div>
         </div>
@@ -369,7 +373,11 @@ export const ProjectExpenditureBudgetRechartsDashboard: React.FC<Props> = ({
             <div>
               <div className="flex items-center gap-2">
                 <h2 className="text-lg sm:text-xl font-black text-slate-900 tracking-tight">
-                  خەرجی و بودجەی ڕاستەقینەی پڕۆژەکان لە سەرجەم کۆمپانیاکان
+                  {getUIText(language, {
+                    en: 'Subsidiaries Project Expenditure vs Budget',
+                    ku: 'خەرجی و بودجەی ڕاستەقینەی پڕۆژەکان لە سەرجەم کۆمپانیاکان',
+                    ar: 'مصروفات وميزانيات مشاريع الشركات التابعة'
+                  })}
                 </h2>
                 <span className="hidden sm:inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-black bg-emerald-50 text-emerald-700 border border-emerald-300">
                   <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
@@ -377,7 +385,11 @@ export const ProjectExpenditureBudgetRechartsDashboard: React.FC<Props> = ({
                 </span>
               </div>
               <p className="text-xs text-slate-500 mt-0.5">
-                Real-Time Project Expenditure vs Allocated Budget across Group Subsidiaries with Burn Rate & Variance Analysis.
+                {getUIText(language, {
+                  en: 'Real-Time Project Expenditure vs Allocated Budget across Group Subsidiaries with Burn Rate & Variance Analysis.',
+                  ku: 'خەرجی ڕاستەقینە بەرامبەر بودجەی تەرخانکراو بەپێی کۆمپانیاکان لەگەڵ شیکاری خێرایی خەرجکردن و بڕی ماوە.',
+                  ar: 'المصروفات الفعلية مقابل الميزانية المعتمدة لشركات المجموعة مع تحليل معدل الاستهلاك والفارق المالي.'
+                })}
               </p>
             </div>
           </div>
@@ -394,10 +406,10 @@ export const ProjectExpenditureBudgetRechartsDashboard: React.FC<Props> = ({
                   ? 'bg-white text-blue-700 shadow-xs'
                   : 'text-slate-600 hover:text-slate-900'
               }`}
-              title="کۆکراوەی کۆمپانیاکان"
+              title={getUIText(language, { en: 'Subsidiary Comparison', ku: 'بەراوردی کۆمپانیاکان', ar: 'مقارنة الشركات' })}
             >
               <BarChart3 className="w-3.5 h-3.5" />
-              <span>بەراوردی کۆمپانیاکان</span>
+              <span>{getUIText(language, { en: 'Subsidiaries', ku: 'بەراوردی کۆمپانیاکان', ar: 'الشركات' })}</span>
             </button>
 
             <button
@@ -407,10 +419,10 @@ export const ProjectExpenditureBudgetRechartsDashboard: React.FC<Props> = ({
                   ? 'bg-white text-blue-700 shadow-xs'
                   : 'text-slate-600 hover:text-slate-900'
               }`}
-              title="بەپێی تاکە پڕۆژە"
+              title={getUIText(language, { en: 'Project by Project', ku: 'پڕۆژە بە پڕۆژە', ar: 'المشاريع' })}
             >
               <FolderKanban className="w-3.5 h-3.5" />
-              <span>پڕۆژە بە پڕۆژە</span>
+              <span>{getUIText(language, { en: 'Projects', ku: 'پڕۆژە بە پڕۆژە', ar: 'المشاريع' })}</span>
             </button>
 
             <button
@@ -420,10 +432,10 @@ export const ProjectExpenditureBudgetRechartsDashboard: React.FC<Props> = ({
                   ? 'bg-white text-blue-700 shadow-xs'
                   : 'text-slate-600 hover:text-slate-900'
               }`}
-              title="دابەشبوونی پشکەکان"
+              title={getUIText(language, { en: 'Budget & Expenditure Share', ku: 'دابەشبوونی پشکەکان', ar: 'توزيع الحصص' })}
             >
               <PieIcon className="w-3.5 h-3.5" />
-              <span>پشکی بودجە و خەرجی</span>
+              <span>{getUIText(language, { en: 'Share', ku: 'پشکی بودجە', ar: 'الحصص' })}</span>
             </button>
 
             <button
@@ -433,10 +445,10 @@ export const ProjectExpenditureBudgetRechartsDashboard: React.FC<Props> = ({
                   ? 'bg-white text-blue-700 shadow-xs'
                   : 'text-slate-600 hover:text-slate-900'
               }`}
-              title="هێڵی خەرجکردن بەپێی کات"
+              title={getUIText(language, { en: 'Spend Velocity', ku: 'هێڵی خێرایی', ar: 'منحنى السرعة' })}
             >
               <TrendingUp className="w-3.5 h-3.5" />
-              <span>هێڵی خێرایی (Velocity)</span>
+              <span>{getUIText(language, { en: 'Velocity', ku: 'خێرایی (Velocity)', ar: 'السرعة' })}</span>
             </button>
           </div>
 
@@ -455,38 +467,50 @@ export const ProjectExpenditureBudgetRechartsDashboard: React.FC<Props> = ({
       {/* KPI Highlight Cards */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3.5">
         <div className="bg-slate-50/90 border border-slate-200/80 rounded-2xl p-4 transition hover:bg-slate-50">
-          <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider block">کۆی بودجەی دیاریکراو</span>
+          <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider block">
+            {getUIText(language, { en: 'Total Allocated Budget', ku: 'کۆی بودجەی دیاریکراو', ar: 'إجمالي الميزانية المعتمدة' })}
+          </span>
           <div className="text-xl sm:text-2xl font-black text-slate-900 mt-1 font-mono">
             {formatMoney(holdingTotals.totalBudget)}
           </div>
           <span className="text-[11px] text-slate-400 mt-0.5 block">
-            لە سەرجەم {holdingTotals.totalProjectsCount} پڕۆژەی کۆمپانیاکان
+            {getUIText(language, {
+              en: `Across ${holdingTotals.totalProjectsCount} group projects`,
+              ku: `لە سەرجەم ${holdingTotals.totalProjectsCount} پڕۆژەی کۆمپانیاکان`,
+              ar: `عبر ${holdingTotals.totalProjectsCount} مشروعاً بالمجموعة`
+            })}
           </span>
         </div>
 
         <div className="bg-emerald-50/50 border border-emerald-200/80 rounded-2xl p-4 transition hover:bg-emerald-50">
-          <span className="text-[11px] font-bold text-emerald-800 uppercase tracking-wider block">خەرجکراوی ڕاستەقینە</span>
+          <span className="text-[11px] font-bold text-emerald-800 uppercase tracking-wider block">
+            {getUIText(language, { en: 'Actual Expenditure', ku: 'خەرجکراوی ڕاستەقینە', ar: 'المنصرف الفعلي' })}
+          </span>
           <div className="text-xl sm:text-2xl font-black text-emerald-700 mt-1 font-mono">
             {formatMoney(holdingTotals.totalSpent)}
           </div>
           <span className="text-[11px] text-emerald-600 font-bold mt-0.5 flex items-center gap-1">
             <ArrowUpRight className="w-3 h-3" />
-            تەواوی پارەی خەرجکراوی مەیدانی
+            {getUIText(language, { en: 'Total field funds spent', ku: 'تەواوی پارەی خەرجکراوی مەیدانی', ar: 'إجمالي المنصرف الميداني' })}
           </span>
         </div>
 
         <div className="bg-sky-50/50 border border-sky-200/80 rounded-2xl p-4 transition hover:bg-sky-50">
-          <span className="text-[11px] font-bold text-sky-800 uppercase tracking-wider block">بڕی ماوە (Remaining)</span>
+          <span className="text-[11px] font-bold text-sky-800 uppercase tracking-wider block">
+            {getUIText(language, { en: 'Remaining Variance', ku: 'بڕی ماوە (Remaining)', ar: 'الفارق المتبقي' })}
+          </span>
           <div className="text-xl sm:text-2xl font-black text-sky-700 mt-1 font-mono">
             {formatMoney(holdingTotals.remaining)}
           </div>
           <span className="text-[11px] text-sky-600 font-semibold mt-0.5 block">
-            پارێزراو بۆ قۆناغەکانی داهاتوو
+            {getUIText(language, { en: 'Secured for next phases', ku: 'پارێزراو بۆ قۆناغەکانی داهاتوو', ar: 'محفوظ للمراحل القادمة' })}
           </span>
         </div>
 
         <div className="bg-amber-50/50 border border-amber-200/80 rounded-2xl p-4 transition hover:bg-amber-50">
-          <span className="text-[11px] font-bold text-amber-900 uppercase tracking-wider block">ڕێژەی خەرجکردن (Burn Rate)</span>
+          <span className="text-[11px] font-bold text-amber-900 uppercase tracking-wider block">
+            {getUIText(language, { en: 'Spend Burn Rate', ku: 'ڕێژەی خەرجکردن (Burn Rate)', ar: 'معدل الاستهلاك' })}
+          </span>
           <div className="text-xl sm:text-2xl font-black text-amber-700 mt-1 font-mono">
             {holdingTotals.overallBurnRate}%
           </div>
@@ -504,7 +528,7 @@ export const ProjectExpenditureBudgetRechartsDashboard: React.FC<Props> = ({
         <div className="flex flex-wrap items-center gap-2">
           <span className="font-bold text-slate-500 flex items-center gap-1">
             <Filter className="w-3.5 h-3.5" />
-            فلتەر:
+            {getUIText(language, { en: 'Filter:', ku: 'فلتەر:', ar: 'تصفية:' })}
           </span>
 
           {/* Subsidiary Filter */}
@@ -513,9 +537,15 @@ export const ProjectExpenditureBudgetRechartsDashboard: React.FC<Props> = ({
             onChange={(e) => setInternalCompanyFilter(e.target.value)}
             className="bg-white border border-slate-200 rounded-xl px-2.5 py-1.5 font-bold text-slate-800 outline-none cursor-pointer"
           >
-            <option value="ALL">سەرجەم کۆمپانیاکانی هۆلدینگ ({companies.length})</option>
+            <option value="ALL">
+              {getUIText(language, {
+                en: `All Holding Subsidiaries (${companies.length})`,
+                ku: `سەرجەم کۆمپانیاکانی هۆلدینگ (${companies.length})`,
+                ar: `كافة شركات المجموعة (${companies.length})`
+              })}
+            </option>
             {companies.map(c => (
-              <option key={c.id} value={c.id}>{c.nameKu || c.name} ({c.code})</option>
+              <option key={c.id} value={c.id}>{resolveEntityText(c, 'name', language)} ({c.code})</option>
             ))}
           </select>
 
@@ -525,32 +555,36 @@ export const ProjectExpenditureBudgetRechartsDashboard: React.FC<Props> = ({
             onChange={(e: any) => setSortBy(e.target.value)}
             className="bg-white border border-slate-200 rounded-xl px-2.5 py-1.5 font-bold text-slate-800 outline-none cursor-pointer"
           >
-            <option value="BUDGET_DESC">ڕیزبەندی: بەرزترین بودجە</option>
-            <option value="SPENT_DESC">ڕیزبەندی: بەرزترین خەرجی</option>
-            <option value="BURN_RATE_DESC">ڕیزبەندی: بەرزترین ڕێژەی خەرجکردن (%)</option>
-            <option value="NAME">ڕیزبەندی بەپێی ئەلفوبێ</option>
+            <option value="BUDGET_DESC">{getUIText(language, { en: 'Sort: Highest Budget', ku: 'ڕیزبەندی: بەرزترین بودجە', ar: 'ترتيب: أعلى ميزانية' })}</option>
+            <option value="SPENT_DESC">{getUIText(language, { en: 'Sort: Highest Spent', ku: 'ڕیزبەندی: بەرزترین خەرجی', ar: 'ترتيب: أعلى صرف' })}</option>
+            <option value="BURN_RATE_DESC">{getUIText(language, { en: 'Sort: Highest Burn Rate (%)', ku: 'ڕیزبەندی: بەرزترین ڕێژەی خەرجکردن (%)', ar: 'ترتيب: أعلى نسبة استهلاك' })}</option>
+            <option value="NAME">{getUIText(language, { en: 'Sort: Alphabetical', ku: 'ڕیزبەندی بەپێی ئەلفوبێ', ar: 'ترتيب: أبجدي' })}</option>
           </select>
         </div>
 
         <div className="flex items-center gap-4 text-slate-500 text-[11px]">
           <span className="flex items-center gap-1.5">
             <span className="w-3 h-3 rounded-sm bg-indigo-600" />
-            بودجەی پڕۆژە
+            {getUIText(language, { en: 'Budget', ku: 'بودجەی پڕۆژە', ar: 'الميزانية' })}
           </span>
           <span className="flex items-center gap-1.5">
             <span className="w-3 h-3 rounded-sm bg-emerald-500" />
-            خەرجی ڕاستەقینە
+            {getUIText(language, { en: 'Actual Spent', ku: 'خەرجی ڕاستەقینە', ar: 'المنصرف الفعلي' })}
           </span>
           <span className="flex items-center gap-1.5">
             <span className="w-3 h-3 rounded-sm bg-sky-400" />
-            بڕی ماوە
+            {getUIText(language, { en: 'Variance', ku: 'بڕی ماوە', ar: 'المتبقي' })}
           </span>
           <span className="flex items-center gap-1.5">
             <span className="w-2.5 h-0.5 bg-amber-500" />
-            ڕێژەی خەرجکردن (%)
+            {getUIText(language, { en: 'Burn Rate (%)', ku: 'ڕێژەی خەرجکردن (%)', ar: 'معدل الاستهلاك (%)' })}
           </span>
           <span className="hidden md:inline-flex items-center gap-1 text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded-full font-bold">
-            👆 کلیک لەسەر باڕەکان بکە بۆ وردەکاری
+            {getUIText(language, {
+              en: '👆 Click bars for details',
+              ku: '👆 کلیک لەسەر باڕەکان بکە بۆ وردەکاری',
+              ar: '👆 اضغط على الأعمدة للتفاصيل'
+            })}
           </span>
         </div>
       </div>
@@ -689,7 +723,7 @@ export const ProjectExpenditureBudgetRechartsDashboard: React.FC<Props> = ({
             {/* Left Donut: Budget Allocation Share */}
             <div className="flex flex-col items-center justify-center relative">
               <span className="text-xs font-black text-slate-800 mb-2">
-                دابەشبوونی بودجە بەپێی کۆمپانیاکان (Budget Share)
+                {getUIText(language, { en: 'Budget Allocation Share by Subsidiary', ku: 'دابەشبوونی بودجە بەپێی کۆمپانیاکان (Budget Share)', ar: 'توزيع الميزانيات المعتمدة حسب الشركات' })}
               </span>
               <div className="w-full h-[280px]">
                 <ResponsiveContainer width="100%" height="100%">
@@ -715,7 +749,9 @@ export const ProjectExpenditureBudgetRechartsDashboard: React.FC<Props> = ({
                 </ResponsiveContainer>
               </div>
               <div className="text-center -mt-6">
-                <span className="text-[10px] text-slate-400 font-bold block">کۆی گشتی بودجە</span>
+                <span className="text-[10px] text-slate-400 font-bold block">
+                  {getUIText(language, { en: 'Total Group Budget', ku: 'کۆی گشتی بودجە', ar: 'إجمالي ميزانية المجموعة' })}
+                </span>
                 <span className="text-sm font-black text-slate-900 font-mono">
                   {formatMoney(holdingTotals.totalBudget)}
                 </span>
@@ -725,7 +761,7 @@ export const ProjectExpenditureBudgetRechartsDashboard: React.FC<Props> = ({
             {/* Right Donut: Real-Time Expenditure Share */}
             <div className="flex flex-col items-center justify-center relative">
               <span className="text-xs font-black text-slate-800 mb-2">
-                دابەشبوونی پارەی خەرجکراو بەپێی کۆمپانیاکان (Expenditure Share)
+                {getUIText(language, { en: 'Real-Time Expenditure Share by Subsidiary', ku: 'دابەشبوونی پارەی خەرجکراو بەپێی کۆمپانیاکان (Expenditure Share)', ar: 'توزيع المصروفات الفعلية حسب الشركات' })}
               </span>
               <div className="w-full h-[280px]">
                 <ResponsiveContainer width="100%" height="100%">
@@ -751,7 +787,9 @@ export const ProjectExpenditureBudgetRechartsDashboard: React.FC<Props> = ({
                 </ResponsiveContainer>
               </div>
               <div className="text-center -mt-6">
-                <span className="text-[10px] text-slate-400 font-bold block">کۆی خەرجکراوی ڕاستەقینە</span>
+                <span className="text-[10px] text-slate-400 font-bold block">
+                  {getUIText(language, { en: 'Total Group Spent', ku: 'کۆی خەرجکراوی ڕاستەقینە', ar: 'إجمالي المنصرف الفعلي' })}
+                </span>
                 <span className="text-sm font-black text-emerald-700 font-mono">
                   {formatMoney(holdingTotals.totalSpent)}
                 </span>
@@ -815,31 +853,32 @@ export const ProjectExpenditureBudgetRechartsDashboard: React.FC<Props> = ({
         <div className="flex items-center justify-between mb-3">
           <h3 className="text-xs font-black text-slate-900 flex items-center gap-1.5">
             <Building2 className="w-4 h-4 text-blue-600" />
-            <span>خشتەی وردەکاری کۆمپانیا باڵادەستەکان و پڕۆژەکانیان:</span>
+            <span>{getUIText(language, { en: 'Subsidiaries & Projects Expenditure Table:', ku: 'خشتەی وردەکاری کۆمپانیا باڵادەستەکان و پڕۆژەکانیان:', ar: 'جدول تفاصيل الشركات ومشاريعها الميدانية:' })}</span>
           </h3>
           <span className="text-[11px] text-slate-500">
-            کلیک لەسەر هەر کۆمپانیایەک بکە بۆ بینینی پڕۆژەکانی لە بەشی بەڕێوەبردن
+            {getUIText(language, { en: 'Click any subsidiary to drill down into active projects', ku: 'کلیک لەسەر هەر کۆمپانیایەک بکە بۆ بینینی پڕۆژەکانی لە بەشی بەڕێوەبردن', ar: 'اضغط على أي شركة لاستعراض مشاريعها في قسم الإدارة' })}
           </span>
         </div>
 
         <div className="overflow-x-auto">
-          <table className="w-full text-right text-xs">
+          <table className={`w-full text-xs ${language === 'en' ? 'text-left' : 'text-right'}`}>
             <thead>
               <tr className="bg-slate-50/80 text-slate-500 font-extrabold border-b border-slate-200">
-                <th className="py-2.5 px-3">کۆمپانیا (Subsidiary)</th>
-                <th className="py-2.5 px-3">بەڕێوەبەری گشتی (GM)</th>
-                <th className="py-2.5 px-3">ژمارەی پڕۆژە</th>
-                <th className="py-2.5 px-3">بودجەی پڕۆژەکان</th>
-                <th className="py-2.5 px-3">خەرجی ڕاستەقینە</th>
-                <th className="py-2.5 px-3">بڕی ماوە (Variance)</th>
+                <th className="py-2.5 px-3">{getUIText(language, { en: 'Subsidiary', ku: 'کۆمپانیا (Subsidiary)', ar: 'الشركة' })}</th>
+                <th className="py-2.5 px-3">{getUIText(language, { en: 'General Manager (GM)', ku: 'بەڕێوەبەری گشتی (GM)', ar: 'المدير العام' })}</th>
+                <th className="py-2.5 px-3">{getUIText(language, { en: 'Projects Count', ku: 'ژمارەی پڕۆژە', ar: 'عدد المشاريع' })}</th>
+                <th className="py-2.5 px-3">{getUIText(language, { en: 'Budget', ku: 'بودجەی پڕۆژەکان', ar: 'الميزانية' })}</th>
+                <th className="py-2.5 px-3">{getUIText(language, { en: 'Actual Spent', ku: 'خەرجی ڕاستەقینە', ar: 'المنصرف الفعلي' })}</th>
+                <th className="py-2.5 px-3">{getUIText(language, { en: 'Variance (Remaining)', ku: 'بڕی ماوە (Variance)', ar: 'الفارق المتبقي' })}</th>
                 <th className="py-2.5 px-3">Burn Rate (%)</th>
-                <th className="py-2.5 px-3 text-center">کردار</th>
+                <th className="py-2.5 px-3 text-center">{getUIText(language, { en: 'Action', ku: 'کردار', ar: 'إجراء' })}</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
               {subsidiaryAggregates.map((sub) => {
                 const isOverBudget = sub.burnRate > 90;
                 const isWarning = sub.burnRate > 75 && sub.burnRate <= 90;
+                const subDisplayName = language === 'en' ? (sub.name || sub.nameKu) : (sub.nameKu || sub.name);
 
                 return (
                   <tr
@@ -852,7 +891,7 @@ export const ProjectExpenditureBudgetRechartsDashboard: React.FC<Props> = ({
                           {sub.code}
                         </span>
                         <div>
-                          <strong className="text-slate-900 block font-bold">{sub.nameKu}</strong>
+                          <strong className="text-slate-900 block font-bold">{subDisplayName}</strong>
                           <span className="text-[10px] text-slate-400 block">{sub.name}</span>
                         </div>
                       </div>
@@ -864,7 +903,7 @@ export const ProjectExpenditureBudgetRechartsDashboard: React.FC<Props> = ({
 
                     <td className="py-3 px-3">
                       <span className="inline-block px-2 py-0.5 rounded-md bg-slate-100 text-slate-800 font-bold text-[11px]">
-                        {sub.projectCount} پڕۆژە
+                        {sub.projectCount} {getUIText(language, { en: 'Projects', ku: 'پڕۆژە', ar: 'مشاريع' })}
                       </span>
                     </td>
 
@@ -905,10 +944,10 @@ export const ProjectExpenditureBudgetRechartsDashboard: React.FC<Props> = ({
                           setActiveTab('companies-projects');
                         }}
                         className="px-2.5 py-1 rounded-lg bg-slate-100 hover:bg-blue-600 text-slate-700 hover:text-white font-bold text-[11px] transition cursor-pointer flex items-center gap-1 mx-auto"
-                        title="View Projects in Companies Module"
+                        title={getUIText(language, { en: 'View Projects in Companies Module', ku: 'بینینی پڕۆژەکان لە بەشی کۆمپانیاکان', ar: 'عرض المشاريع في قسم الشركات' })}
                       >
                         <Eye className="w-3 h-3" />
-                        <span>بینینی پڕۆژەکان</span>
+                        <span>{getUIText(language, { en: 'Projects', ku: 'بینینی پڕۆژەکان', ar: 'المشاريع' })}</span>
                       </button>
                     </td>
                   </tr>
@@ -924,13 +963,14 @@ export const ProjectExpenditureBudgetRechartsDashboard: React.FC<Props> = ({
         const compProjects = projects.filter(p => p.companyId === inspectingCompany.id);
         const totalBudget = compProjects.reduce((sum, p) => sum + (p.budgetUSD || 0), 0);
         const totalSpent = compProjects.reduce((sum, p) => sum + (p.spentUSD || 0), 0);
-        const remaining = Math.max(0, totalBudget - totalSpent);
         const burnRate = totalBudget > 0 ? (totalSpent / totalBudget) * 100 : 0;
         const highBurnProjects = compProjects.filter(p => {
           const b = p.budgetUSD || 0;
           const s = p.spentUSD || 0;
           return b > 0 && (s / b) >= 0.90;
         });
+
+        const compModalName = resolveEntityText(inspectingCompany, 'name', language);
 
         return (
           <div className="fixed inset-0 z-50 bg-slate-900/70 backdrop-blur-sm flex items-center justify-center p-3 sm:p-5 overflow-y-auto">
@@ -948,11 +988,11 @@ export const ProjectExpenditureBudgetRechartsDashboard: React.FC<Props> = ({
                         {inspectingCompany.code}
                       </span>
                       <h3 className="text-base sm:text-lg font-black text-slate-900">
-                        {inspectingCompany.nameKu || inspectingCompany.name}
+                        {compModalName}
                       </h3>
                     </div>
                     <p className="text-xs text-slate-500 mt-0.5 flex items-center gap-2">
-                      <span>بەڕێوەبەری گشتی: {inspectingCompany.generalManager}</span>
+                      <span>{getUIText(language, { en: 'General Manager:', ku: 'بەڕێوەبەری گشتی:', ar: 'المدير العام:' })} {inspectingCompany.generalManager}</span>
                       <span>•</span>
                       <span className="font-mono text-blue-600">{inspectingCompany.gmPhone}</span>
                     </p>
@@ -967,13 +1007,13 @@ export const ProjectExpenditureBudgetRechartsDashboard: React.FC<Props> = ({
                           name: inspectingCompany.generalManager,
                           role: 'General Manager',
                           phone: inspectingCompany.gmPhone,
-                          company: inspectingCompany.nameKu || inspectingCompany.name,
+                          company: compModalName,
                           avatar: '👔'
                         });
                       }
                     }}
                     className="p-2 rounded-xl bg-blue-50 hover:bg-blue-600 text-blue-600 hover:text-white border border-blue-200 transition cursor-pointer"
-                    title="پەیوەندی ڕاستەوخۆ بە GM"
+                    title={getUIText(language, { en: 'Direct Phone Call with GM', ku: 'پەیوەندی ڕاستەوخۆ بە GM', ar: 'اتصال هاتفي مباشر بالمدير العام' })}
                   >
                     <PhoneCall className="w-4 h-4" />
                   </button>
@@ -995,10 +1035,18 @@ export const ProjectExpenditureBudgetRechartsDashboard: React.FC<Props> = ({
                     <AlertTriangle className="w-5 h-5 text-rose-600 shrink-0 mt-0.5" />
                     <div>
                       <h4 className="text-xs sm:text-sm font-black text-rose-900">
-                        ئاگاداری مەترسی تێپەڕاندنی سنووری ٩٠٪ی بودجە ({highBurnProjects.length} پڕۆژە لە مەترسیدایە)
+                        {getUIText(language, {
+                          en: `Budget Risk Warning: Burn Exceeds 90% (${highBurnProjects.length} Projects at Risk)`,
+                          ku: `ئاگاداری مەترسی تێپەڕاندنی سنووری ٩٠٪ی بودجە (${highBurnProjects.length} پڕۆژە لە مەترسیدایە)`,
+                          ar: `تنبيه مخاطر الميزانية: الاستهلاك تجاوز 90% (${highBurnProjects.length} مشاريع في خطر)`
+                        })}
                       </h4>
                       <p className="text-xs text-rose-700 mt-0.5 leading-relaxed">
-                        ڕێژەی خەرجکردنی پارە لەم پڕۆژانەدا گەیشتووەتە زیاتر لە ٩٠٪ی کۆی بودجەی پەسەندکراو. پێویستە خاوەنی هۆلدینگ یان سەرۆکایەتی پێداچوونەوە بکات.
+                        {getUIText(language, {
+                          en: 'Expenditure in these projects has exceeded 90% of approved budget. Requires Holding Owner review.',
+                          ku: 'ڕێژەی خەرجکردنی پارە لەم پڕۆژانەدا گەیشتووەتە زیاتر لە ٩٠٪ی کۆی بودجەی پەسەندکراو. پێویستە خاوەنی هۆلدینگ یان سەرۆکایەتی پێداچوونەوە بکات.',
+                          ar: 'تجاوزت المصروفات في هذه المشاريع 90% من الميزانية المعتمدة وتتطلب مراجعة من مالك المجموعة.'
+                        })}
                       </p>
                     </div>
                   </div>
@@ -1007,21 +1055,31 @@ export const ProjectExpenditureBudgetRechartsDashboard: React.FC<Props> = ({
                 {/* Subsidiary Financial KPI Cards */}
                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
                   <div className="bg-slate-50 border border-slate-200 rounded-2xl p-3.5">
-                    <span className="text-[10px] font-bold text-slate-400 uppercase block">کۆی پڕۆژەکان</span>
-                    <span className="text-xl font-black text-slate-900 mt-0.5 block font-mono">{compProjects.length} پڕۆژە</span>
+                    <span className="text-[10px] font-bold text-slate-400 uppercase block">
+                      {getUIText(language, { en: 'Total Projects', ku: 'کۆی پڕۆژەکان', ar: 'إجمالي المشاريع' })}
+                    </span>
+                    <span className="text-xl font-black text-slate-900 mt-0.5 block font-mono">
+                      {compProjects.length} {getUIText(language, { en: 'Projects', ku: 'پڕۆژە', ar: 'مشاريع' })}
+                    </span>
                   </div>
                   <div className="bg-indigo-50/60 border border-indigo-200 rounded-2xl p-3.5">
-                    <span className="text-[10px] font-bold text-indigo-700 uppercase block">کۆی بودجەی پەسەندکراو</span>
+                    <span className="text-[10px] font-bold text-indigo-700 uppercase block">
+                      {getUIText(language, { en: 'Approved Budget', ku: 'کۆی بودجەی پەسەندکراو', ar: 'الميزانية المعتمدة' })}
+                    </span>
                     <span className="text-xl font-black text-indigo-900 mt-0.5 block font-mono">{formatMoney(totalBudget)}</span>
                   </div>
                   <div className="bg-emerald-50/60 border border-emerald-200 rounded-2xl p-3.5">
-                    <span className="text-[10px] font-bold text-emerald-700 uppercase block">خەرجکراوی مەیدانی</span>
+                    <span className="text-[10px] font-bold text-emerald-700 uppercase block">
+                      {getUIText(language, { en: 'Actual Spent', ku: 'خەرجکراوی مەیدانی', ar: 'المنصرف الفعلي' })}
+                    </span>
                     <span className="text-xl font-black text-emerald-900 mt-0.5 block font-mono">{formatMoney(totalSpent)}</span>
                   </div>
                   <div className={`rounded-2xl p-3.5 border ${
                     burnRate >= 90 ? 'bg-rose-50 border-rose-300' : burnRate >= 75 ? 'bg-amber-50 border-amber-300' : 'bg-slate-50 border-slate-200'
                   }`}>
-                    <span className="text-[10px] font-bold uppercase block text-slate-600">ڕێژەی بەکارهێنان (Burn Rate)</span>
+                    <span className="text-[10px] font-bold uppercase block text-slate-600">
+                      {getUIText(language, { en: 'Burn Rate', ku: 'ڕێژەی بەکارهێنان (Burn Rate)', ar: 'معدل الاستهلاك' })}
+                    </span>
                     <span className={`text-xl font-black mt-0.5 block font-mono ${
                       burnRate >= 90 ? 'text-rose-600' : burnRate >= 75 ? 'text-amber-600' : 'text-slate-900'
                     }`}>{burnRate.toFixed(1)}%</span>
@@ -1033,21 +1091,23 @@ export const ProjectExpenditureBudgetRechartsDashboard: React.FC<Props> = ({
                   <div className="flex items-center justify-between">
                     <h4 className="text-xs sm:text-sm font-extrabold text-slate-900 flex items-center gap-2">
                       <FolderKanban className="w-4 h-4 text-blue-600" />
-                      <span>لیستی پڕۆژەکانی ئەم کۆمپانیایە ({compProjects.length})</span>
+                      <span>{getUIText(language, { en: `Subsidiary Projects (${compProjects.length})`, ku: `لیستی پڕۆژەکانی ئەم کۆمپانیایە (${compProjects.length})`, ar: `مشاريع هذه الشركة (${compProjects.length})` })}</span>
                     </h4>
-                    <span className="text-[11px] text-slate-500 font-medium">کلیک بۆ بینینی ڕاپۆرت و بەستنەوە</span>
+                    <span className="text-[11px] text-slate-500 font-medium">
+                      {getUIText(language, { en: 'Click to inspect reports', ku: 'کلیک بۆ بینینی ڕاپۆرت و بەستنەوە', ar: 'اضغط لمطالعة التقارير والربط' })}
+                    </span>
                   </div>
 
                   <div className="border border-slate-200 rounded-2xl overflow-hidden bg-white">
-                    <table className="w-full text-xs text-right">
+                    <table className={`w-full text-xs ${language === 'en' ? 'text-left' : 'text-right'}`}>
                       <thead className="bg-slate-50 border-b border-slate-200 text-slate-600 font-bold">
                         <tr>
-                          <th className="py-2.5 px-3">ناوی پڕۆژە و شوێن</th>
-                          <th className="py-2.5 px-3">بەڕێوەبەری پڕۆژە (PM)</th>
-                          <th className="py-2.5 px-3">بودجە</th>
-                          <th className="py-2.5 px-3">خەرجکراو</th>
-                          <th className="py-2.5 px-3">ڕێژەی خەرجکردن</th>
-                          <th className="py-2.5 px-3 text-center">کردار</th>
+                          <th className="py-2.5 px-3">{getUIText(language, { en: 'Project & Location', ku: 'ناوی پڕۆژە و شوێن', ar: 'المشروع والموقع' })}</th>
+                          <th className="py-2.5 px-3">{getUIText(language, { en: 'Project Manager (PM)', ku: 'بەڕێوەبەری پڕۆژە (PM)', ar: 'مدير المشروع' })}</th>
+                          <th className="py-2.5 px-3">{getUIText(language, { en: 'Budget', ku: 'بودجە', ar: 'الميزانية' })}</th>
+                          <th className="py-2.5 px-3">{getUIText(language, { en: 'Spent', ku: 'خەرجکراو', ar: 'المنصرف' })}</th>
+                          <th className="py-2.5 px-3">{getUIText(language, { en: 'Burn Rate', ku: 'ڕێژەی خەرجکردن', ar: 'نسبة الاستهلاك' })}</th>
+                          <th className="py-2.5 px-3 text-center">{getUIText(language, { en: 'Action', ku: 'کردار', ar: 'إجراء' })}</th>
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-slate-100">
@@ -1056,11 +1116,12 @@ export const ProjectExpenditureBudgetRechartsDashboard: React.FC<Props> = ({
                           const s = p.spentUSD || 0;
                           const pBurn = b > 0 ? (s / b) * 100 : 0;
                           const isExceed90 = pBurn >= 90;
+                          const pName = language === 'en' ? (p.name || p.nameKu) : (p.nameKu || p.name);
 
                           return (
                             <tr key={p.id} className={`hover:bg-slate-50/80 transition ${isExceed90 ? 'bg-rose-50/30' : ''}`}>
                               <td className="py-3 px-3">
-                                <div className="font-bold text-slate-900">{p.nameKu || p.name}</div>
+                                <div className="font-bold text-slate-900">{pName}</div>
                                 <div className="text-[10px] text-slate-400 font-mono">{p.code} • {p.location}</div>
                               </td>
                               <td className="py-3 px-3">
@@ -1104,7 +1165,7 @@ export const ProjectExpenditureBudgetRechartsDashboard: React.FC<Props> = ({
                                   }}
                                   className="px-2.5 py-1 rounded-lg bg-blue-50 hover:bg-blue-600 text-blue-700 hover:text-white font-bold text-[11px] transition cursor-pointer"
                                 >
-                                  بەڕێوەبردن
+                                  {getUIText(language, { en: 'Manage', ku: 'بەڕێوەبردن', ar: 'إدارة' })}
                                 </button>
                               </td>
                             </tr>
@@ -1127,14 +1188,14 @@ export const ProjectExpenditureBudgetRechartsDashboard: React.FC<Props> = ({
                   }}
                   className="text-xs font-bold text-blue-600 hover:text-blue-800 flex items-center gap-1 cursor-pointer"
                 >
-                  <span>بینینی تەواوی بەشەکان و ڕاپۆرتەکانی ئەم کۆمپانیایە</span>
+                  <span>{getUIText(language, { en: 'View full company departments & reports', ku: 'بینینی تەواوی بەشەکان و ڕاپۆرتەکانی ئەم کۆمپانیایە', ar: 'عرض كافة أقسام وتقارير هذه الشركة' })}</span>
                   <ChevronRight className="w-4 h-4" />
                 </button>
                 <button
                   onClick={() => setInspectingCompany(null)}
                   className="px-4 py-2 bg-slate-200 hover:bg-slate-300 text-slate-800 rounded-xl text-xs font-bold transition cursor-pointer"
                 >
-                  داخستن
+                  {getUIText(language, { en: 'Close', ku: 'داخستن', ar: 'إغلاق' })}
                 </button>
               </div>
 

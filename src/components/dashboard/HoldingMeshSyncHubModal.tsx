@@ -397,14 +397,14 @@ export const HoldingMeshSyncHubModal: React.FC<HoldingMeshSyncHubModalProps> = (
                 <button
                   onClick={() => handleSimulateOfflineAction('approve_po')}
                   className="px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 text-xs font-bold transition cursor-pointer"
-                  title="تاقیکردنەوەی واژۆکردنی فەرمانی کڕین لە دۆخی ئۆفلاین"
+                  title={isRTL ? 'تاقیکردنەوەی واژۆکردنی فەرمانی کڕین لە دۆخی ئۆفلاین' : 'Test Offline PO Approval'}
                 >
                   ⚡ {isRTL ? 'تاقیکردنەوەی واژۆی ئۆفلاین' : 'Test Offline PO Approval'}
                 </button>
                 <button
                   onClick={() => handleSimulateOfflineAction('gate_scan')}
                   className="px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 text-xs font-bold transition cursor-pointer"
-                  title="تاقیکردنەوەی تۆمارکردنی بارهەڵگری دەروازە بێ ئینتەرنێت"
+                  title={isRTL ? 'تاقیکردنەوەی تۆمارکردنی بارهەڵگری دەروازە بێ ئینتەرنێت' : 'Test Offline Gate Logistics'}
                 >
                   🚚 {isRTL ? 'تاقیکردنەوەی دەروازەی بێ ئینتەرنێت' : 'Test Offline Gate Log'}
                 </button>
@@ -415,6 +415,10 @@ export const HoldingMeshSyncHubModal: React.FC<HoldingMeshSyncHubModalProps> = (
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5">
               {nodes.map((node) => {
                 const isCurrent = node.nodeId === currentNode.nodeId || node.nodeId === 'node-hq-owner';
+                const nodeDisplayName = language === 'en' ? node.name : node.nameKu;
+                const nodeDisplayLoc = language === 'en' ? node.siteLocation : node.siteLocationKu;
+                const nodeLastSeen = language === 'en' ? (node.lastSeenEn || 'Active Now') : node.lastSeen;
+
                 return (
                   <div
                     key={node.nodeId}
@@ -434,7 +438,7 @@ export const HoldingMeshSyncHubModal: React.FC<HoldingMeshSyncHubModalProps> = (
                           </div>
                           <div>
                             <div className="flex items-center gap-1.5">
-                              <h5 className="text-xs font-black text-white">{node.nameKu}</h5>
+                              <h5 className="text-xs font-black text-white">{nodeDisplayName}</h5>
                               {isCurrent && (
                                 <span className="text-[9px] font-bold px-1.5 rounded bg-blue-500 text-white">
                                   {isRTL ? 'ئەم ئامێرە' : 'This Device'}
@@ -455,14 +459,14 @@ export const HoldingMeshSyncHubModal: React.FC<HoldingMeshSyncHubModalProps> = (
                       </div>
 
                       <p className="text-xs text-slate-300 leading-relaxed">
-                        📍 {node.siteLocationKu}
+                        📍 {nodeDisplayLoc}
                       </p>
                     </div>
 
                     <div className="mt-3 pt-2.5 border-t border-slate-700/60 flex items-center justify-between text-[11px] text-slate-400">
-                      <span>دوا پەیوەندی: {node.lastSeen}</span>
+                      <span>{isRTL ? 'دوا پەیوەندی:' : 'Last Seen:'} {nodeLastSeen}</span>
                       <span className="text-slate-300 font-bold font-mono">
-                        {node.pendingSyncCount > 0 ? `⚠️ ${node.pendingSyncCount} نۆرە` : '✓ هاوکاتکراوە'}
+                        {node.pendingSyncCount > 0 ? (isRTL ? `⚠️ ${node.pendingSyncCount} نۆرە` : `⚠️ ${node.pendingSyncCount} queued`) : (isRTL ? '✓ هاوکاتکراوە' : '✓ Synced')}
                       </span>
                     </div>
                   </div>

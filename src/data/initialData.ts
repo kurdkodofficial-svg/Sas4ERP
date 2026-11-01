@@ -18,9 +18,48 @@ import {
   VirtualMeeting,
   AppNotification,
   GeneralManagerProfile,
-  ProjectPeriodicReport
+  ProjectPeriodicReport,
+  PrinterDeviceConfig,
+  ExecutiveSignatureProfile
 } from '../types/erp';
 import { generateDefaultDepartments } from './departmentsData';
+
+export const initialPrinterDevices: PrinterDeviceConfig[] = [
+  {
+    id: 'prn-office-a4',
+    name: 'Office Executive LaserJet (A4 / Color)',
+    type: 'STANDARD_A4',
+    isDefault: true,
+    status: 'ONLINE',
+    autoPrintOnApproval: false,
+    paperSize: 'A4',
+    copies: 1,
+  },
+  {
+    id: 'prn-thermal-pos-80',
+    name: 'Site Gate & Store POS Thermal (80mm)',
+    type: 'THERMAL_80MM',
+    isDefault: false,
+    status: 'ONLINE',
+    autoPrintOnApproval: false,
+    paperSize: '80mm',
+    copies: 1,
+  },
+  {
+    id: 'prn-network-ip',
+    name: 'HQ Finance Network Station (IP)',
+    type: 'NETWORK_IP',
+    ipAddress: '192.168.1.180',
+    port: 9100,
+    isDefault: false,
+    status: 'ONLINE',
+    autoPrintOnApproval: false,
+    paperSize: 'A4',
+    copies: 1,
+  }
+];
+
+export const initialSignatureProfiles: ExecutiveSignatureProfile[] = [];
 
 // Placeholder Holding Group - Ready to be customized by user or IT department
 export const initialHolding: HoldingGroup = {

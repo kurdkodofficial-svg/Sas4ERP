@@ -544,7 +544,227 @@ app.post('/api/mesh/sync', (req: Request, res: Response) => {
     success: true,
     message: 'Local Mesh sync reconciled successfully on LAN Master',
     receivedCount: mutations?.length || 0,
-    totalHoldingMutations: serverMeshMutations.length
+  });
+});
+
+// =========================================================================
+// SAS4ERP Multi-Laptop Real-Time Synchronization Engine
+// Synchronizes Erbil HQ with Halabja Site and other subsidiary laptops
+// =========================================================================
+
+interface SyncNode {
+  nodeId: string;
+  nodeName: string;
+  location: string;
+  role: string;
+  lastPing: string;
+  ipAddress?: string;
+}
+
+interface HoldingCloudSyncStore {
+  holdingKey: string;
+  holdingName: string;
+  version: number;
+  lastUpdated: string;
+  lastUpdatedByNode: string;
+  connectedNodes: SyncNode[];
+  state: Record<string, any>;
+  subscribers: Set<Response>;
+}
+
+const holdingCloudStores = new Map<string, HoldingCloudSyncStore>();
+
+function getHoldingStore(key: string, defaultName: string = 'Holding Enterprise'): HoldingCloudSyncStore {
+  const normalizedKey = (key || 'HOLDING-KEY-DEFAULT').trim().toUpperCase();
+  if (!holdingCloudStores.has(normalizedKey)) {
+    holdingCloudStores.set(normalizedKey, {
+      holdingKey: normalizedKey,
+      holdingName: defaultName,
+      version: 1,
+      lastUpdated: new Date().toISOString(),
+      lastUpdatedByNode: 'Central Cloud Server',
+      connectedNodes: [],
+      state: {},
+      subscribers: new Set()
+    });
+  }
+  return holdingCloudStores.get(normalizedKey)!;
+}
+
+// 1. Connect / Pair Laptop to Holding Key
+app.post('/api/sync/connect', (req: Request, res: Response) => {
+  const { holdingKey, node, initialState } = req.body;
+  const store = getHoldingStore(holdingKey || 'HOLDING-KEY-DEFAULT');
+
+  if (node && node.nodeId) {
+    const existingIndex = store.connectedNodes.findIndex(n => n.nodeId === node.nodeId);
+    const nodeRecord: SyncNode = {
+      nodeId: node.nodeId,
+      nodeName: node.nodeName || 'Remote ERP Laptop',
+      location: node.location || 'Site Office',
+      role: node.role || 'GENERAL',
+      lastPing: new Date().toISOString(),
+      ipAddress: req.ip
+    };
+
+    if (existingIndex >= 0) {
+      store.connectedNodes[existingIndex] = nodeRecord;
+    } else {
+      store.connectedNodes.push(nodeRecord);
+    }
+  }
+
+  // If server store is empty and client provided state, bootstrap it
+  if (Object.keys(store.state).length === 0 && initialState && Object.keys(initialState).length > 0) {
+    store.state = initialState;
+    store.version = 1;
+    store.lastUpdated = new Date().toISOString();
+    store.lastUpdatedByNode = node?.nodeName || 'Bootstrap Node';
+  }
+
+  res.json({
+    success: true,
+    holdingKey: store.holdingKey,
+    version: store.version,
+    lastUpdated: store.lastUpdated,
+    lastUpdatedByNode: store.lastUpdatedByNode,
+    state: store.state,
+    connectedNodes: store.connectedNodes
+  });
+});
+
+// 2. Push State Updates from any Laptop (Erbil or Halabja)
+app.post('/api/sync/push', (req: Request, res: Response) => {
+  const { holdingKey, nodeId, nodeName, stateUpdates } = req.body;
+  const store = getHoldingStore(holdingKey);
+
+  if (stateUpdates && typeof stateUpdates === 'object') {
+    store.state = {
+      ...store.state,
+      ...stateUpdates
+    };
+    store.version += 1;
+    store.lastUpdated = new Date().toISOString();
+    store.lastUpdatedByNode = nodeName || nodeId || 'Remote Laptop';
+
+    // Update node heartbeat
+    if (nodeId) {
+      const targetNode = store.connectedNodes.find(n => n.nodeId === nodeId);
+      if (targetNode) {
+        targetNode.lastPing = store.lastUpdated;
+      }
+    }
+
+    // Broadcast SSE update event to all other connected laptops
+    const broadcastData = JSON.stringify({
+      type: 'STATE_UPDATED',
+      holdingKey: store.holdingKey,
+      version: store.version,
+      updatedBy: store.lastUpdatedByNode,
+      lastUpdated: store.lastUpdated
+    });
+
+    store.subscribers.forEach((clientRes) => {
+      try {
+        clientRes.write(`data: ${broadcastData}\n\n`);
+      } catch (err) {
+        store.subscribers.delete(clientRes);
+      }
+    });
+  }
+
+  res.json({
+    success: true,
+    version: store.version,
+    lastUpdated: store.lastUpdated,
+    connectedCount: store.connectedNodes.length
+  });
+});
+
+// 3. Pull Full State Snapshot
+app.get('/api/sync/pull', (req: Request, res: Response) => {
+  const key = String(req.query.key || 'HOLDING-KEY-DEFAULT');
+  const store = getHoldingStore(key);
+
+  res.json({
+    success: true,
+    holdingKey: store.holdingKey,
+    version: store.version,
+    lastUpdated: store.lastUpdated,
+    lastUpdatedByNode: store.lastUpdatedByNode,
+    state: store.state,
+    connectedNodes: store.connectedNodes
+  });
+});
+
+// 4. Real-Time Server-Sent Events (SSE) Stream
+app.get('/api/sync/events', (req: Request, res: Response) => {
+  const key = String(req.query.key || 'HOLDING-KEY-DEFAULT');
+  const nodeId = String(req.query.nodeId || '');
+  const nodeName = String(req.query.nodeName || 'Laptop');
+  const location = String(req.query.location || 'Remote');
+
+  const store = getHoldingStore(key);
+
+  // Set SSE Headers
+  res.writeHead(200, {
+    'Content-Type': 'text/event-stream',
+    'Cache-Control': 'no-cache',
+    'Connection': 'keep-alive',
+  });
+  res.write('\n');
+
+  // Register node
+  if (nodeId) {
+    const existingIndex = store.connectedNodes.findIndex(n => n.nodeId === nodeId);
+    const nodeRec: SyncNode = {
+      nodeId,
+      nodeName,
+      location,
+      role: 'PEER',
+      lastPing: new Date().toISOString(),
+      ipAddress: req.ip
+    };
+    if (existingIndex >= 0) {
+      store.connectedNodes[existingIndex] = nodeRec;
+    } else {
+      store.connectedNodes.push(nodeRec);
+    }
+  }
+
+  store.subscribers.add(res);
+
+  // Send initial handshake
+  res.write(`data: ${JSON.stringify({ type: 'HANDSHAKE', holdingKey: store.holdingKey, version: store.version })}\n\n`);
+
+  req.on('close', () => {
+    store.subscribers.delete(res);
+  });
+});
+
+// 5. Heartbeat Ping & Pruning
+app.post('/api/sync/ping', (req: Request, res: Response) => {
+  const { holdingKey, nodeId } = req.body;
+  const store = getHoldingStore(holdingKey);
+  const now = Date.now();
+
+  if (nodeId) {
+    const node = store.connectedNodes.find(n => n.nodeId === nodeId);
+    if (node) {
+      node.lastPing = new Date().toISOString();
+    }
+  }
+
+  // Prune nodes inactive for > 120 seconds
+  store.connectedNodes = store.connectedNodes.filter(n => {
+    const pingTime = new Date(n.lastPing).getTime();
+    return (now - pingTime) < 120000;
+  });
+
+  res.json({
+    success: true,
+    version: store.version,
+    activeNodes: store.connectedNodes
   });
 });
 

@@ -36,6 +36,8 @@ export interface HoldingSectorKpi {
   nameKu: string;
   nameAr: string;
   description: string;
+  descriptionKu?: string;
+  descriptionAr?: string;
   color: string;
   annualBudgetUSD: number;
   spentUSD: number;

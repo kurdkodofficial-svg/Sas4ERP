@@ -148,7 +148,7 @@ export const translations: TranslationDict = {
     ar: 'القسم الفني، الكهرباء والمعدات',
   },
   navCorrespondence: {
-    en: 'Inbound & Outbound (الصادرة والواردة)',
+    en: 'Inbound & Outbound',
     ku: 'نوسراوی هاتو و نێردراو (الصادرة والواردة)',
     ar: 'الاتصالات الإدارية (الصادرة والواردة)',
   },
@@ -207,7 +207,7 @@ export const translations: TranslationDict = {
     ar: 'قانون المجموعة: لا يتم صرف أي أمر شراء دون الموافقة المباشرة لمالك المجموعة.',
   },
   generalManagersTitle: {
-    en: 'Subsidiary General Managers (بەڕێوەبەرە گشتیەکان)',
+    en: 'Subsidiary General Managers',
     ku: 'بەڕێوەبەرە گشتیەکانی کۆمپانیاکانی هۆلدینگ',
     ar: 'المدراء العامون لشركات المجموعة القابضة',
   },
@@ -349,7 +349,7 @@ export const translations: TranslationDict = {
 
   // Correspondence
   inboundOutboundTitle: {
-    en: 'Official Letters (Inbound & Outbound / الصادرة والواردة)',
+    en: 'Official Letters (Inbound & Outbound)',
     ku: 'نوسراوی فەرمی (الصادرة والواردة / هاتوو و نێردراو)',
     ar: 'الاتصالات الإدارية والمراسلات الرسمية (الصادرة والواردة)',
   },

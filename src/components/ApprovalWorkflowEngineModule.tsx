@@ -32,7 +32,9 @@ import {
   ShieldAlert,
   Sparkles,
   RefreshCw,
-  Zap
+  Zap,
+  PenTool,
+  Stamp
 } from 'lucide-react';
 import { useERP } from '../context/ERPContext';
 import { useLanguage } from '../context/LanguageContext';
@@ -55,6 +57,7 @@ import {
   findGMPolicy,
   evaluateGMWorkflowDecision
 } from '../services/workflowEngine';
+import { DigitalSignatureStudio } from './workflow/DigitalSignatureStudio';
 
 export const ApprovalWorkflowEngineModule: React.FC = () => {
   const {
@@ -80,15 +83,22 @@ export const ApprovalWorkflowEngineModule: React.FC = () => {
     evaluateGMForPO,
     autoApproveGMStep,
     currentUser,
-    setActiveTab
+    setActiveTab,
+    setSignatureTargetPoId,
+    setIsSignatureModalOpen,
+    setPrintPreviewPO,
+    setIsPrinterModalOpen,
+    openPrintManager,
+    printPurchaseOrder
   } = useERP();
 
   const { t, language } = useLanguage();
 
   // Active Tab within Module
   const [activeEngineTab, setActiveEngineTab] = useState<
-    'QUEUE' | 'CHAINS' | 'POLICIES' | 'GM_BUDGET_RULES' | 'SIMULATOR' | 'AUDIT'
+    'QUEUE' | 'CHAINS' | 'POLICIES' | 'GM_BUDGET_RULES' | 'SIGNATURE_STUDIO' | 'SIMULATOR' | 'AUDIT'
   >('QUEUE');
+  const [studioPoId, setStudioPoId] = useState<string | undefined>(undefined);
 
   // Filter States for Queue
   const [searchQuery, setSearchQuery] = useState('');
@@ -458,6 +468,21 @@ export const ApprovalWorkflowEngineModule: React.FC = () => {
           <span>{getUIText(language, { en: 'GM Budget Decisions & Thresholds', ku: 'بڕیاری بەڕێوەبەری گشتی بەپێی بودجە', ar: 'قرارات وميزانيات المدراء العامين' })}</span>
           <span className="text-[10px] px-1.5 py-0.2 rounded-md bg-emerald-100 text-emerald-700 font-bold font-mono">
             {gmBudgetPolicies.length}
+          </span>
+        </button>
+
+        <button
+          onClick={() => setActiveEngineTab('SIGNATURE_STUDIO')}
+          className={`flex items-center gap-2 px-4 py-2.5 rounded-2xl text-xs font-bold transition whitespace-nowrap cursor-pointer ${
+            activeEngineTab === 'SIGNATURE_STUDIO'
+              ? 'bg-gradient-to-r from-amber-500 to-amber-600 text-slate-950 shadow-md font-black'
+              : 'bg-white text-slate-700 hover:bg-slate-100 border border-slate-200/80'
+          }`}
+        >
+          <Stamp className="w-4 h-4 text-rose-600" />
+          <span>{getUIText(language, { en: 'Digital Signature & Stamp Studio', ku: 'واژۆی ئەلیکترۆنی و ستۆدیۆی مۆری فەرمی', ar: 'استوديو التوقيع والختم الرسمي' })}</span>
+          <span className="px-1.5 py-0.5 rounded-md text-[9px] font-black uppercase bg-rose-100 text-rose-700">
+            {getUIText(language, { en: 'Drag & Drop', ku: 'درەگ و درۆپ', ar: 'سحب وإفلات' })}
           </span>
         </button>
 
@@ -875,6 +900,15 @@ export const ApprovalWorkflowEngineModule: React.FC = () => {
                           <span>{getUIText(language, { en: 'Audit Log & History', ku: 'مێژووی وردبینی', ar: 'سجل التدقيق' })}</span>
                         </button>
 
+                        <button
+                          onClick={() => openPrintManager(po)}
+                          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold bg-slate-100 hover:bg-slate-200 text-slate-800 border border-slate-200 transition cursor-pointer"
+                          title="Print via PrintManager Network Station"
+                        >
+                          <Printer className="w-3.5 h-3.5 text-slate-600" />
+                          <span>{getUIText(language, { en: 'Print Voucher', ku: 'چاپکردنی پسوولە', ar: 'طباعة السند' })}</span>
+                        </button>
+
                         {po.holdingApproval && (
                           <button
                             onClick={() => setSelectedPoForSeal(po)}
@@ -887,21 +921,33 @@ export const ApprovalWorkflowEngineModule: React.FC = () => {
                       </div>
 
                       {isPendingOwner && (
-                        <div className="flex items-center gap-2.5">
+                        <div className="flex items-center gap-2.5 flex-wrap">
                           <button
                             onClick={() => setRejectionModalPo(po)}
-                            className="px-4 py-2 rounded-xl text-xs font-bold bg-rose-50 hover:bg-rose-600 text-rose-700 hover:text-white border border-rose-200 transition cursor-pointer flex items-center gap-1.5"
+                            className="px-3.5 py-2 rounded-xl text-xs font-bold bg-rose-50 hover:bg-rose-600 text-rose-700 hover:text-white border border-rose-200 transition cursor-pointer flex items-center gap-1.5"
                           >
                             <XCircle className="w-4 h-4" />
-                            <span>{getUIText(language, { en: 'Reject with Reason', ku: 'ڕەتکردنەوە بە هۆکار', ar: 'رفض مع بيان السبب' })}</span>
+                            <span>{getUIText(language, { en: 'Reject', ku: 'ڕەتکردنەوە', ar: 'رفض' })}</span>
+                          </button>
+
+                          <button
+                            onClick={() => {
+                              setStudioPoId(po.id);
+                              setActiveEngineTab('SIGNATURE_STUDIO');
+                            }}
+                            className="px-4 py-2 rounded-xl text-xs font-black bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700 text-white shadow-md transition transform active:scale-95 flex items-center gap-1.5 cursor-pointer"
+                            title="Open Drag & Drop Digital Signature and Seal Studio"
+                          >
+                            <Stamp className="w-4 h-4" />
+                            <span>{getUIText(language, { en: 'Digital Stamp & Sign Studio', ku: 'ستۆدیۆی واژۆ و مۆر (درەگ)', ar: 'استوديو التوقيع والختم (سحب)' })}</span>
                           </button>
 
                           <button
                             onClick={() => handleApproveWithSeal(po)}
-                            className="px-6 py-2 rounded-xl text-xs font-black bg-emerald-600 hover:bg-emerald-700 text-white shadow-md transition transform active:scale-95 flex items-center gap-2 cursor-pointer"
+                            className="px-5 py-2 rounded-xl text-xs font-black bg-emerald-600 hover:bg-emerald-700 text-white shadow-md transition transform active:scale-95 flex items-center gap-2 cursor-pointer"
                           >
                             <CheckCircle2 className="w-4 h-4" />
-                            <span>{getUIText(language, { en: 'Authorize & Sign Order', ku: 'پەسەندکردن و واژۆی کۆتایی', ar: 'اعتماد وتوقيع الطلب' })}</span>
+                            <span>{getUIText(language, { en: 'Authorize Order', ku: 'پەسەندکردنی کۆتایی', ar: 'اعتماد نهائي' })}</span>
                           </button>
                         </div>
                       )}
@@ -1634,6 +1680,18 @@ export const ApprovalWorkflowEngineModule: React.FC = () => {
       )}
 
       {/* ========================================================================= */}
+      {/* TAB: DIGITAL SIGNATURE & OFFICIAL STAMP STUDIO (DRAG & DROP) */}
+      {/* ========================================================================= */}
+      {activeEngineTab === 'SIGNATURE_STUDIO' && (
+        <DigitalSignatureStudio
+          initialPoId={studioPoId}
+          onSignSuccess={() => {
+            setActiveEngineTab('QUEUE');
+          }}
+        />
+      )}
+
+      {/* ========================================================================= */}
       {/* TAB 4: WORKFLOW SIMULATOR & SANDBOX */}
       {/* ========================================================================= */}
       {activeEngineTab === 'SIMULATOR' && (
@@ -2022,14 +2080,59 @@ export const ApprovalWorkflowEngineModule: React.FC = () => {
                   {selectedPoForSeal.holdingApproval?.signatureHash || `SIG-HOLDING-${Math.random().toString(36).substring(2, 10).toUpperCase()}`}
                 </span>
               </div>
+
+              {/* Electronic Signature & Seal Visual Display */}
+              {(selectedPoForSeal.holdingApproval?.signatureImage || selectedPoForSeal.holdingApproval?.sealStampImage) && (
+                <div className="pt-2 border-t border-slate-200 flex items-center justify-around bg-white p-3 rounded-xl border">
+                  {selectedPoForSeal.holdingApproval?.signatureImage && (
+                    <div className="text-center">
+                      <span className="text-[10px] text-slate-400 block mb-1">
+                        {getUIText(language, { en: 'Electronic Signature', ku: 'واژۆی ئەلیکترۆنی', ar: 'التوقيع الإلكتروني' })}
+                      </span>
+                      <img
+                        src={selectedPoForSeal.holdingApproval.signatureImage}
+                        alt="E-Signature"
+                        className="max-h-12 max-w-[120px] object-contain mx-auto"
+                      />
+                    </div>
+                  )}
+
+                  {selectedPoForSeal.holdingApproval?.sealStampImage && (
+                    <div className="text-center">
+                      <span className="text-[10px] text-slate-400 block mb-1">
+                        {getUIText(language, { en: 'Holding Official Seal', ku: 'مۆری فەرمی هۆڵدینگ', ar: 'الختم الرسمي' })}
+                      </span>
+                      <img
+                        src={selectedPoForSeal.holdingApproval.sealStampImage}
+                        alt="Official Seal"
+                        className="w-14 h-14 object-contain mx-auto"
+                      />
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
 
-            <button
-              onClick={() => setSelectedPoForSeal(null)}
-              className="w-full py-2.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs shadow-md transition cursor-pointer"
-            >
-              {getUIText(language, { en: 'Close Certificate', ku: 'داخستنی بڕوانامە', ar: 'إغلاق الشهادة' })}
-            </button>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => {
+                  const poToPrint = selectedPoForSeal;
+                  setSelectedPoForSeal(null);
+                  openPrintManager(poToPrint);
+                }}
+                className="flex-1 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs shadow-md transition cursor-pointer flex items-center justify-center gap-1.5"
+              >
+                <Printer className="w-4 h-4" />
+                <span>{getUIText(language, { en: 'Print Official Voucher', ku: 'چاپکردنی پسوولەی فەرمی', ar: 'طباعة السند الرسمي' })}</span>
+              </button>
+
+              <button
+                onClick={() => setSelectedPoForSeal(null)}
+                className="px-5 py-2.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs transition cursor-pointer"
+              >
+                {getUIText(language, { en: 'Close', ku: 'داخستن', ar: 'إغلاق' })}
+              </button>
+            </div>
           </div>
         </div>
       )}

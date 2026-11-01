@@ -14,11 +14,14 @@ import {
   Building2,
   FileText,
   AlertTriangle,
-  Trash2
+  Trash2,
+  PenTool,
+  ChevronRight
 } from 'lucide-react';
 import { useERP } from '../context/ERPContext';
 import { useLanguage } from '../context/LanguageContext';
 import { PurchaseOrder, PurchaseItem } from '../types/erp';
+import { RequestApprovalJourneyModal } from './workflow/RequestApprovalJourneyModal';
 
 export const ProcurementModule: React.FC = () => {
   const {
@@ -47,8 +50,18 @@ export const ProcurementModule: React.FC = () => {
 
   const [aiAuditResult, setAiAuditResult] = useState<string | null>(null);
   const [isAuditing, setIsAuditing] = useState(false);
+  const [trackingPo, setTrackingPo] = useState<PurchaseOrder | null>(null);
+
+  const isHoldingApprover = currentUser.role === 'HOLDING_OWNER' || currentUser.role === 'SUPER_ADMIN';
 
   const filteredPOs = purchaseOrders.filter((po) => {
+    // If subordinate has designated project or company
+    if (currentUser.role === 'PROJECT_MANAGER' && currentUser.projectId && po.projectId !== currentUser.projectId) {
+      return false;
+    }
+    if (currentUser.role === 'COMPANY_GM' && currentUser.companyId && po.companyId !== currentUser.companyId) {
+      return false;
+    }
     if (selectedCompanyId !== 'ALL' && po.companyId !== selectedCompanyId) return false;
     if (filterStatus !== 'ALL' && po.status !== filterStatus) return false;
     return true;
@@ -240,19 +253,34 @@ export const ProcurementModule: React.FC = () => {
               </div>
 
               {/* Holding Owner Decision Stamp or Action Buttons */}
-              <div className="pt-3 border-t border-slate-100 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                {po.holdingApproval ? (
-                  <div className="flex items-center gap-2 text-xs text-emerald-800 bg-emerald-50 border border-emerald-200 px-3 py-1.5 rounded-xl font-medium">
-                    <Crown className="w-4 h-4 text-amber-600" />
-                    <span>Approved by <strong>{po.holdingApproval.approvedBy}</strong> ({po.holdingApproval.approvedAt})</span>
-                    <span className="font-mono text-[10px] text-slate-500">[{po.holdingApproval.signatureHash}]</span>
-                  </div>
-                ) : (
-                  <div className="flex items-center gap-2 text-xs text-amber-700">
-                    <Clock className="w-4 h-4 text-amber-600" />
-                    <span>Awaiting Holding Owner Signature</span>
-                  </div>
-                )}
+              <div className="pt-3 border-t border-slate-100 flex flex-col md:flex-row md:items-center justify-between gap-3">
+                <div className="flex flex-col sm:flex-row sm:items-center gap-2">
+                  {po.holdingApproval ? (
+                    <div className="flex items-center gap-2 text-xs text-emerald-800 bg-emerald-50 border border-emerald-200 px-3 py-1.5 rounded-xl font-medium">
+                      <Crown className="w-4 h-4 text-amber-600" />
+                      <span>Approved by <strong>{po.holdingApproval.approvedBy}</strong> ({po.holdingApproval.approvedAt})</span>
+                      <span className="font-mono text-[10px] text-slate-500">[{po.holdingApproval.signatureHash}]</span>
+                    </div>
+                  ) : (
+                    <div className="flex items-center gap-2 text-xs text-amber-800 bg-amber-50 border border-amber-200 px-3 py-1.5 rounded-xl font-medium">
+                      <Clock className="w-4 h-4 text-amber-600 animate-pulse" />
+                      <span>
+                        {language === 'ku'
+                          ? `گەیشتۆتە لای: ${po.workflowState?.steps?.find(s => s.status === 'PENDING')?.titleKu || 'خاوەنی هۆڵدینگ (سەرۆکایەتی)'}`
+                          : `Currently with: ${po.workflowState?.steps?.find(s => s.status === 'PENDING')?.titleEn || 'Holding Owner Signature'}`}
+                      </span>
+                    </div>
+                  )}
+
+                  <button
+                    onClick={() => setTrackingPo(po)}
+                    className="px-3 py-1.5 rounded-xl bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 text-xs font-bold flex items-center gap-1.5 transition cursor-pointer self-start sm:self-auto shadow-2xs"
+                  >
+                    <PenTool className="w-3.5 h-3.5 text-blue-600" />
+                    <span>{language === 'ku' ? 'چاودێری واژۆ و مۆرەکان' : 'Track Approval Journey'}</span>
+                    <ChevronRight className="w-3.5 h-3.5 rtl:rotate-180" />
+                  </button>
+                </div>
 
                 {/* Owner Actions */}
                 <div className="flex items-center gap-2">
@@ -264,7 +292,7 @@ export const ProcurementModule: React.FC = () => {
                     <span>AI Audit</span>
                   </button>
 
-                  {isPending && (
+                  {isPending && isHoldingApprover && (
                     <>
                       <button
                         onClick={() => approvePurchaseByOwner(po.id, 'Holding Owner Approved')}
@@ -283,14 +311,22 @@ export const ProcurementModule: React.FC = () => {
                     </>
                   )}
 
-                  <button
-                    type="button"
-                    onClick={() => deletePurchaseOrder(po.id)}
-                    className="flex items-center gap-1 px-2.5 py-1.5 rounded-xl text-xs font-medium text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition cursor-pointer"
-                    title="سڕینەوەی ئەم داواکارییە (Delete PO)"
-                  >
-                    <Trash2 className="w-3.5 h-3.5" />
-                  </button>
+                  {isPending && !isHoldingApprover && (
+                    <span className="text-[11px] font-bold text-slate-500 bg-slate-100 border border-slate-200 px-2.5 py-1 rounded-lg">
+                      {language === 'ku' ? '🔒 چاوەڕوانی واژۆی سەرەوەیە' : '🔒 Awaiting Upper Sign-off'}
+                    </span>
+                  )}
+
+                  {isHoldingApprover && (
+                    <button
+                      type="button"
+                      onClick={() => deletePurchaseOrder(po.id)}
+                      className="flex items-center gap-1 px-2.5 py-1.5 rounded-xl text-xs font-medium text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition cursor-pointer"
+                      title="سڕینەوەی ئەم داواکارییە (Delete PO)"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </button>
+                  )}
                 </div>
               </div>
 
@@ -446,6 +482,12 @@ export const ProcurementModule: React.FC = () => {
         </div>
       )}
 
+      {/* Request Approval Journey Modal */}
+      <RequestApprovalJourneyModal
+        isOpen={Boolean(trackingPo)}
+        onClose={() => setTrackingPo(null)}
+        purchaseOrder={trackingPo}
+      />
     </div>
   );
 };

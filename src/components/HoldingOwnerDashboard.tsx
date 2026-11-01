@@ -31,7 +31,8 @@ import {
   Edit3,
   Printer,
   FolderKanban,
-  Radio
+  Radio,
+  PenTool
 } from 'lucide-react';
 import { useERP } from '../context/ERPContext';
 import { useLanguage } from '../context/LanguageContext';
@@ -57,6 +58,7 @@ import { ProjectExpenditureBudgetRechartsDashboard } from './dashboard/ProjectEx
 import { MLAnomalyMonitorWidget } from './dashboard/MLAnomalyMonitorWidget';
 import { ExecutiveStickyNoteWidget } from './dashboard/ExecutiveStickyNoteWidget';
 import { HoldingMeshSyncHubModal } from './dashboard/HoldingMeshSyncHubModal';
+import { BranchProjectOperationalPortal } from './dashboard/BranchProjectOperationalPortal';
 
 export const HoldingOwnerDashboard: React.FC = () => {
   const {
@@ -75,6 +77,9 @@ export const HoldingOwnerDashboard: React.FC = () => {
     setIsHoldingSetupOpen,
     setActiveTab,
     setSelectedCompanyId,
+    setIsSignatureModalOpen,
+    setIsPrinterModalOpen,
+    currentUser,
   } = useERP();
 
   const { t, language } = useLanguage();
@@ -645,13 +650,21 @@ export const HoldingOwnerDashboard: React.FC = () => {
     }
   };
 
+  // RBAC Boundary: Top Management (سەرەوە) vs Subordinates (خوارەوە)
+  const isTopManagement = currentUser.role === 'HOLDING_OWNER' || currentUser.role === 'SUPER_ADMIN';
+
+  if (!isTopManagement) {
+    return <BranchProjectOperationalPortal />;
+  }
+
   return (
     <div className="space-y-6 animate-in fade-in duration-300">
       
       {/* Top Banner: Holding Owner Executive Overview */}
       <div className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-slate-900 via-indigo-950 to-blue-950 border border-indigo-500/20 p-6 sm:p-8 shadow-md">
         <div className="absolute top-0 right-0 w-96 h-96 bg-blue-500/10 rounded-full blur-3xl pointer-events-none" />
-        <div className="relative z-10 flex flex-col lg:flex-row lg:items-center justify-between gap-6">
+        {/* Tier 1: Executive Brand & Symmetrical Live Macro Statuses */}
+        <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-6">
           <div className="flex items-start gap-4">
             {/* Holding Custom Logo or Platform Emblem */}
             {holding.logoUrl ? (
@@ -708,7 +721,7 @@ export const HoldingOwnerDashboard: React.FC = () => {
                 </button>
               </div>
 
-              <p className="text-sm text-slate-300 mt-2 max-w-2xl leading-relaxed">
+              <p className="text-xs sm:text-sm text-slate-300 mt-2 max-w-2xl leading-relaxed">
                 <span className="font-bold text-amber-300">
                   {getUIText(language, { en: 'SAS ERP: ', ku: 'سیستەمی SAS: ', ar: 'منصة SAS: ' })}
                 </span>
@@ -721,66 +734,109 @@ export const HoldingOwnerDashboard: React.FC = () => {
             </div>
           </div>
 
-          {/* Action Suite & Customize Button */}
-          <div className="flex flex-wrap items-center gap-2.5">
-            <button
-              onClick={() => setIsHoldingSetupOpen(true)}
-              className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold bg-amber-400 hover:bg-amber-300 text-slate-950 shadow-md transition transform active:scale-95 cursor-pointer"
-              id="dashboard-holding-identity-btn"
-              title={getUIText(language, { en: 'Setup Holding Name, Logo & Owner', ku: 'ڕێکخستنی ناوی هۆلدینگ، لۆگۆ و خاوەن', ar: 'ضبط اسم وشعار ومالك الهولدينغ' })}
-            >
-              <Crown className="w-4 h-4 text-slate-950" />
-              <span>{getUIText(language, { en: 'Holding & Owner Identity', ku: 'ناوی هۆلدینگ و خاوەن', ar: 'هوية الهولدينغ والمالك' })}</span>
-            </button>
+          {/* Symmetrical Executive Macro Badges on Trailing Side */}
+          <div className="flex items-center gap-2.5 sm:gap-3 flex-wrap shrink-0">
+            <div className="bg-white/5 border border-white/10 rounded-2xl px-3.5 py-2.5 backdrop-blur-md flex items-center gap-2.5">
+              <div className="w-8 h-8 rounded-xl bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 flex items-center justify-center font-bold">
+                <Building2 className="w-4 h-4" />
+              </div>
+              <div>
+                <span className="text-[10px] text-slate-400 font-bold uppercase block">{getUIText(language, { en: 'Subsidiaries', ku: 'کۆمپانیاکان', ar: 'الشركات' })}</span>
+                <span className="font-mono text-sm font-black text-white">{filteredCompanies.length} Active</span>
+              </div>
+            </div>
 
-            <button
-              onClick={() => setIsConfigModalOpen(true)}
-              className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold bg-white/10 hover:bg-white/20 text-white border border-white/20 shadow-sm transition transform active:scale-95 cursor-pointer backdrop-blur-md"
-              id="dashboard-customize-btn"
-              title={t('customizeDashboard')}
-            >
-              <Sliders className="w-4 h-4 text-amber-300" />
-              <span>{t('customizeDashboard')}</span>
-            </button>
-
-            <button
-              onClick={() => setIsMeetingModalOpen(true)}
-              className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold bg-blue-600 hover:bg-blue-500 text-white shadow-sm transition transform active:scale-95 cursor-pointer"
-              id="dashboard-start-meeting-btn"
-            >
-              <Video className="w-4 h-4" />
-              <span>{t('startInstantMeeting')}</span>
-            </button>
-
-            <button
-              onClick={() => setIsGateScannerOpen(true)}
-              className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold bg-emerald-600 hover:bg-emerald-500 text-white shadow-sm transition transform active:scale-95 cursor-pointer"
-              id="dashboard-gate-scanner-btn"
-            >
-              <ScanLine className="w-4 h-4 animate-pulse" />
-              <span>{t('scanReceiptBtn')}</span>
-            </button>
-
-            <button
-              onClick={() => setIsMeshHubOpen(true)}
-              className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold bg-indigo-600 hover:bg-indigo-500 text-white shadow-sm transition transform active:scale-95 cursor-pointer"
-              id="dashboard-mesh-hub-btn"
-              title={getUIText(language, { en: 'Offline local mesh sync', ku: 'تۆڕی خۆجێیی میش بۆ کاتی نەبوونی ئینتەرنێت', ar: 'شبكة المش المحلية عند انقطاع الإنترنت' })}
-            >
-              <Radio className="w-4 h-4 animate-pulse" />
-              <span>{t('localMeshNetwork')}</span>
-            </button>
-
-            <button
-              onClick={() => window.print()}
-              className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold bg-slate-800 hover:bg-slate-700 text-white border border-slate-700 shadow-sm transition transform active:scale-95 cursor-pointer"
-              id="dashboard-export-pdf-btn"
-              title={getUIText(language, { en: 'Export and print dashboard report as PDF', ku: 'داگرتن و پرینتکردنی گشتگیری پێوەرەکان بە PDF', ar: 'تصدير وطباعة التقرير بصيغة PDF' })}
-            >
-              <Printer className="w-4 h-4 text-sky-400" />
-              <span>{getUIText(language, { en: 'Export PDF', ku: 'داگرتنی ڕاپۆرتی PDF', ar: 'تصدير تقرير PDF' })}</span>
-            </button>
+            <div className="bg-white/5 border border-white/10 rounded-2xl px-3.5 py-2.5 backdrop-blur-md flex items-center gap-2.5">
+              <div className="w-8 h-8 rounded-xl bg-amber-500/20 text-amber-400 border border-amber-500/30 flex items-center justify-center font-bold">
+                <Crown className="w-4 h-4" />
+              </div>
+              <div>
+                <span className="text-[10px] text-slate-400 font-bold uppercase block">{getUIText(language, { en: 'Awaiting Sign', ku: 'چاوەڕوانی واژۆ', ar: 'بانتظار توقيع' })}</span>
+                <span className="font-mono text-sm font-black text-amber-400">{pendingPOs.length} POs</span>
+              </div>
+            </div>
           </div>
+        </div>
+
+        {/* Tier 2: Symmetrical Full-Width Action Deck */}
+        <div className="relative z-10 mt-6 pt-5 border-t border-indigo-900/60 grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-8 gap-2.5">
+          <button
+            onClick={() => setIsHoldingSetupOpen(true)}
+            className="flex items-center justify-center gap-2 px-3 py-2.5 rounded-xl text-xs font-bold bg-amber-400 hover:bg-amber-300 text-slate-950 shadow-md transition transform active:scale-95 cursor-pointer text-center"
+            id="dashboard-holding-identity-btn"
+            title={getUIText(language, { en: 'Setup Holding Name, Logo & Owner', ku: 'ڕێکخستنی ناوی هۆلدینگ، لۆگۆ و خاوەن', ar: 'ضبط اسم وشعار ومالك الهولدينغ' })}
+          >
+            <Crown className="w-4 h-4 text-slate-950 shrink-0" />
+            <span className="truncate">{getUIText(language, { en: 'Holding Identity', ku: 'ناوی هۆلدینگ و خاوەن', ar: 'هوية الهولدينغ' })}</span>
+          </button>
+
+          <button
+            onClick={() => setIsSignatureModalOpen(true)}
+            className="flex items-center justify-center gap-2 px-3 py-2.5 rounded-xl text-xs font-bold bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border border-amber-500/40 shadow-sm transition transform active:scale-95 cursor-pointer text-center"
+            id="dashboard-e-signature-btn"
+            title={getUIText(language, { en: 'Electronic Signature Studio & Official Seal', ku: 'ستۆدیۆی واژۆی ئەلیکترۆنی و مۆری فەرمی', ar: 'استوديو التوقيع الإلكتروني والختم' })}
+          >
+            <PenTool className="w-4 h-4 text-amber-300 shrink-0" />
+            <span className="truncate">{getUIText(language, { en: 'E-Signature Studio', ku: 'واژۆی ئەلیکترۆنی', ar: 'التوقيع الإلكتروني' })}</span>
+          </button>
+
+          <button
+            onClick={() => setIsPrinterModalOpen(true)}
+            className="flex items-center justify-center gap-2 px-3 py-2.5 rounded-xl text-xs font-bold bg-slate-800 hover:bg-slate-700 text-white border border-slate-700 shadow-sm transition transform active:scale-95 cursor-pointer text-center"
+            id="dashboard-printer-station-btn"
+            title={getUIText(language, { en: 'Hardware Printer Station & Output Settings', ku: 'بەستنەوە بە پرینتەر و ڕێکخستنی چاپ', ar: 'محطة الطباعة المادية' })}
+          >
+            <Printer className="w-4 h-4 text-sky-400 shrink-0" />
+            <span className="truncate">{getUIText(language, { en: 'Printer Station', ku: 'بەستنەوە بە پرینتەر', ar: 'محطة الطباعة' })}</span>
+          </button>
+
+          <button
+            onClick={() => setIsConfigModalOpen(true)}
+            className="flex items-center justify-center gap-2 px-3 py-2.5 rounded-xl text-xs font-bold bg-white/10 hover:bg-white/20 text-white border border-white/20 shadow-sm transition transform active:scale-95 cursor-pointer backdrop-blur-md text-center"
+            id="dashboard-customize-btn"
+            title={t('customizeDashboard')}
+          >
+            <Sliders className="w-4 h-4 text-amber-300 shrink-0" />
+            <span className="truncate">{t('customizeDashboard')}</span>
+          </button>
+
+          <button
+            onClick={() => setIsMeetingModalOpen(true)}
+            className="flex items-center justify-center gap-2 px-3 py-2.5 rounded-xl text-xs font-bold bg-blue-600 hover:bg-blue-500 text-white shadow-sm transition transform active:scale-95 cursor-pointer text-center"
+            id="dashboard-start-meeting-btn"
+          >
+            <Video className="w-4 h-4 shrink-0" />
+            <span className="truncate">{t('startInstantMeeting')}</span>
+          </button>
+
+          <button
+            onClick={() => setIsGateScannerOpen(true)}
+            className="flex items-center justify-center gap-2 px-3 py-2.5 rounded-xl text-xs font-bold bg-emerald-600 hover:bg-emerald-500 text-white shadow-sm transition transform active:scale-95 cursor-pointer text-center"
+            id="dashboard-gate-scanner-btn"
+          >
+            <ScanLine className="w-4 h-4 animate-pulse shrink-0" />
+            <span className="truncate">{t('scanReceiptBtn')}</span>
+          </button>
+
+          <button
+            onClick={() => setIsMeshHubOpen(true)}
+            className="flex items-center justify-center gap-2 px-3 py-2.5 rounded-xl text-xs font-bold bg-indigo-600 hover:bg-indigo-500 text-white shadow-sm transition transform active:scale-95 cursor-pointer text-center"
+            id="dashboard-mesh-hub-btn"
+            title={getUIText(language, { en: 'Offline local mesh sync', ku: 'تۆڕی خۆجێیی میش بۆ کاتی نەبوونی ئینتەرنێت', ar: 'شبكة المش المحلية عند انقطاع الإنترنت' })}
+          >
+            <Radio className="w-4 h-4 animate-pulse shrink-0" />
+            <span className="truncate">{t('localMeshNetwork')}</span>
+          </button>
+
+          <button
+            onClick={() => window.print()}
+            className="flex items-center justify-center gap-2 px-3 py-2.5 rounded-xl text-xs font-bold bg-slate-900 hover:bg-slate-800 text-white border border-slate-700 shadow-sm transition transform active:scale-95 cursor-pointer text-center"
+            id="dashboard-export-pdf-btn"
+            title={getUIText(language, { en: 'Export and print dashboard report as PDF', ku: 'داگرتن و پرینتکردنی گشتگیری پێوەرەکان بە PDF', ar: 'تصدير وطباعة التقرير بصيغة PDF' })}
+          >
+            <Printer className="w-4 h-4 text-emerald-400 shrink-0" />
+            <span className="truncate">{getUIText(language, { en: 'Export PDF', ku: 'داگرتنی PDF', ar: 'تصدير PDF' })}</span>
+          </button>
         </div>
 
         {/* Holding Owner Rule Highlight Banner */}

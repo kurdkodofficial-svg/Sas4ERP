@@ -95,7 +95,7 @@ export const availableWidgetsList: { id: WidgetId; name: string; desc: string; c
   { id: 'macro_kpis', name: 'Executive Macro KPIs', desc: 'Top high-level performance numbers and indicators', category: 'Overview' },
   { id: 'kpi_overview', name: 'KPI Overview: Budget vs. Actual Trends', desc: 'Visualizes sector performance metrics and budget vs actual spending trends using Recharts with itemized expense breakdown and PDF/Excel export', category: 'Overview' },
   { id: 'project_expenditure_chart', name: 'Real-Time Project Expenditure vs Budget (Recharts)', desc: 'Interactive Recharts dashboard visualizing project expenditure versus budget across different company subsidiaries', category: 'Finance' },
-  { id: 'general_managers', name: 'General Managers Command & Progress (بەڕێوەبەرە گشتیەکان)', desc: 'Add, supervise, and inspect progress and dashboards of all Subsidiary General Managers under the Holding Owner', category: 'Management' },
+  { id: 'general_managers', name: 'General Managers Command & Progress', desc: 'Add, supervise, and inspect progress and dashboards of all Subsidiary General Managers under the Holding Owner', category: 'Management' },
   { id: 'pending_approvals', name: 'Urgent Owner Approvals', desc: 'Holding purchase authorizations above threshold ($5,000+)', category: 'Finance' },
   { id: 'financial_summary', name: 'Holding Financial Matrix & Burn Rate', desc: 'Visual charts comparing subsidiary budgets, spend, and cash runway', category: 'Finance' },
   { id: 'projects_radar', name: 'Group Projects Delivery & Milestones', desc: 'Milestone tracking, on-time health, and workforce on site across all projects', category: 'Operations' },

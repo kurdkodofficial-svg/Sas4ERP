@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect } from 'react';
+import React, { createContext, useContext, useState, useEffect, useMemo, useCallback } from 'react';
 import confetti from 'canvas-confetti';
 import {
   HoldingGroup,
@@ -27,7 +27,9 @@ import {
   LetterApprovalStage,
   GeneralManagerProfile,
   ProjectPeriodicReport,
-  SubProject
+  SubProject,
+  PrinterDeviceConfig,
+  ExecutiveSignatureProfile
 } from '../types/erp';
 import { initialSubProjects } from '../data/initialSubProjects';
 import { generateDefaultDepartments } from '../data/departmentsData';
@@ -51,8 +53,28 @@ import {
   initialItAssets,
   initialDispatchShipments,
   initialEmployees,
-  currentUserProfiles
+  currentUserProfiles,
+  initialPrinterDevices,
+  initialSignatureProfiles
 } from '../data/initialData';
+import { ElectronicSignatureModal } from '../components/ElectronicSignatureModal';
+import { PrinterConnectivityModal } from '../components/PrinterConnectivityModal';
+import { DocumentPrintPreviewModal } from '../components/DocumentPrintPreviewModal';
+import { PrintManagerModal } from '../components/PrintManagerModal';
+import { HoldingCloudSyncModal } from '../components/dashboard/HoldingCloudSyncModal';
+import { holdingCloudSyncService, HoldingCloudSyncStatus } from '../services/holdingCloudSyncService';
+import { PrintManagerService } from '../services/printManager';
+import { PrintJob, PrintOptions, PrintResult, PrintableReportData } from '../types/print';
+import { HoldingSectorKpi } from '../types/kpi';
+import { getHoldingSectorsData } from '../data/holdingSectorsData';
+import {
+  IntercompanyInvoice,
+  IntercompanyBilateralPair,
+  ConsolidationSummary,
+  CreateBilateralInvoiceParams
+} from '../types/intercompany';
+import { initialIntercompanyInvoices } from '../data/initialIntercompanyData';
+import { ConsolidationEngine } from '../services/consolidationEngine';
 import {
   MLAnomalyAlert,
   AttendanceRecord,
@@ -128,7 +150,7 @@ interface ERPContextType {
   purchaseOrders: PurchaseOrder[];
   addPurchaseOrder: (po: Omit<PurchaseOrder, 'id' | 'poNumber' | 'createdDate' | 'status'>) => void;
   deletePurchaseOrder: (id: string) => void;
-  approvePurchaseByOwner: (poId: string, comments?: string) => void;
+  approvePurchaseByOwner: (poId: string, comments?: string, signatureImage?: string, sealStampImage?: string) => void;
   rejectPurchaseByOwner: (poId: string, comments?: string) => void;
 
   gateLogs: GateEntryLog[];
@@ -258,6 +280,68 @@ interface ERPContextType {
   deleteGmBudgetPolicy: (id: string) => void;
   evaluateGMForPO: (po: PurchaseOrder) => GMEvaluationResult;
   autoApproveGMStep: (poId: string, comments?: string) => void;
+
+  // Electronic Signature & Seal Engine
+  signatureProfiles: ExecutiveSignatureProfile[];
+  defaultSignature: ExecutiveSignatureProfile | null;
+  saveSignatureProfile: (profile: Omit<ExecutiveSignatureProfile, 'id' | 'createdDate'>) => void;
+  deleteSignatureProfile: (id: string) => void;
+  isSignatureModalOpen: boolean;
+  setIsSignatureModalOpen: (open: boolean) => void;
+  signatureTargetPoId: string | null;
+  setSignatureTargetPoId: (poId: string | null) => void;
+
+  // Hardware Printer Connectivity Engine
+  printerDevices: PrinterDeviceConfig[];
+  defaultPrinter: PrinterDeviceConfig | null;
+  addPrinterDevice: (device: Omit<PrinterDeviceConfig, 'id'>) => void;
+  updatePrinterDevice: (id: string, updates: Partial<PrinterDeviceConfig>) => void;
+  deletePrinterDevice: (id: string) => void;
+  setDefaultPrinter: (id: string) => void;
+  isPrinterModalOpen: boolean;
+  setIsPrinterModalOpen: (open: boolean) => void;
+
+  // Universal Document Print Preview
+  printPreviewPO: PurchaseOrder | null;
+  setPrintPreviewPO: (po: PurchaseOrder | null) => void;
+
+  // ERP PrintManager Utility & Network Printing
+  printManager: PrintManagerService;
+  printQueue: PrintJob[];
+  printPurchaseOrder: (po: PurchaseOrder, options?: PrintOptions) => Promise<PrintResult>;
+  printDigitalApproval: (po: PurchaseOrder, options?: PrintOptions) => Promise<PrintResult>;
+  printKpiReport: (reportData: PrintableReportData, options?: PrintOptions) => Promise<PrintResult>;
+  reprintJob: (jobId: string) => Promise<PrintResult | null>;
+  cancelPrintJob: (jobId: string) => void;
+  clearPrintHistory: () => void;
+  isPrintManagerModalOpen: boolean;
+  setIsPrintManagerModalOpen: (open: boolean) => void;
+  openPrintManager: (documentToPrint?: PurchaseOrder | null) => void;
+
+  // Holding Sectors & Financial KPI State (Customizable by Admin)
+  holdingSectors: HoldingSectorKpi[];
+  addHoldingSector: (sector: Omit<HoldingSectorKpi, 'id'>) => void;
+  updateHoldingSector: (id: string, updates: Partial<HoldingSectorKpi>) => void;
+  deleteHoldingSector: (id: string) => void;
+  resetHoldingSectorsToDefault: () => void;
+  syncSectorsWithCompanies: () => void;
+
+  // Intercompany Bilateral Invoicing & Financial Consolidation (IFRS 10 / GAAP)
+  intercompanyInvoices: IntercompanyInvoice[];
+  createBilateralIntercompanyInvoice: (params: CreateBilateralInvoiceParams) => { expenseInvoice: IntercompanyInvoice; revenueInvoice: IntercompanyInvoice };
+  settleIntercompanyInvoice: (pairId: string) => void;
+  deleteIntercompanyPair: (pairId: string) => void;
+  isConsolidationEnabled: boolean;
+  setIsConsolidationEnabled: (enabled: boolean) => void;
+  consolidationSummary: ConsolidationSummary;
+
+  // Holding Cloud Real-Time Multi-Laptop Synchronization (Erbil HQ <-> Halabja Site)
+  isCloudSyncModalOpen: boolean;
+  setIsCloudSyncModalOpen: (open: boolean) => void;
+  holdingCloudSyncStatus: HoldingCloudSyncStatus;
+  triggerForceSync: () => Promise<void>;
+  holdingSyncKey: string;
+  setHoldingSyncKey: (key: string) => void;
 }
 
 const ERPContext = createContext<ERPContextType | undefined>(undefined);
@@ -280,6 +364,35 @@ export const ERPProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         ) {
           parsed.chairmanName = '';
         }
+
+        // Cleanse holding name if it was set to SAS Holding, SAS Holding International, etc.
+        if (
+          parsed.name &&
+          (parsed.name.toLowerCase().includes('sas holding') ||
+            parsed.name.toLowerCase().includes('holding international') ||
+            parsed.name.toLowerCase().includes('sas international') ||
+            parsed.name.trim() === 'SAS' ||
+            parsed.name.trim() === 'SAS Holding')
+        ) {
+          parsed.name = '';
+        }
+        if (
+          parsed.nameKu &&
+          (parsed.nameKu.toLowerCase().includes('sas holding') ||
+            parsed.nameKu.includes('ساس') ||
+            parsed.nameKu.includes('SAS'))
+        ) {
+          parsed.nameKu = '';
+        }
+        if (
+          parsed.nameAr &&
+          (parsed.nameAr.toLowerCase().includes('sas holding') ||
+            parsed.nameAr.includes('ساس') ||
+            parsed.nameAr.includes('SAS'))
+        ) {
+          parsed.nameAr = '';
+        }
+
         return parsed;
       } catch (e) {
         console.error('Failed to parse saved holding', e);
@@ -287,6 +400,152 @@ export const ERPProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
     return initialHolding;
   });
+
+  // Electronic Signature & Seal State
+  const [signatureProfiles, setSignatureProfiles] = useState<ExecutiveSignatureProfile[]>(() => {
+    const saved = localStorage.getItem('sas4erp_signatures');
+    return saved ? JSON.parse(saved) : initialSignatureProfiles;
+  });
+  const [isSignatureModalOpen, setIsSignatureModalOpen] = useState(false);
+  const [signatureTargetPoId, setSignatureTargetPoId] = useState<string | null>(null);
+
+  // Hardware Printer Connectivity State
+  const [printerDevices, setPrinterDevices] = useState<PrinterDeviceConfig[]>(() => {
+    const saved = localStorage.getItem('sas4erp_printers');
+    return saved ? JSON.parse(saved) : initialPrinterDevices;
+  });
+  const [isPrinterModalOpen, setIsPrinterModalOpen] = useState(false);
+  const [printPreviewPO, setPrintPreviewPO] = useState<PurchaseOrder | null>(null);
+
+  const defaultPrinter = printerDevices.find(p => p.isDefault) || printerDevices[0] || null;
+  const defaultSignature = signatureProfiles.find(s => s.isActive) || signatureProfiles[0] || null;
+
+  const saveSignatureProfile = (profile: Omit<ExecutiveSignatureProfile, 'id' | 'createdDate'>) => {
+    const newProfile: ExecutiveSignatureProfile = {
+      ...profile,
+      id: `sig-${Date.now()}`,
+      createdDate: new Date().toISOString()
+    };
+    setSignatureProfiles(prev => {
+      const updated = [newProfile, ...prev.map(p => ({ ...p, isActive: false }))];
+      try {
+        localStorage.setItem('sas4erp_signatures', JSON.stringify(updated));
+      } catch {}
+      return updated;
+    });
+  };
+
+  const deleteSignatureProfile = (id: string) => {
+    setSignatureProfiles(prev => {
+      const updated = prev.filter(p => p.id !== id);
+      try {
+        localStorage.setItem('sas4erp_signatures', JSON.stringify(updated));
+      } catch {}
+      return updated;
+    });
+  };
+
+  const addPrinterDevice = (device: Omit<PrinterDeviceConfig, 'id'>) => {
+    const newDevice: PrinterDeviceConfig = {
+      ...device,
+      id: `prn-${Date.now()}`
+    };
+    setPrinterDevices(prev => {
+      const updated = [...prev, newDevice];
+      try {
+        localStorage.setItem('sas4erp_printers', JSON.stringify(updated));
+      } catch {}
+      return updated;
+    });
+  };
+
+  const updatePrinterDevice = (id: string, updates: Partial<PrinterDeviceConfig>) => {
+    setPrinterDevices(prev => {
+      const updated = prev.map(p => p.id === id ? { ...p, ...updates } : p);
+      try {
+        localStorage.setItem('sas4erp_printers', JSON.stringify(updated));
+      } catch {}
+      return updated;
+    });
+  };
+
+  const deletePrinterDevice = (id: string) => {
+    setPrinterDevices(prev => {
+      const updated = prev.filter(p => p.id !== id);
+      try {
+        localStorage.setItem('sas4erp_printers', JSON.stringify(updated));
+      } catch {}
+      return updated;
+    });
+  };
+
+  const setDefaultPrinter = (id: string) => {
+    setPrinterDevices(prev => {
+      const updated = prev.map(p => ({
+        ...p,
+        isDefault: p.id === id
+      }));
+      try {
+        localStorage.setItem('sas4erp_printers', JSON.stringify(updated));
+      } catch {}
+      return updated;
+    });
+  };
+
+  // ERP PrintManager Utility Initialization
+  const printManager = useMemo(() => new PrintManagerService(printerDevices), []);
+  const [printQueue, setPrintQueue] = useState<PrintJob[]>(() => printManager.getQueue());
+  const [isPrintManagerModalOpen, setIsPrintManagerModalOpen] = useState(false);
+  const [printManagerActiveDoc, setPrintManagerActiveDoc] = useState<PurchaseOrder | null>(null);
+
+  useEffect(() => {
+    printManager.updatePrinters(printerDevices);
+  }, [printerDevices, printManager]);
+
+  useEffect(() => {
+    const unsubscribe = printManager.subscribeToQueue((q) => {
+      setPrintQueue(q);
+    });
+    return () => unsubscribe();
+  }, [printManager]);
+
+  const printPurchaseOrder = useCallback(
+    (po: PurchaseOrder, options?: PrintOptions) => printManager.printPurchaseOrder(po, options),
+    [printManager]
+  );
+
+  const printDigitalApproval = useCallback(
+    (po: PurchaseOrder, options?: PrintOptions) => printManager.printDigitalApproval(po, options),
+    [printManager]
+  );
+
+  const printKpiReport = useCallback(
+    (reportData: PrintableReportData, options?: PrintOptions) => printManager.printKpiReport(reportData, options),
+    [printManager]
+  );
+
+  const reprintJob = useCallback(
+    (jobId: string) => printManager.reprintJob(jobId),
+    [printManager]
+  );
+
+  const cancelPrintJob = useCallback(
+    (jobId: string) => printManager.cancelJob(jobId),
+    [printManager]
+  );
+
+  const clearPrintHistory = useCallback(
+    () => printManager.clearHistory(),
+    [printManager]
+  );
+
+  const openPrintManager = useCallback(
+    (doc?: PurchaseOrder | null) => {
+      setPrintManagerActiveDoc(doc || null);
+      setIsPrintManagerModalOpen(true);
+    },
+    []
+  );
 
   const [companies, setCompanies] = useState<Company[]>(() => {
     const saved = localStorage.getItem('sas4erp_companies');
@@ -314,6 +573,110 @@ export const ERPProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       };
     });
   });
+
+  // Holding Sectors & Financial KPI State (Customizable by Admin)
+  const [holdingSectors, setHoldingSectors] = useState<HoldingSectorKpi[]>(() => {
+    const saved = localStorage.getItem('sas4erp_holding_sectors');
+    if (saved) {
+      try {
+        return JSON.parse(saved);
+      } catch (e) {
+        console.error('Failed to parse saved holding sectors', e);
+      }
+    }
+    return getHoldingSectorsData(initialCompanies, initialProjects);
+  });
+
+  const addHoldingSector = (sectorData: Omit<HoldingSectorKpi, 'id'>) => {
+    const newSector: HoldingSectorKpi = {
+      ...sectorData,
+      id: `sec-${Date.now()}`
+    };
+    setHoldingSectors(prev => {
+      const updated = [...prev, newSector];
+      try {
+        localStorage.setItem('sas4erp_holding_sectors', JSON.stringify(updated));
+      } catch {}
+      return updated;
+    });
+  };
+
+  const updateHoldingSector = (id: string, updates: Partial<HoldingSectorKpi>) => {
+    setHoldingSectors(prev => {
+      const updated = prev.map(sec => {
+        if (sec.id === id) {
+          const merged = { ...sec, ...updates };
+          if (updates.annualBudgetUSD !== undefined || updates.spentUSD !== undefined) {
+            const b = updates.annualBudgetUSD !== undefined ? Number(updates.annualBudgetUSD) : sec.annualBudgetUSD;
+            const s = updates.spentUSD !== undefined ? Number(updates.spentUSD) : sec.spentUSD;
+            merged.annualBudgetUSD = b;
+            merged.spentUSD = s;
+            merged.varianceUSD = b - s;
+            merged.utilizationRate = b > 0 ? Number(((s / b) * 100).toFixed(1)) : 0;
+            merged.status = merged.utilizationRate > 95 ? 'ALERT' : merged.utilizationRate > 85 ? 'WARNING' : merged.utilizationRate > 70 ? 'ON_TRACK' : 'EXCELLENT';
+          }
+          return merged;
+        }
+        return sec;
+      });
+      try {
+        localStorage.setItem('sas4erp_holding_sectors', JSON.stringify(updated));
+      } catch {}
+      return updated;
+    });
+  };
+
+  const deleteHoldingSector = (id: string) => {
+    setHoldingSectors(prev => {
+      const updated = prev.filter(sec => sec.id !== id);
+      try {
+        localStorage.setItem('sas4erp_holding_sectors', JSON.stringify(updated));
+      } catch {}
+      return updated;
+    });
+  };
+
+  const resetHoldingSectorsToDefault = () => {
+    const defaults = getHoldingSectorsData(companies, projects);
+    setHoldingSectors(defaults);
+    try {
+      localStorage.setItem('sas4erp_holding_sectors', JSON.stringify(defaults));
+    } catch {}
+  };
+
+  const syncSectorsWithCompanies = () => {
+    const synced = getHoldingSectorsData(companies, projects);
+    setHoldingSectors(synced);
+    try {
+      localStorage.setItem('sas4erp_holding_sectors', JSON.stringify(synced));
+    } catch {}
+  };
+
+  // Intercompany Bilateral Invoicing & Financial Consolidation (IFRS 10 / GAAP)
+  const [intercompanyInvoices, setIntercompanyInvoices] = useState<IntercompanyInvoice[]>(() => {
+    const saved = localStorage.getItem('sas4erp_intercompany_invoices');
+    if (saved) {
+      try {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+      } catch {}
+    }
+    return initialIntercompanyInvoices;
+  });
+
+  const [isConsolidationEnabled, setIsConsolidationEnabled] = useState<boolean>(() => {
+    const saved = localStorage.getItem('sas4erp_consolidation_enabled');
+    return saved !== null ? JSON.parse(saved) : true;
+  });
+
+  const consolidationSummary: ConsolidationSummary = useMemo(() => {
+    return ConsolidationEngine.computeConsolidation(
+      companies,
+      holding,
+      intercompanyInvoices,
+      isConsolidationEnabled
+    );
+  }, [companies, holding, intercompanyInvoices, isConsolidationEnabled]);
 
   // Workflow Engine States
   const [workflowRules, setWorkflowRules] = useState<ApprovalChainRule[]>(() => {
@@ -533,6 +896,101 @@ export const ERPProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [activeTab, setActiveTab] = useState<string>('holding-dashboard');
   const [searchQuery, setSearchQuery] = useState<string>('');
 
+  // Intercompany Bilateral Operations & Mirror Postings
+  const createBilateralIntercompanyInvoice = useCallback((params: CreateBilateralInvoiceParams) => {
+    const { expenseInvoice, revenueInvoice } = ConsolidationEngine.generateBilateralPair(params, companies);
+    
+    setIntercompanyInvoices(prev => {
+      const updated = [expenseInvoice, revenueInvoice, ...prev];
+      try {
+        localStorage.setItem('sas4erp_intercompany_invoices', JSON.stringify(updated));
+      } catch {}
+      return updated;
+    });
+
+    // Auto-post paired general ledger journal vouchers
+    const expVoucherNo = `IC-VCH-${expenseInvoice.invoiceNumber}`;
+    const revVoucherNo = `IC-VCH-${revenueInvoice.invoiceNumber}`;
+
+    const expVoucher: FinanceLedgerEntry = {
+      id: `fin-${expenseInvoice.id}`,
+      companyId: expenseInvoice.buyerCompanyId,
+      projectId: expenseInvoice.buyerProjectId,
+      entryDate: expenseInvoice.issueDate,
+      voucherNumber: expVoucherNo,
+      accountName: `Intercompany Cost - ${expenseInvoice.sellerCompanyName}`,
+      debitUSD: expenseInvoice.amountUSD,
+      creditUSD: 0,
+      description: `Bilateral Procurement: ${expenseInvoice.title} from sister subsidiary ${expenseInvoice.sellerCompanyName} (Eliminated in Consolidation)`,
+      sourceModule: 'PROCUREMENT',
+      postedBy: `${currentUser.name} (Intercompany Mirror Engine)`
+    };
+
+    const revVoucher: FinanceLedgerEntry = {
+      id: `fin-${revenueInvoice.id}`,
+      companyId: revenueInvoice.sellerCompanyId,
+      projectId: revenueInvoice.sellerProjectId,
+      entryDate: revenueInvoice.issueDate,
+      voucherNumber: revVoucherNo,
+      accountName: `Intercompany Revenue - ${revenueInvoice.buyerCompanyName}`,
+      debitUSD: 0,
+      creditUSD: revenueInvoice.amountUSD,
+      description: `Bilateral Sales Revenue: ${revenueInvoice.title} to sister subsidiary ${revenueInvoice.buyerCompanyName} (Eliminated in Consolidation)`,
+      sourceModule: 'GATE_SCAN_AUTO',
+      postedBy: `${currentUser.name} (Intercompany Mirror Engine)`
+    };
+
+    setFinanceLedgers(prev => [expVoucher, revVoucher, ...prev]);
+
+    addNotification({
+      title: `Bilateral Invoices Generated: ${expenseInvoice.pairCode}`,
+      titleKu: `فاکتۆری دوولایەنە دروستکرا: ${expenseInvoice.pairCode}`,
+      titleAr: `تم توليد فاتورتين متقابلتين: ${expenseInvoice.pairCode}`,
+      message: `Pair ${expenseInvoice.pairCode} created: Expense for ${expenseInvoice.buyerCompanyName} ($${expenseInvoice.amountUSD.toLocaleString()}) and Revenue for ${expenseInvoice.sellerCompanyName}. Auto-eliminated in holding consolidation.`,
+      type: 'FINANCE_ENTRY'
+    });
+
+    return { expenseInvoice, revenueInvoice };
+  }, [companies, currentUser.name]);
+
+  const settleIntercompanyInvoice = useCallback((pairId: string) => {
+    setIntercompanyInvoices(prev => {
+      const updated = prev.map(inv => {
+        if (inv.pairId === pairId) {
+          return {
+            ...inv,
+            status: 'SETTLED' as const,
+            settledAt: new Date().toISOString().split('T')[0],
+            settledBy: currentUser.name || 'Holding Central Treasury'
+          };
+        }
+        return inv;
+      });
+      try {
+        localStorage.setItem('sas4erp_intercompany_invoices', JSON.stringify(updated));
+      } catch {}
+      return updated;
+    });
+
+    addNotification({
+      title: 'Intercompany Pair Settled',
+      titleKu: 'مامەڵەی دوولایەنەی نێوان کۆمپانیاکان یەکلاکرایەوە',
+      titleAr: 'تمت تسوية المعاملة البينية بنجاح',
+      message: `Bilateral transaction cleared through Holding Central Treasury with mutual offset.`,
+      type: 'FINANCE_ENTRY'
+    });
+  }, [currentUser.name]);
+
+  const deleteIntercompanyPair = useCallback((pairId: string) => {
+    setIntercompanyInvoices(prev => {
+      const updated = prev.filter(inv => inv.pairId !== pairId);
+      try {
+        localStorage.setItem('sas4erp_intercompany_invoices', JSON.stringify(updated));
+      } catch {}
+      return updated;
+    });
+  }, []);
+
   // Modals
   const [isGateScannerOpen, setIsGateScannerOpen] = useState<boolean>(false);
   const [isMeetingModalOpen, setIsMeetingModalOpen] = useState<boolean>(false);
@@ -542,6 +1000,95 @@ export const ERPProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [activeCallingManager, setActiveCallingManager] = useState<{ name: string; role: string; phone: string; company: string; avatar: string } | null>(null);
   const [activeMeeting, setActiveMeeting] = useState<VirtualMeeting | null>(initialVirtualMeetings[0]);
   const [activeInspectingDept, setActiveInspectingDept] = useState<{ companyId: string; projectId?: string; department: DepartmentOverview } | null>(null);
+
+  // Holding Cloud Real-Time Multi-Laptop Synchronization State (Erbil HQ <-> Halabja Site)
+  const [isCloudSyncModalOpen, setIsCloudSyncModalOpen] = useState<boolean>(false);
+  const [holdingCloudSyncStatus, setHoldingCloudSyncStatus] = useState<HoldingCloudSyncStatus>(
+    holdingCloudSyncService.getStatus()
+  );
+  const [holdingSyncKey, setHoldingSyncKey] = useState<string>(
+    () => holdingCloudSyncService.getNodeProfile().holdingKey
+  );
+
+  const triggerForceSync = useCallback(async () => {
+    const remoteState = await holdingCloudSyncService.pullLatestState();
+    if (remoteState) {
+      if (Array.isArray(remoteState.companies)) setCompanies(remoteState.companies);
+      if (Array.isArray(remoteState.projects)) setProjects(remoteState.projects);
+      if (Array.isArray(remoteState.purchaseOrders)) setPurchaseOrders(remoteState.purchaseOrders);
+      if (Array.isArray(remoteState.gateLogs)) setGateLogs(remoteState.gateLogs);
+      if (Array.isArray(remoteState.financeLedgers)) setFinanceLedgers(remoteState.financeLedgers);
+      if (Array.isArray(remoteState.intercompanyInvoices)) setIntercompanyInvoices(remoteState.intercompanyInvoices);
+      if (Array.isArray(remoteState.warehouseItems)) setWarehouseItems(remoteState.warehouseItems);
+      if (Array.isArray(remoteState.projectReports)) setProjectReports(remoteState.projectReports);
+      if (remoteState.holding && typeof remoteState.holding === 'object') {
+        setHolding(prev => ({ ...prev, ...remoteState.holding }));
+      }
+    }
+    await holdingCloudSyncService.executePush();
+  }, []);
+
+  const handleUpdateHoldingSyncKey = useCallback((newKey: string) => {
+    setHoldingSyncKey(newKey);
+    holdingCloudSyncService.setNodeProfile({ holdingKey: newKey });
+  }, []);
+
+  useEffect(() => {
+    // 1. Subscribe to sync status updates
+    const unsubStatus = holdingCloudSyncService.onStatusChange((status) => {
+      setHoldingCloudSyncStatus(status);
+      setHoldingSyncKey(status.holdingKey);
+    });
+
+    // 2. Subscribe to remote SSE pushes
+    const unsubRemote = holdingCloudSyncService.onRemoteUpdate((remoteState) => {
+      if (!remoteState) return;
+      if (Array.isArray(remoteState.companies)) setCompanies(remoteState.companies);
+      if (Array.isArray(remoteState.projects)) setProjects(remoteState.projects);
+      if (Array.isArray(remoteState.purchaseOrders)) setPurchaseOrders(remoteState.purchaseOrders);
+      if (Array.isArray(remoteState.gateLogs)) setGateLogs(remoteState.gateLogs);
+      if (Array.isArray(remoteState.financeLedgers)) setFinanceLedgers(remoteState.financeLedgers);
+      if (Array.isArray(remoteState.intercompanyInvoices)) setIntercompanyInvoices(remoteState.intercompanyInvoices);
+      if (Array.isArray(remoteState.warehouseItems)) setWarehouseItems(remoteState.warehouseItems);
+      if (Array.isArray(remoteState.projectReports)) setProjectReports(remoteState.projectReports);
+      if (remoteState.holding && typeof remoteState.holding === 'object') {
+        setHolding(prev => ({ ...prev, ...remoteState.holding }));
+      }
+    });
+
+    // 3. Handshake and connect with Holding Cloud Hub
+    holdingCloudSyncService.connect();
+
+    return () => {
+      unsubStatus();
+      unsubRemote();
+    };
+  }, []);
+
+  // Debounced Auto-Push local updates to Holding Cloud
+  useEffect(() => {
+    holdingCloudSyncService.schedulePush({
+      holding,
+      companies,
+      projects,
+      purchaseOrders,
+      gateLogs,
+      financeLedgers,
+      intercompanyInvoices,
+      warehouseItems,
+      projectReports,
+    });
+  }, [
+    holding,
+    companies,
+    projects,
+    purchaseOrders,
+    gateLogs,
+    financeLedgers,
+    intercompanyInvoices,
+    warehouseItems,
+    projectReports,
+  ]);
 
   // Persist key state
   useEffect(() => {
@@ -1587,7 +2134,12 @@ export const ERPProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     });
   };
 
-  const approvePurchaseByOwner = (poId: string, comments: string = 'Approved by Holding Chairman') => {
+  const approvePurchaseByOwner = (
+    poId: string,
+    comments: string = 'Approved by Holding Chairman',
+    signatureImage?: string,
+    sealStampImage?: string
+  ) => {
     const targetPO = purchaseOrders.find(p => p.id === poId);
     if (!targetPO) return;
 
@@ -1598,14 +2150,18 @@ export const ERPProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
       if (ownerStep) {
         processWorkflowStep(poId, ownerStep.stepNumber, 'APPROVED', comments);
-        return;
       }
     }
+
+    const appliedSig = signatureImage || defaultSignature?.signatureDataUrl;
+    const appliedSeal = sealStampImage || defaultSignature?.officialSealDataUrl;
+
+    let finalApprovedPO: PurchaseOrder | null = null;
 
     setPurchaseOrders(prev => {
       const updated = prev.map(po => {
         if (po.id === poId) {
-          return {
+          const approved: PurchaseOrder = {
             ...po,
             status: 'APPROVED_BY_OWNER' as POStatus,
             holdingApproval: {
@@ -1614,8 +2170,13 @@ export const ERPProvider: React.FC<{ children: React.ReactNode }> = ({ children 
               decision: 'APPROVED' as const,
               comments,
               signatureHash: `SIG-HOLDING-${Math.random().toString(36).substring(2, 9).toUpperCase()}`,
+              signatureImage: appliedSig,
+              sealStampImage: appliedSeal,
+              signerRole: 'HOLDING_OWNER'
             }
           };
+          finalApprovedPO = approved;
+          return approved;
         }
         return po;
       });
@@ -1624,6 +2185,13 @@ export const ERPProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       } catch {}
       return updated;
     });
+
+    // Check if auto-print is configured on default printer
+    if (defaultPrinter?.autoPrintOnApproval && finalApprovedPO) {
+      setTimeout(() => {
+        setPrintPreviewPO(finalApprovedPO);
+      }, 500);
+    }
 
     try {
       confetti({ particleCount: 80, spread: 60, origin: { y: 0.6 } });
@@ -2588,9 +3156,142 @@ export const ERPProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         deleteGmBudgetPolicy,
         evaluateGMForPO,
         autoApproveGMStep,
+        signatureProfiles,
+        defaultSignature,
+        saveSignatureProfile,
+        deleteSignatureProfile,
+        isSignatureModalOpen,
+        setIsSignatureModalOpen,
+        signatureTargetPoId,
+        setSignatureTargetPoId,
+        printerDevices,
+        defaultPrinter,
+        addPrinterDevice,
+        updatePrinterDevice,
+        deletePrinterDevice,
+        setDefaultPrinter,
+        isPrinterModalOpen,
+        setIsPrinterModalOpen,
+        printPreviewPO,
+        setPrintPreviewPO,
+        holdingSectors,
+        addHoldingSector,
+        updateHoldingSector,
+        deleteHoldingSector,
+        resetHoldingSectorsToDefault,
+        syncSectorsWithCompanies,
+        printManager,
+        printQueue,
+        printPurchaseOrder,
+        printDigitalApproval,
+        printKpiReport,
+        reprintJob,
+        cancelPrintJob,
+        clearPrintHistory,
+        isPrintManagerModalOpen,
+        setIsPrintManagerModalOpen,
+        openPrintManager,
+        intercompanyInvoices,
+        createBilateralIntercompanyInvoice,
+        settleIntercompanyInvoice,
+        deleteIntercompanyPair,
+        isConsolidationEnabled,
+        setIsConsolidationEnabled,
+        consolidationSummary,
+        isCloudSyncModalOpen,
+        setIsCloudSyncModalOpen,
+        holdingCloudSyncStatus,
+        triggerForceSync,
+        holdingSyncKey,
+        setHoldingSyncKey: handleUpdateHoldingSyncKey,
       }}
     >
       {children}
+      <HoldingCloudSyncModal
+        isOpen={isCloudSyncModalOpen}
+        onClose={() => setIsCloudSyncModalOpen(false)}
+        holdingName={holding.name}
+        onForceSync={triggerForceSync}
+      />
+      <PrintManagerModal
+        isOpen={isPrintManagerModalOpen}
+        onClose={() => {
+          setIsPrintManagerModalOpen(false);
+          setPrintManagerActiveDoc(null);
+        }}
+        initialDocument={printManagerActiveDoc}
+      />
+      <ElectronicSignatureModal
+        isOpen={isSignatureModalOpen}
+        onClose={() => {
+          setIsSignatureModalOpen(false);
+          setSignatureTargetPoId(null);
+        }}
+        targetPoId={signatureTargetPoId || undefined}
+        onSignComplete={(signatureUrl, sealUrl) => {
+          if (signatureTargetPoId) {
+            approvePurchaseByOwner(
+              signatureTargetPoId,
+              `Digitally signed and sealed by ${currentUser.name || 'Holding Owner'}`,
+              signatureUrl,
+              sealUrl
+            );
+            setSignatureTargetPoId(null);
+          }
+        }}
+      />
+      <PrinterConnectivityModal
+        isOpen={isPrinterModalOpen}
+        onClose={() => setIsPrinterModalOpen(false)}
+        onOpenTestPrint={(device) => {
+          const testPO: PurchaseOrder = {
+            id: 'po-test-print',
+            poNumber: `TEST-PRINT-${Date.now().toString().slice(-4)}`,
+            companyId: companies[0]?.id || 'comp-1',
+            projectId: projects[0]?.id || 'proj-1',
+            requestedBy: currentUser.name || 'System Administrator',
+            requesterRole: 'Holding Operations Director',
+            supplierName: 'Global Enterprise Test Equipment Ltd.',
+            items: [
+              {
+                id: 'item-t-1',
+                name: 'Hardware Printer Station Diagnostic & Calibration Page',
+                nameKu: 'تاقیکردنەوەی پەیوەندی پرینتەر و کالیبرەیکردنی فەرمی',
+                nameAr: 'صفحة تشخيص ومعايرة محطة الطباعة المادية',
+                quantity: 1,
+                unit: 'UNIT',
+                unitPriceUSD: 0,
+                totalUSD: 0,
+                category: 'TEST_DIAGNOSTIC'
+              }
+            ],
+            subtotalUSD: 0,
+            taxUSD: 0,
+            totalAmountUSD: 0,
+            currency: 'USD',
+            purpose: `Hardware Connectivity Diagnostic Test for ${device.name} (${device.type}). Verifying alignment, barcode rastering, and cryptographic seal output.`,
+            originalLanguage: 'en',
+            createdDate: new Date().toISOString(),
+            status: 'APPROVED_BY_OWNER',
+            holdingApproval: {
+              approvedBy: holding.chairmanName || currentUser.name || 'Holding Owner',
+              approvedAt: new Date().toLocaleString(),
+              decision: 'APPROVED',
+              comments: 'Hardware print test successful',
+              signatureHash: `SIG-TEST-${Math.random().toString(36).substring(2, 9).toUpperCase()}`
+            }
+          };
+          setPrintPreviewPO(testPO);
+        }}
+      />
+      {printPreviewPO && (
+        <DocumentPrintPreviewModal
+          isOpen={Boolean(printPreviewPO)}
+          onClose={() => setPrintPreviewPO(null)}
+          purchaseOrder={printPreviewPO}
+          defaultFormat={defaultPrinter?.paperSize === '80mm' ? '80MM' : 'A4'}
+        />
+      )}
     </ERPContext.Provider>
   );
 };

@@ -15,11 +15,15 @@ import {
   RotateCcw,
   ShieldAlert,
   Check,
-  Trash2
+  Trash2,
+  ArrowRightLeft,
+  Scale
 } from 'lucide-react';
 import { useERP } from '../context/ERPContext';
 import { useLanguage } from '../context/LanguageContext';
 import { FinanceLedgerEntry } from '../types/erp';
+import { getUIText } from '../utils/langHelper';
+import { IntercompanyConsolidationModule } from './finance/IntercompanyConsolidationModule';
 
 export const FinanceModule: React.FC = () => {
   const {
@@ -36,6 +40,7 @@ export const FinanceModule: React.FC = () => {
 
   const { t, language } = useLanguage();
 
+  const [financeSubTab, setFinanceSubTab] = useState<'LEDGER' | 'INTERCOMPANY_CONSOLIDATION'>('INTERCOMPANY_CONSOLIDATION');
   const [isAddEntryOpen, setIsAddEntryOpen] = useState(false);
   const [isResetConfirmOpen, setIsResetConfirmOpen] = useState(false);
   const [accountName, setAccountName] = useState('Accounts Payable - Raw Materials');
@@ -81,43 +86,91 @@ export const FinanceModule: React.FC = () => {
   return (
     <div className="space-y-6 animate-in fade-in duration-300">
       
-      {/* Finance Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white border border-slate-200/80 rounded-3xl p-6 shadow-xs">
-        <div>
-          <div className="flex items-center gap-2">
-            <div className="w-8 h-8 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center font-bold">
-              <Wallet className="w-4 h-4 text-emerald-600" />
-            </div>
-            <h1 className="text-xl sm:text-2xl font-extrabold text-slate-900">
-              {t('navFinance')} & General Ledger
-            </h1>
-          </div>
-          <p className="text-xs text-slate-500 mt-1">
-            Real-time accounting, accounts payable, and zero-based balance auditing.
-          </p>
-        </div>
+      {/* Finance Navigation Tabs */}
+      <div className="flex items-center gap-2 p-1.5 bg-white border border-slate-200/80 rounded-2xl shadow-xs w-fit">
+        <button
+          onClick={() => setFinanceSubTab('INTERCOMPANY_CONSOLIDATION')}
+          className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold transition cursor-pointer ${
+            financeSubTab === 'INTERCOMPANY_CONSOLIDATION'
+              ? 'bg-blue-600 text-white shadow-xs font-extrabold'
+              : 'text-slate-600 hover:text-slate-900 hover:bg-slate-50'
+          }`}
+        >
+          <Scale className="w-4 h-4" />
+          <span>
+            {getUIText(language, {
+              en: 'Intercompany & Consolidation (IFRS 10)',
+              ku: 'فاکتۆری دوولایەنە و هاوسەنگیی هۆڵدینگ',
+              ar: 'المعاملات البينية وتوحيد القوائم'
+            })}
+          </span>
+          <span className={`text-[10px] px-1.5 py-0.2 rounded-md font-black ${
+            financeSubTab === 'INTERCOMPANY_CONSOLIDATION' ? 'bg-white/20 text-white' : 'bg-blue-50 text-blue-700'
+          }`}>
+            NEW
+          </span>
+        </button>
 
-        <div className="flex items-center gap-2.5 flex-wrap">
-          <button
-            onClick={() => setIsResetConfirmOpen(true)}
-            className="flex items-center gap-1.5 px-3.5 py-2.5 rounded-xl text-xs font-bold bg-slate-100 hover:bg-rose-50 text-slate-700 hover:text-rose-700 border border-slate-200 hover:border-rose-200 transition cursor-pointer"
-            title="Reset all accounting figures and mock entries to 0"
-            id="reset-financials-btn"
-          >
-            <RotateCcw className="w-3.5 h-3.5" />
-            <span>سفرکردنەوەی ژمارەکان بۆ 0</span>
-          </button>
-
-          <button
-            onClick={() => setIsAddEntryOpen(true)}
-            className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold bg-blue-600 hover:bg-blue-700 text-white shadow-xs transition transform active:scale-95 cursor-pointer"
-            id="new-journal-entry-btn"
-          >
-            <Plus className="w-4 h-4" />
-            <span>New Journal Voucher</span>
-          </button>
-        </div>
+        <button
+          onClick={() => setFinanceSubTab('LEDGER')}
+          className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold transition cursor-pointer ${
+            financeSubTab === 'LEDGER'
+              ? 'bg-blue-600 text-white shadow-xs font-extrabold'
+              : 'text-slate-600 hover:text-slate-900 hover:bg-slate-50'
+          }`}
+        >
+          <Wallet className="w-4 h-4" />
+          <span>
+            {getUIText(language, {
+              en: 'General Ledger & Journal Vouchers',
+              ku: 'دەفتەری حیسابات و قەیدە داراییەکان',
+              ar: 'دفتر الأستاذ العام والقيود اليومية'
+            })}
+          </span>
+        </button>
       </div>
+
+      {financeSubTab === 'INTERCOMPANY_CONSOLIDATION' ? (
+        <IntercompanyConsolidationModule />
+      ) : (
+        <>
+          {/* Finance Header */}
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white border border-slate-200/80 rounded-3xl p-6 shadow-xs">
+            <div>
+              <div className="flex items-center gap-2">
+                <div className="w-8 h-8 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center font-bold">
+                  <Wallet className="w-4 h-4 text-emerald-600" />
+                </div>
+                <h1 className="text-xl sm:text-2xl font-extrabold text-slate-900">
+                  {t('navFinance')} & General Ledger
+                </h1>
+              </div>
+              <p className="text-xs text-slate-500 mt-1">
+                Real-time accounting, accounts payable, and zero-based balance auditing.
+              </p>
+            </div>
+
+            <div className="flex items-center gap-2.5 flex-wrap">
+              <button
+                onClick={() => setIsResetConfirmOpen(true)}
+                className="flex items-center gap-1.5 px-3.5 py-2.5 rounded-xl text-xs font-bold bg-slate-100 hover:bg-rose-50 text-slate-700 hover:text-rose-700 border border-slate-200 hover:border-rose-200 transition cursor-pointer"
+                title={getUIText(language, { en: 'Reset all accounting figures and mock entries to 0', ku: 'سفرکردنەوەی هەموو ژمارە داراییەکان بۆ 0', ar: 'تصفير كافة الأرقام المالية إلى 0' })}
+                id="reset-financials-btn"
+              >
+                <RotateCcw className="w-3.5 h-3.5" />
+                <span>{getUIText(language, { en: 'Zero-Base Reset', ku: 'سفرکردنەوەی ژمارەکان بۆ 0', ar: 'تصفير الحسابات إلى 0' })}</span>
+              </button>
+
+              <button
+                onClick={() => setIsAddEntryOpen(true)}
+                className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold bg-blue-600 hover:bg-blue-700 text-white shadow-xs transition transform active:scale-95 cursor-pointer"
+                id="new-journal-entry-btn"
+              >
+                <Plus className="w-4 h-4" />
+                <span>{getUIText(language, { en: 'New Journal Voucher', ku: 'قەیدی دارایی نوێ', ar: 'قيد محاسبي جديد' })}</span>
+              </button>
+            </div>
+          </div>
 
       {/* Financial Summary Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
@@ -172,10 +225,18 @@ export const FinanceModule: React.FC = () => {
             </div>
             <div>
               <h3 className="text-sm font-bold text-slate-800">
-                دەفتەری حیسابات لەسەر 0 داندراوە و پاککراوەتەوە
+                {getUIText(language, {
+                  en: 'General Ledger Cleared to Zero-Base',
+                  ku: 'دەفتەری حیسابات لەسەر 0 داندراوە و پاککراوەتەوە',
+                  ar: 'دفتر الأستاذ العام مصفّر ومطهر بالكامل'
+                })}
               </h3>
               <p className="text-xs text-slate-500 max-w-md mx-auto mt-1">
-                هیچ ژمارە و قەیدێکی نادروست بوونی نییە. ئێستا دەتوانیت لە ڕێگەی دوگمەی "New Journal Voucher" قەیدی دارایی ڕاستەقینە تۆمار بکەیت.
+                {getUIText(language, {
+                  en: 'No dummy entries exist. You can record live financial vouchers using the New Journal Voucher button.',
+                  ku: 'هیچ ژمارە و قەیدێکی نادروست بوونی نییە. ئێستا دەتوانیت لە ڕێگەی دوگمەی "قەیدی دارایی نوێ" قەیدی دارایی ڕاستەقینە تۆمار بکەیت.',
+                  ar: 'لا توجد قيود وهمية. يمكنك الآن تسجيل قيود مالية حقيقية عبر زر قيد محاسبي جديد.'
+                })}
               </p>
             </div>
             <button
@@ -183,7 +244,7 @@ export const FinanceModule: React.FC = () => {
               className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-bold bg-blue-600 hover:bg-blue-700 text-white transition shadow-xs cursor-pointer"
             >
               <Plus className="w-4 h-4" />
-              <span>تۆمارکردنی قەیدی نوێ (New Voucher)</span>
+              <span>{getUIText(language, { en: 'Record New Voucher', ku: 'تۆمارکردنی قەیدی نوێ', ar: 'تسجيل قيد جديد' })}</span>
             </button>
           </div>
         ) : (
@@ -269,10 +330,18 @@ export const FinanceModule: React.FC = () => {
             
             <div className="text-center space-y-1.5">
               <h3 className="text-base font-extrabold text-slate-900">
-                سفرکردنەوەی سەرجەم ژمارە داراییەکان؟
+                {getUIText(language, {
+                  en: 'Zero-Base Reset All Financial Numbers?',
+                  ku: 'سفرکردنەوەی سەرجەم ژمارە داراییەکان؟',
+                  ar: 'تصفير كافة الأرقام المالية؟'
+                })}
               </h3>
               <p className="text-xs text-slate-500 leading-relaxed">
-                ئەم کارە تەواوی بودجەکان، خەرجییەکان، داهاتەکان و دەفتەرە داراییە تاقیکارییەکان دەکات بە 0 دۆلار بۆ ئەوەی ژمێریاری لەسەر خاڵی سفر دەستپێبکات.
+                {getUIText(language, {
+                  en: 'This action clears all budgets, expenses, revenues, and ledgers to $0 to begin clean zero-base accounting.',
+                  ku: 'ئەم کارە تەواوی بودجەکان، خەرجییەکان، داهاتەکان و دەفتەرە داراییەکان دەکات بە 0 دۆلار بۆ ئەوەی ژمێریاری لەسەر خاڵی سفر دەستپێبکات.',
+                  ar: 'سيؤدي هذا الإجراء إلى تصفير كافة الميزانيات والمصروفات والإيرادات للبدء بمحاسبة نظيفة من الصفر.'
+                })}
               </p>
             </div>
 
@@ -282,7 +351,7 @@ export const FinanceModule: React.FC = () => {
                 onClick={() => setIsResetConfirmOpen(false)}
                 className="px-4 py-2.5 rounded-xl text-xs font-bold text-slate-600 hover:bg-slate-100 transition cursor-pointer"
               >
-                پاشگەزبوونەوە (Cancel)
+                {getUIText(language, { en: 'Cancel', ku: 'پاشگەزبوونەوە', ar: 'إلغاء' })}
               </button>
               <button
                 type="button"
@@ -290,11 +359,19 @@ export const FinanceModule: React.FC = () => {
                 className="px-5 py-2.5 rounded-xl text-xs font-bold bg-rose-600 hover:bg-rose-700 text-white shadow-xs transition cursor-pointer flex items-center gap-1.5"
               >
                 <Check className="w-4 h-4" />
-                <span>بەڵێ، ژمارەکان بکە بە 0</span>
+                <span>
+                  {getUIText(language, {
+                    en: 'Yes, Reset to 0',
+                    ku: 'بەڵێ، ژمارەکان بکە بە 0',
+                    ar: 'نعم، قم بالتصفير إلى 0'
+                  })}
+                </span>
               </button>
             </div>
           </div>
         </div>
+      )}
+      </>
       )}
 
       {/* Manual Entry Modal */}

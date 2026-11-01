@@ -162,6 +162,33 @@ export interface HoldingGroup {
   logoUrl?: string;
   isConfigured: boolean;
   systemPlatformName?: string; // 'SAS4ERP'
+  defaultSignatureUrl?: string; // Holding Owner electronic signature
+  defaultSealUrl?: string; // Holding corporate seal
+}
+
+export interface ExecutiveSignatureProfile {
+  id: string;
+  name: string;
+  role: 'HOLDING_OWNER' | 'GENERAL_MANAGER' | 'FINANCE_DIRECTOR' | 'PROJECT_MANAGER' | 'CHIEF_AUDITOR';
+  signatureType: 'DRAWN' | 'TYPED' | 'UPLOADED';
+  signatureDataUrl: string; // base64 PNG
+  officialSealDataUrl?: string; // base64 PNG seal
+  digitalCertHash: string;
+  createdDate: string;
+  isActive: boolean;
+}
+
+export interface PrinterDeviceConfig {
+  id: string;
+  name: string;
+  type: 'STANDARD_A4' | 'THERMAL_80MM' | 'THERMAL_58MM' | 'NETWORK_IP';
+  ipAddress?: string;
+  port?: number;
+  isDefault: boolean;
+  status: 'ONLINE' | 'STANDBY' | 'DISCONNECTED';
+  autoPrintOnApproval: boolean;
+  paperSize: 'A4' | 'Letter' | '80mm' | '58mm';
+  copies: number;
 }
 
 export interface GeneralManagerProfile {
@@ -324,6 +351,17 @@ export interface PurchaseOrder {
     decision: 'APPROVED' | 'REJECTED';
     comments: string;
     signatureHash: string;
+    signatureImage?: string;
+    sealStampImage?: string;
+    signerRole?: string;
+    encryptedTimestamp?: string;
+    uniqueKey?: string;
+    certificateSerial?: string;
+    stampScope?: 'HOLDING' | 'COMPANY' | 'PROJECT' | 'DEPARTMENT';
+    stampEntityName?: string;
+    signaturePosition?: { x: number; y: number };
+    sealPosition?: { x: number; y: number };
+    badgePosition?: { x: number; y: number };
   };
   gateScanLog?: {
     scannedAt: string;

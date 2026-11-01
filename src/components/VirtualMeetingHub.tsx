@@ -680,7 +680,7 @@ export const VirtualMeetingHub: React.FC = () => {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           title: currentMeeting.title,
-          company: 'SAS Holding Group',
+          company: holding.name || 'Holding Enterprise',
           attendees: currentMeeting.attendees.map(a => `${a.name} (${a.role})`),
           notes: meetingNotes + '\n' + chatLog.map(c => `${c.sender}: ${c.text}`).join('\n'),
           language,

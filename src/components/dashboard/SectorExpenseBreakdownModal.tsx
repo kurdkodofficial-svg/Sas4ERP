@@ -16,7 +16,8 @@ import {
   Tag,
   Briefcase,
   Layers,
-  Download
+  Download,
+  Edit2
 } from 'lucide-react';
 import { ResponsiveContainer, PieChart, Pie, Cell, Tooltip } from 'recharts';
 import { HoldingSectorKpi } from '../../types/kpi';
@@ -28,6 +29,7 @@ interface SectorExpenseBreakdownModalProps {
   onClose: () => void;
   sector: HoldingSectorKpi | null;
   holdingName?: string;
+  onEditSector?: (sector: HoldingSectorKpi) => void;
 }
 
 export const SectorExpenseBreakdownModal: React.FC<SectorExpenseBreakdownModalProps> = ({
@@ -35,6 +37,7 @@ export const SectorExpenseBreakdownModal: React.FC<SectorExpenseBreakdownModalPr
   onClose,
   sector,
   holdingName = 'SAS4ERP Holding Group',
+  onEditSector,
 }) => {
   const { language } = useLanguage();
   const [activeTab, setActiveTab] = useState<'SUBCATEGORIES' | 'VOUCHERS' | 'CHART'>('SUBCATEGORIES');
@@ -44,6 +47,20 @@ export const SectorExpenseBreakdownModal: React.FC<SectorExpenseBreakdownModalPr
 
   const formatUSD = (amount: number) => `$${amount.toLocaleString()}`;
   const formatMillions = (amount: number) => `$${(amount / 1000000).toFixed(2)}M`;
+
+  const getLocalizedKpiMetric = (metric: string) => {
+    if (language === 'en') return metric;
+    const map: Record<string, { ku: string; ar: string }> = {
+      'On-Schedule Milestones': { ku: 'قۆناغەکانی سەر کاتی پرۆژە', ar: 'المراحل المنجزة في الموعد' },
+      'Power Uptime Factor': { ku: 'فاکتەری بەردەوامی کارەبا', ar: 'معامل استمرارية الطاقة' },
+      'Pre-Lease / Sales Velocity': { ku: 'خێرایی بەکرێدان و فرۆشتن', ar: 'سرعة المبيعات والتأجير' },
+      'Fleet Dispatch Reliability': { ku: 'باوەڕپێکراوی ناردنی بارهەڵگرەکان', ar: 'موثوقية إرسال أسطول النقل' },
+      'Factory Production Yield': { ku: 'بەرهەمی کارگەیی', ar: 'إنتاجية المصنع والمواد' },
+      'Network & Cloud Uptime': { ku: 'بەردەوامی تۆڕ و خزمەتگوزاری هەور', ar: 'جاهزية الشبكة والأنظمة السحابية' },
+      'Camp Safety & Health Score': { ku: 'نمرەی تەندروستی و سەلامەتی کەمپ', ar: 'مؤشر أمان وصحة المخيمات' },
+    };
+    return map[metric]?.[language] || metric;
+  };
 
   const handleExportExcel = () => {
     setIsExporting('excel');
@@ -62,7 +79,7 @@ export const SectorExpenseBreakdownModal: React.FC<SectorExpenseBreakdownModalPr
   };
 
   const pieData = sector.subcategories.map(s => ({
-    name: s.name,
+    name: language === 'ku' && s.nameKu ? s.nameKu : language === 'ar' && s.nameAr ? s.nameAr : s.name,
     value: s.spentUSD,
     color: s.color,
   }));
@@ -89,7 +106,7 @@ export const SectorExpenseBreakdownModal: React.FC<SectorExpenseBreakdownModalPr
                   {sector.code}
                 </span>
                 <span className="px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-blue-100 text-blue-800 border border-blue-200">
-                  {sector.primaryKpiMetric}: {sector.primaryKpiValue}
+                  {getLocalizedKpiMetric(sector.primaryKpiMetric)}: {sector.primaryKpiValue}
                 </span>
                 <span className={`px-2.5 py-0.5 rounded-full text-[11px] font-bold ${
                   sector.status === 'EXCELLENT' ? 'bg-emerald-100 text-emerald-800' :
@@ -97,38 +114,53 @@ export const SectorExpenseBreakdownModal: React.FC<SectorExpenseBreakdownModalPr
                   sector.status === 'WARNING' ? 'bg-amber-100 text-amber-800' :
                   'bg-rose-100 text-rose-800'
                 }`}>
-                  {sector.status === 'EXCELLENT' ? 'Optimal Performance' : sector.status === 'ON_TRACK' ? 'Within Budget' : 'Review Required'}
+                  {sector.status === 'EXCELLENT'
+                    ? (language === 'ku' ? 'ئەدای ئەرێنی و گونجاو' : language === 'ar' ? 'أداء مثالي' : 'Optimal Performance')
+                    : sector.status === 'ON_TRACK'
+                    ? (language === 'ku' ? 'لە چوارچێوەی بودجە' : language === 'ar' ? 'ضمن الميزانية' : 'Within Budget')
+                    : (language === 'ku' ? 'پێویستی بە پێداچوونەوەیە' : language === 'ar' ? 'يتطلب المراجعة' : 'Review Required')}
                 </span>
               </div>
               <h2 className="text-xl font-extrabold text-slate-900 mt-1">
-                {sector.name}
+                {language === 'ku' && sector.nameKu ? sector.nameKu : language === 'ar' && sector.nameAr ? sector.nameAr : sector.name}
               </h2>
-              {language === 'ku' && sector.nameKu && (
-                <p className="text-xs text-slate-500 font-semibold mt-0.5">{sector.nameKu}</p>
-              )}
-              {language === 'ar' && sector.nameAr && (
-                <p className="text-xs text-slate-500 font-semibold mt-0.5">{sector.nameAr}</p>
-              )}
               <p className="text-xs text-slate-500 mt-0.5 max-w-xl">
-                {sector.description}
+                {language === 'ku' && sector.descriptionKu ? sector.descriptionKu : language === 'ar' && sector.descriptionAr ? sector.descriptionAr : sector.description}
               </p>
             </div>
           </div>
 
-          <button
-            onClick={onClose}
-            className="w-8 h-8 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-500 hover:text-slate-800 flex items-center justify-center transition cursor-pointer shrink-0"
-            title="Close Modal"
-          >
-            <X className="w-4 h-4" />
-          </button>
+          <div className="flex items-center gap-2 shrink-0">
+            {onEditSector && (
+              <button
+                onClick={() => {
+                  onClose();
+                  onEditSector(sector);
+                }}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-amber-50 hover:bg-amber-100 text-amber-900 border border-amber-200/80 text-xs font-bold transition cursor-pointer shadow-2xs"
+                title={language === 'ku' ? 'دەستکاریکردنی بودجە و ناوی کەرت' : language === 'ar' ? 'تعديل ميزانية واسم القطاع' : 'Edit Sector & Budget'}
+              >
+                <Edit2 className="w-3.5 h-3.5 text-amber-600" />
+                <span className="hidden sm:inline">
+                  {language === 'ku' ? 'دەستکاری کەرت' : language === 'ar' ? 'تعديل القطاع' : 'Edit Sector'}
+                </span>
+              </button>
+            )}
+            <button
+              onClick={onClose}
+              className="w-8 h-8 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-500 hover:text-slate-800 flex items-center justify-center transition cursor-pointer shrink-0"
+              title={language === 'ku' ? 'داخستن' : language === 'ar' ? 'إغلاق' : 'Close Modal'}
+            >
+              <X className="w-4 h-4" />
+            </button>
+          </div>
         </div>
 
         {/* Top Summary Metrics Bar */}
         <div className="px-6 py-4 bg-slate-50 border-b border-slate-200/80 grid grid-cols-2 sm:grid-cols-4 gap-3">
           <div className="bg-white rounded-2xl p-3 border border-slate-200/80 shadow-2xs">
             <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 block">
-              Annual Sector Budget
+              {language === 'ku' ? 'بودجەی ساڵانەی کەرت' : language === 'ar' ? 'ميزانية القطاع السنوية' : 'Annual Sector Budget'}
             </span>
             <span className="text-lg font-extrabold text-slate-900 block mt-0.5">
               {formatMillions(sector.annualBudgetUSD)}
@@ -140,37 +172,39 @@ export const SectorExpenseBreakdownModal: React.FC<SectorExpenseBreakdownModalPr
 
           <div className="bg-white rounded-2xl p-3 border border-slate-200/80 shadow-2xs">
             <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 block">
-              Actual Spending to Date
+              {language === 'ku' ? 'خەرجی ڕاستەقینە تا ئێستا' : language === 'ar' ? 'المصروف الفعلي حتى تاريخه' : 'Actual Spending to Date'}
             </span>
             <span className="text-lg font-extrabold text-blue-600 block mt-0.5">
               {formatMillions(sector.spentUSD)}
             </span>
             <span className="text-[11px] text-emerald-600 font-semibold">
-              {sector.utilizationRate}% Burned
+              {sector.utilizationRate}% {language === 'ku' ? 'بەکارهێنراوە' : language === 'ar' ? 'مستنفذ' : 'Burned'}
             </span>
           </div>
 
           <div className="bg-white rounded-2xl p-3 border border-slate-200/80 shadow-2xs">
             <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 block">
-              Remaining Reserve Variance
+              {language === 'ku' ? 'یەدەگی جیاوازی ماوە' : language === 'ar' ? 'فائض الاحتياطي المتبقي' : 'Remaining Reserve Variance'}
             </span>
             <span className="text-lg font-extrabold text-emerald-600 block mt-0.5">
               {formatMillions(sector.varianceUSD)}
             </span>
             <span className="text-[11px] text-slate-500">
-              {sector.varianceUSD >= 0 ? 'Surplus / Available' : 'Overrun Alert'}
+              {sector.varianceUSD >= 0
+                ? (language === 'ku' ? 'زیادە / بەردەستە' : language === 'ar' ? 'فائض / متاح' : 'Surplus / Available')
+                : (language === 'ku' ? 'ئاگاداری تەجاوز' : language === 'ar' ? 'تجاوز الميزانية' : 'Overrun Alert')}
             </span>
           </div>
 
           <div className="bg-white rounded-2xl p-3 border border-slate-200/80 shadow-2xs">
             <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 block">
-              Subsidiaries & Sites
+              {language === 'ku' ? 'کۆمپانیا و پڕۆژەکان' : language === 'ar' ? 'الشركات والمشاريع' : 'Subsidiaries & Sites'}
             </span>
             <span className="text-lg font-extrabold text-purple-600 block mt-0.5">
-              {sector.companiesCount} Co. / {sector.activeProjectsCount} Sites
+              {sector.companiesCount} {language === 'ku' ? 'کۆمپانیا' : language === 'ar' ? 'شركات' : 'Co.'} / {sector.activeProjectsCount} {language === 'ku' ? 'پڕۆژە' : language === 'ar' ? 'مشاريع' : 'Sites'}
             </span>
             <span className="text-[11px] text-purple-700 font-semibold">
-              Health: {sector.healthScore}%
+              {language === 'ku' ? 'تەندروستی:' : language === 'ar' ? 'الصحة:' : 'Health:'} {sector.healthScore}%
             </span>
           </div>
         </div>
@@ -187,7 +221,7 @@ export const SectorExpenseBreakdownModal: React.FC<SectorExpenseBreakdownModalPr
               }`}
             >
               <Layers className="w-3.5 h-3.5" />
-              <span>Expense Categories ({sector.subcategories.length})</span>
+              <span>{language === 'ku' ? 'پۆلەکانی خەرجی' : language === 'ar' ? 'فئات المصروفات' : 'Expense Categories'} ({sector.subcategories.length})</span>
             </button>
             <button
               onClick={() => setActiveTab('VOUCHERS')}
@@ -198,7 +232,7 @@ export const SectorExpenseBreakdownModal: React.FC<SectorExpenseBreakdownModalPr
               }`}
             >
               <CheckCircle2 className="w-3.5 h-3.5" />
-              <span>Audited Vouchers ({sector.recentVouchers.length})</span>
+              <span>{language === 'ku' ? 'پسوولە وردبینی کراوەکان' : language === 'ar' ? 'السندات المدققة' : 'Audited Vouchers'} ({sector.recentVouchers.length})</span>
             </button>
             <button
               onClick={() => setActiveTab('CHART')}
@@ -209,7 +243,7 @@ export const SectorExpenseBreakdownModal: React.FC<SectorExpenseBreakdownModalPr
               }`}
             >
               <PieIcon className="w-3.5 h-3.5" />
-              <span>Cost Allocation Donut</span>
+              <span>{language === 'ku' ? 'دابەشکردنی تێچوو' : language === 'ar' ? 'توزيع التكاليف' : 'Cost Allocation Donut'}</span>
             </button>
           </div>
 
@@ -222,7 +256,7 @@ export const SectorExpenseBreakdownModal: React.FC<SectorExpenseBreakdownModalPr
               title="Download Sector Excel Breakdown"
             >
               <FileSpreadsheet className="w-3.5 h-3.5" />
-              <span>{isExporting === 'excel' ? 'Exporting...' : 'Export Excel'}</span>
+              <span>{isExporting === 'excel' ? (language === 'ku' ? 'هەناردەکردن...' : language === 'ar' ? 'جارٍ التصدير...' : 'Exporting...') : (language === 'ku' ? 'ناردن بۆ ئێکسڵ' : language === 'ar' ? 'تصدير إكسل' : 'Export Excel')}</span>
             </button>
             <button
               onClick={handleExportPdf}
@@ -231,7 +265,7 @@ export const SectorExpenseBreakdownModal: React.FC<SectorExpenseBreakdownModalPr
               title="Download Sector PDF Statement"
             >
               <FileText className="w-3.5 h-3.5" />
-              <span>{isExporting === 'pdf' ? 'Exporting...' : 'Export PDF'}</span>
+              <span>{isExporting === 'pdf' ? (language === 'ku' ? 'هەناردەکردن...' : language === 'ar' ? 'جارٍ التصدير...' : 'Exporting...') : (language === 'ku' ? 'ناردن بۆ PDF' : language === 'ar' ? 'تصدير PDF' : 'Export PDF')}</span>
             </button>
           </div>
         </div>
@@ -241,43 +275,45 @@ export const SectorExpenseBreakdownModal: React.FC<SectorExpenseBreakdownModalPr
           {activeTab === 'SUBCATEGORIES' && (
             <div className="space-y-4">
               <div className="flex items-center justify-between text-xs text-slate-500">
-                <span className="font-semibold text-slate-700">Detailed Expense Categories & Variance</span>
-                <span>Values in USD ($)</span>
+                <span className="font-semibold text-slate-700">
+                  {language === 'ku' ? 'پۆلەکانی خەرجی و باڵانسی جیاوازی' : language === 'ar' ? 'فئات المصروفات التفصيلية وأرصدة الفارق' : 'Detailed Expense Categories & Variance'}
+                </span>
+                <span>{language === 'ku' ? 'نرخەکان بە دۆلار ($)' : language === 'ar' ? 'القيم بالدولار ($)' : 'Values in USD ($)'}</span>
               </div>
 
               <div className="overflow-x-auto border border-slate-200 rounded-2xl shadow-2xs bg-white">
-                <table className="w-full text-left border-collapse text-xs">
+                <table className="w-full text-start border-collapse text-xs">
                   <thead>
                     <tr className="bg-slate-50 border-b border-slate-200 text-slate-600 font-bold uppercase tracking-wider text-[11px]">
-                      <th className="py-3 px-4">Line Item / Subcategory</th>
-                      <th className="py-3 px-3 text-right">Allocated Budget</th>
-                      <th className="py-3 px-3 text-right">Actual Spent</th>
-                      <th className="py-3 px-3 text-right">Variance Balance</th>
-                      <th className="py-3 px-4 text-center">Utilization</th>
-                      <th className="py-3 px-4 text-right">Share of Sector</th>
+                      <th className="py-3 px-4 text-start">{language === 'ku' ? 'بڕگەی تێچوو / جۆری لاوەکی' : language === 'ar' ? 'بند التكلفة / التصنيف الفرعي' : 'Line Item / Subcategory'}</th>
+                      <th className="py-3 px-3 text-end">{language === 'ku' ? 'بودجەی تەرخانکراو' : language === 'ar' ? 'الميزانية المخصصة' : 'Allocated Budget'}</th>
+                      <th className="py-3 px-3 text-end">{language === 'ku' ? 'خەرجکراوی ڕاستەقینە' : language === 'ar' ? 'المصروف الفعلي' : 'Actual Spent'}</th>
+                      <th className="py-3 px-3 text-end">{language === 'ku' ? 'باڵانسی جیاوازی' : language === 'ar' ? 'رصيد الفارق' : 'Variance Balance'}</th>
+                      <th className="py-3 px-4 text-center">{language === 'ku' ? 'ڕێژەی بەکارهێنان' : language === 'ar' ? 'نسبة الاستخدام' : 'Utilization'}</th>
+                      <th className="py-3 px-4 text-end">{language === 'ku' ? 'بەشی کەرتەکە' : language === 'ar' ? 'حصة القطاع' : 'Share of Sector'}</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100">
                     {sector.subcategories.map((sub) => {
                       const share = sector.spentUSD > 0 ? ((sub.spentUSD / sector.spentUSD) * 100).toFixed(1) : '0';
+                      const subName = language === 'ku' && sub.nameKu ? sub.nameKu : language === 'ar' && sub.nameAr ? sub.nameAr : sub.name;
                       return (
                         <tr key={sub.id} className="hover:bg-slate-50/80 transition">
-                          <td className="py-3.5 px-4">
+                          <td className="py-3.5 px-4 text-start">
                             <div className="flex items-center gap-2.5">
                               <span className="w-3 h-3 rounded-full shrink-0" style={{ backgroundColor: sub.color }} />
                               <div>
-                                <span className="font-bold text-slate-900 block">{sub.name}</span>
-                                {sub.nameKu && <span className="text-[10px] text-slate-500 block">{sub.nameKu}</span>}
+                                <span className="font-bold text-slate-900 block">{subName}</span>
                               </div>
                             </div>
                           </td>
-                          <td className="py-3.5 px-3 text-right font-mono font-semibold text-slate-800">
+                          <td className="py-3.5 px-3 text-end font-mono font-semibold text-slate-800">
                             {formatUSD(sub.budgetUSD)}
                           </td>
-                          <td className="py-3.5 px-3 text-right font-mono font-bold text-blue-600">
+                          <td className="py-3.5 px-3 text-end font-mono font-bold text-blue-600">
                             {formatUSD(sub.spentUSD)}
                           </td>
-                          <td className="py-3.5 px-3 text-right font-mono font-semibold text-emerald-600">
+                          <td className="py-3.5 px-3 text-end font-mono font-semibold text-emerald-600">
                             +{formatUSD(sub.varianceUSD)}
                           </td>
                           <td className="py-3.5 px-4 text-center">
@@ -296,7 +332,7 @@ export const SectorExpenseBreakdownModal: React.FC<SectorExpenseBreakdownModalPr
                               </div>
                             </div>
                           </td>
-                          <td className="py-3.5 px-4 text-right font-bold text-slate-700">
+                          <td className="py-3.5 px-4 text-end font-bold text-slate-700">
                             {share}%
                           </td>
                         </tr>
@@ -305,12 +341,12 @@ export const SectorExpenseBreakdownModal: React.FC<SectorExpenseBreakdownModalPr
                   </tbody>
                   <tfoot>
                     <tr className="bg-slate-50 border-t-2 border-slate-200 font-extrabold text-slate-900">
-                      <td className="py-3.5 px-4">Sector Total</td>
-                      <td className="py-3.5 px-3 text-right font-mono text-slate-900">{formatUSD(sector.annualBudgetUSD)}</td>
-                      <td className="py-3.5 px-3 text-right font-mono text-blue-600">{formatUSD(sector.spentUSD)}</td>
-                      <td className="py-3.5 px-3 text-right font-mono text-emerald-600">+{formatUSD(sector.varianceUSD)}</td>
+                      <td className="py-3.5 px-4 text-start">{language === 'ku' ? 'کۆی گشتی کەرت' : language === 'ar' ? 'إجمالي القطاع' : 'Sector Total'}</td>
+                      <td className="py-3.5 px-3 text-end font-mono text-slate-900">{formatUSD(sector.annualBudgetUSD)}</td>
+                      <td className="py-3.5 px-3 text-end font-mono text-blue-600">{formatUSD(sector.spentUSD)}</td>
+                      <td className="py-3.5 px-3 text-end font-mono text-emerald-600">+{formatUSD(sector.varianceUSD)}</td>
                       <td className="py-3.5 px-4 text-center text-blue-700">{sector.utilizationRate}%</td>
-                      <td className="py-3.5 px-4 text-right">100.0%</td>
+                      <td className="py-3.5 px-4 text-end">100.0%</td>
                     </tr>
                   </tfoot>
                 </table>
@@ -321,40 +357,44 @@ export const SectorExpenseBreakdownModal: React.FC<SectorExpenseBreakdownModalPr
           {activeTab === 'VOUCHERS' && (
             <div className="space-y-4">
               <div className="flex items-center justify-between text-xs text-slate-500">
-                <span className="font-semibold text-slate-700">Audited General Ledger Disbursements</span>
-                <span>Verified with official holding seals</span>
+                <span className="font-semibold text-slate-700">
+                  {language === 'ku' ? 'خەرجییەکانی دەفتەری گشتی وردبینی کراو' : language === 'ar' ? 'مدفوعات الأستاذ العام المدققة' : 'Audited General Ledger Disbursements'}
+                </span>
+                <span>{language === 'ku' ? 'پشتڕاستکراوەتەوە بە مۆری فەرمی هۆڵدینگ' : language === 'ar' ? 'معتمد بالأختام الرسمية للمجموعة' : 'Verified with official holding seals'}</span>
               </div>
 
               <div className="overflow-x-auto border border-slate-200 rounded-2xl shadow-2xs bg-white">
-                <table className="w-full text-left border-collapse text-xs">
+                <table className="w-full text-start border-collapse text-xs">
                   <thead>
                     <tr className="bg-slate-50 border-b border-slate-200 text-slate-600 font-bold uppercase tracking-wider text-[11px]">
-                      <th className="py-3 px-4">Voucher / Date</th>
-                      <th className="py-3 px-4">Description & Cost Line</th>
-                      <th className="py-3 px-4">Subsidiary / Payee</th>
-                      <th className="py-3 px-4 text-right">Amount ($)</th>
-                      <th className="py-3 px-4 text-center">Status</th>
+                      <th className="py-3 px-4 text-start">{language === 'ku' ? 'پسوولە / بەروار' : language === 'ar' ? 'رقم السند / التاريخ' : 'Voucher / Date'}</th>
+                      <th className="py-3 px-4 text-start">{language === 'ku' ? 'وەسف و هێڵی تێچوو' : language === 'ar' ? 'الوصف وبند المصروف' : 'Description & Cost Line'}</th>
+                      <th className="py-3 px-4 text-start">{language === 'ku' ? 'کۆمپانیای پەیوەندیدار / وەرگر' : language === 'ar' ? 'الشركة التابعة / المستفيد' : 'Subsidiary / Payee'}</th>
+                      <th className="py-3 px-4 text-end">{language === 'ku' ? 'بڕ ($)' : language === 'ar' ? 'المبلغ ($)' : 'Amount ($)'}</th>
+                      <th className="py-3 px-4 text-center">{language === 'ku' ? 'دۆخ' : language === 'ar' ? 'الحالة' : 'Status'}</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100">
                     {sector.recentVouchers.map((vch) => (
                       <tr key={vch.id} className="hover:bg-slate-50/80 transition">
-                        <td className="py-3 px-4">
+                        <td className="py-3 px-4 text-start">
                           <span className="font-mono font-bold text-slate-900 block">{vch.voucherNumber}</span>
                           <span className="text-[11px] text-slate-500 flex items-center gap-1 mt-0.5">
                             <Calendar className="w-3 h-3 text-slate-400" />
                             {vch.date}
                           </span>
                         </td>
-                        <td className="py-3 px-4">
+                        <td className="py-3 px-4 text-start">
                           <span className="font-semibold text-slate-900 block">{vch.description}</span>
                           <span className="text-[11px] text-blue-600 font-semibold">{vch.subcategory}</span>
                         </td>
-                        <td className="py-3 px-4">
+                        <td className="py-3 px-4 text-start">
                           <span className="font-semibold text-slate-800 block">{vch.companyName}</span>
-                          <span className="text-[11px] text-slate-500">Vendor: {vch.vendor}</span>
+                          <span className="text-[11px] text-slate-500">
+                            {language === 'ku' ? 'دابینکەر:' : language === 'ar' ? 'المورّد:' : 'Vendor:'} {vch.vendor}
+                          </span>
                         </td>
-                        <td className="py-3 px-4 text-right font-mono font-bold text-slate-900">
+                        <td className="py-3 px-4 text-end font-mono font-bold text-slate-900">
                           {formatUSD(vch.amountUSD)}
                         </td>
                         <td className="py-3 px-4 text-center">
@@ -364,7 +404,9 @@ export const SectorExpenseBreakdownModal: React.FC<SectorExpenseBreakdownModalPr
                               : 'bg-blue-100 text-blue-800 border border-blue-200'
                           }`}>
                             <ShieldCheck className="w-3 h-3" />
-                            {vch.status === 'HOLDING_APPROVED' ? 'Holding Approved' : 'Audited'}
+                            {vch.status === 'HOLDING_APPROVED'
+                              ? (language === 'ku' ? 'پەسەندکراوی سەرۆکایەتی' : language === 'ar' ? 'معتمد من المجموعة' : 'Holding Approved')
+                              : (language === 'ku' ? 'وردبینی کراوە' : language === 'ar' ? 'مدقق' : 'Audited')}
                           </span>
                         </td>
                       </tr>
@@ -394,7 +436,10 @@ export const SectorExpenseBreakdownModal: React.FC<SectorExpenseBreakdownModalPr
                       ))}
                     </Pie>
                     <Tooltip
-                      formatter={(val: any) => [formatUSD(Number(val)), 'Spent Amount']}
+                      formatter={(val: any) => [
+                        formatUSD(Number(val)),
+                        language === 'ku' ? 'بڕی خەرجکراو' : language === 'ar' ? 'المبلغ المصروف' : 'Spent Amount'
+                      ]}
                       contentStyle={{ backgroundColor: '#ffffff', borderRadius: '12px', borderColor: '#cbd5e1' }}
                     />
                   </PieChart>
@@ -403,20 +448,21 @@ export const SectorExpenseBreakdownModal: React.FC<SectorExpenseBreakdownModalPr
 
               <div className="space-y-2.5">
                 <h4 className="text-xs font-bold uppercase tracking-wider text-slate-500">
-                  Subcategory Spending Concentration
+                  {language === 'ku' ? 'چڕبوونەوەی خەرجی پۆلە لاوەکییەکان' : language === 'ar' ? 'تركيز مصروفات الفئات الفرعية' : 'Subcategory Spending Concentration'}
                 </h4>
                 <div className="space-y-2">
                   {sector.subcategories.map((sub) => {
                     const pct = sector.spentUSD > 0 ? ((sub.spentUSD / sector.spentUSD) * 100).toFixed(1) : '0';
+                    const subName = language === 'ku' && sub.nameKu ? sub.nameKu : language === 'ar' && sub.nameAr ? sub.nameAr : sub.name;
                     return (
                       <div key={sub.id} className="flex items-center justify-between text-xs p-2.5 rounded-xl bg-slate-50 border border-slate-200/80">
                         <div className="flex items-center gap-2">
                           <span className="w-3 h-3 rounded-full" style={{ backgroundColor: sub.color }} />
-                          <span className="font-semibold text-slate-800">{sub.name}</span>
+                          <span className="font-semibold text-slate-800">{subName}</span>
                         </div>
                         <div className="flex items-center gap-3">
                           <span className="font-mono text-slate-600">{formatMillions(sub.spentUSD)}</span>
-                          <span className="font-bold text-slate-900 w-12 text-right">{pct}%</span>
+                          <span className="font-bold text-slate-900 w-12 text-end">{pct}%</span>
                         </div>
                       </div>
                     );
@@ -431,7 +477,13 @@ export const SectorExpenseBreakdownModal: React.FC<SectorExpenseBreakdownModalPr
         <div className="px-6 py-4 bg-slate-50 border-t border-slate-200 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs text-slate-500">
           <div className="flex items-center gap-2 text-slate-500">
             <ShieldCheck className="w-4 h-4 text-emerald-600" />
-            <span>Audited & consolidated from holding general ledger vouchers</span>
+            <span>
+              {language === 'ku'
+                ? 'وردبینی کراوە و کۆکراوەتەوە لە پسوولەکانی دەفتەری گشتی هۆڵدینگ'
+                : language === 'ar'
+                ? 'مدقق ومجمع من سندات سجل الأستاذ العام للمجموعة'
+                : 'Audited & consolidated from holding general ledger vouchers'}
+            </span>
           </div>
 
           <div className="flex items-center gap-2.5">
@@ -440,20 +492,20 @@ export const SectorExpenseBreakdownModal: React.FC<SectorExpenseBreakdownModalPr
               className="flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-bold bg-white hover:bg-slate-100 text-slate-800 border border-slate-300 transition cursor-pointer shadow-2xs"
             >
               <FileSpreadsheet className="w-3.5 h-3.5 text-emerald-600" />
-              <span>Download Excel (.xlsx)</span>
+              <span>{language === 'ku' ? 'داگرتنی ئێکسڵ (.xlsx)' : language === 'ar' ? 'تحميل إكسل (.xlsx)' : 'Download Excel (.xlsx)'}</span>
             </button>
             <button
               onClick={handleExportPdf}
               className="flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-bold bg-blue-600 hover:bg-blue-700 text-white transition cursor-pointer shadow-2xs"
             >
               <FileText className="w-3.5 h-3.5" />
-              <span>Download PDF Statement</span>
+              <span>{language === 'ku' ? 'داگرتنی بەیاننامەی PDF' : language === 'ar' ? 'تحميل بيان PDF' : 'Download PDF Statement'}</span>
             </button>
             <button
               onClick={onClose}
               className="px-4 py-2 rounded-xl text-xs font-bold bg-slate-200 hover:bg-slate-300 text-slate-700 transition cursor-pointer"
             >
-              Close
+              {language === 'ku' ? 'داخستن' : language === 'ar' ? 'إغلاق' : 'Close'}
             </button>
           </div>
         </div>

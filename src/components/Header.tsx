@@ -20,7 +20,10 @@ import {
   Database,
   Radio,
   Wifi,
-  WifiOff
+  WifiOff,
+  Printer,
+  PenTool,
+  CloudLightning
 } from 'lucide-react';
 import { useERP } from '../context/ERPContext';
 import { useLanguage } from '../context/LanguageContext';
@@ -51,6 +54,12 @@ export const Header: React.FC = () => {
     setActiveTab,
     searchQuery,
     setSearchQuery,
+    setIsPrinterModalOpen,
+    setIsSignatureModalOpen,
+    openPrintManager,
+    printQueue,
+    setIsCloudSyncModalOpen,
+    holdingCloudSyncStatus,
   } = useERP();
 
   const { language, setLanguage, userNativeLanguage, setUserNativeLanguage, t, isRtl } = useLanguage();
@@ -254,6 +263,32 @@ export const Header: React.FC = () => {
             <span className="hidden md:inline">{t('navVirtualMeetings')}</span>
           </button>
 
+          {/* Electronic Signature Studio Header Trigger */}
+          <button
+            onClick={() => setIsSignatureModalOpen(true)}
+            className="flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 rounded-xl text-xs font-bold bg-amber-50 hover:bg-amber-100 text-amber-900 border border-amber-200 transition transform active:scale-95 cursor-pointer shadow-2xs"
+            id="header-e-signature-btn"
+            title={getUIText(language, { en: 'Electronic Signature Studio & Official Seal', ku: 'ستۆدیۆی واژۆی ئەلیکترۆنی و مۆری فەرمی', ar: 'استوديو التوقيع الإلكتروني والختم' })}
+          >
+            <PenTool className="w-3.5 h-3.5 text-amber-700" />
+            <span className="hidden xl:inline">{getUIText(language, { en: 'E-Signature', ku: 'واژۆی ئەلیکترۆنی', ar: 'التوقيع' })}</span>
+          </button>
+
+          {/* Universal PrintManager Utility Header Trigger */}
+          <button
+            onClick={() => openPrintManager(null)}
+            className="flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 rounded-xl text-xs font-bold bg-slate-100 hover:bg-slate-200 text-slate-800 border border-slate-200 transition transform active:scale-95 cursor-pointer shadow-2xs relative"
+            id="header-printer-station-btn"
+            title={getUIText(language, { en: 'PrintManager - Direct Network Printing & Spooler', ku: 'بەڕێوەبەری چاپ (PrintManager) - چاپی ڕاستەوخۆ بە پرینتەری تۆڕ', ar: 'مدير الطباعة المباشرة والشبكية' })}
+          >
+            <Printer className="w-3.5 h-3.5 text-slate-700" />
+            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
+            <span className="hidden xl:inline">{getUIText(language, { en: 'Print Manager', ku: 'بەڕێوەبەری چاپ', ar: 'مدير الطباعة' })}</span>
+            {printQueue.some(j => j.status === 'QUEUED' || j.status === 'SPOOLING' || j.status === 'TRANSMITTING') && (
+              <span className="absolute -top-1 -right-1 w-2.5 h-2.5 bg-blue-500 rounded-full animate-ping" />
+            )}
+          </button>
+
           {/* Holding Owner Approvals Badge */}
           {pendingApprovalsCount > 0 && (
             <button
@@ -267,6 +302,35 @@ export const Header: React.FC = () => {
             </button>
           )}
 
+          {/* Holding Real-Time Cloud Sync Button (Erbil HQ <-> Halabja Site) */}
+          <button
+            onClick={() => setIsCloudSyncModalOpen(true)}
+            className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl text-xs font-bold border transition cursor-pointer shadow-2xs ${
+              holdingCloudSyncStatus.connected
+                ? 'bg-blue-50 text-blue-800 border-blue-300 hover:bg-blue-100'
+                : 'bg-slate-100 text-slate-700 border-slate-300 hover:bg-slate-200'
+            }`}
+            id="holding-cloud-sync-btn"
+            title={
+              language === 'ku'
+                ? `سینکرۆنایزی خۆکارانەی هۆڵدینگ (هەولێر ⟷ هەڵەبجە) - ${holdingCloudSyncStatus.activeLaptops.length} لاپتۆپ بەستراوەتەوە`
+                : language === 'ar'
+                ? `المزامنة السحابية المباشرة (أربيل ⟷ حلبجة) - ${holdingCloudSyncStatus.activeLaptops.length} أجهزة متصلة`
+                : `Holding Real-Time Cloud Sync (Erbil ⟷ Halabja) - ${holdingCloudSyncStatus.activeLaptops.length} laptops connected`
+            }
+          >
+            <CloudLightning className={`w-3.5 h-3.5 text-blue-600 ${holdingCloudSyncStatus.isSyncing ? 'animate-spin' : ''}`} />
+            <span className="hidden md:inline">
+              {language === 'ku' ? 'سینکی هۆڵدینگ' : language === 'ar' ? 'سحابة الهولدينغ' : 'Holding Cloud'}
+            </span>
+            {holdingCloudSyncStatus.activeLaptops.length > 0 && (
+              <span className="flex items-center gap-1 text-[10px] bg-blue-200/70 text-blue-900 px-1.5 py-0.2 rounded-full font-mono font-bold">
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 inline-block animate-ping" />
+                {holdingCloudSyncStatus.activeLaptops.length}
+              </span>
+            )}
+          </button>
+
           {/* Holding Local Mesh & Offline Sync Hub Trigger */}
           <button
             onClick={() => setIsMeshHubOpen(true)}
@@ -276,7 +340,10 @@ export const Header: React.FC = () => {
                 : 'bg-amber-100 text-amber-900 border-amber-400 hover:bg-amber-200 animate-pulse'
             }`}
             id="mesh-network-hub-btn"
-            title={isOnline ? 'تۆڕی ناوخۆیی میش و ئۆفلاین (Holding Mesh Ready)' : 'دۆخی ئۆفلاین: تۆڕی خۆجێیی میش کاردەکات'}
+            title={isOnline
+              ? getUIText(language, { en: 'Holding Local Mesh & Offline Sync Ready', ku: 'تۆڕی ناوخۆیی میش و ئۆفلاین (Holding Mesh Ready)', ar: 'الشبكة المحلية الخاصة والمزامنة بدون إنترنت' })
+              : getUIText(language, { en: 'Offline Mode: Local Mesh Active', ku: 'دۆخی ئۆفلاین: تۆڕی خۆجێیی میش کاردەکات', ar: 'وضع عدم الاتصال: شبكة مش مفعلة' })
+            }
           >
             {isOnline ? (
               <Radio className="w-3.5 h-3.5 text-emerald-600 animate-pulse" />

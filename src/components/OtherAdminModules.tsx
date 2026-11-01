@@ -211,6 +211,9 @@ export const DispatchLogisticsView: React.FC = () => {
 // 4. Document Archive
 export const DocArchiveView: React.FC = () => {
   const { t } = useLanguage();
+  const { holding } = useERP();
+
+  const holdingTitle = holding.name || 'Executive Holding';
 
   return (
     <div className="space-y-6 animate-in fade-in duration-300">
@@ -223,7 +226,7 @@ export const DocArchiveView: React.FC = () => {
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-        {['Skyline Towers Architectural CAD v4', 'Ministry of Natural Resources Refinery License', 'ISO 9001:2025 Quality Certification', 'SAS Holding Corporate Articles of Association'].map((doc, idx) => (
+        {['Skyline Towers Architectural CAD v4', 'Ministry of Natural Resources Refinery License', 'ISO 9001:2025 Quality Certification', `${holdingTitle} Corporate Articles of Association`].map((doc, idx) => (
           <div key={idx} className="bg-white border border-slate-200/80 rounded-3xl p-5 shadow-xs space-y-2 hover:border-blue-400 transition cursor-pointer">
             <div className="w-10 h-10 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center">
               <FileText className="w-5 h-5" />

@@ -20,6 +20,7 @@ export interface MeshNode {
   status: 'ONLINE' | 'ACTIVE_MESH' | 'STANDBY';
   ipAddress: string;
   lastSeen: string;
+  lastSeenEn?: string;
   pendingSyncCount: number;
 }
 
@@ -67,6 +68,7 @@ export const initialHoldingMeshNodes: MeshNode[] = [
     status: 'ACTIVE_MESH',
     ipAddress: '192.168.10.10',
     lastSeen: 'ئێستا (Active)',
+    lastSeenEn: 'Active Now',
     pendingSyncCount: 0
   },
   {
@@ -80,6 +82,7 @@ export const initialHoldingMeshNodes: MeshNode[] = [
     status: 'ACTIVE_MESH',
     ipAddress: '10.0.4.15',
     lastSeen: '٢ خولەک پێش ئێستا',
+    lastSeenEn: '2 mins ago',
     pendingSyncCount: 2
   },
   {
@@ -93,6 +96,7 @@ export const initialHoldingMeshNodes: MeshNode[] = [
     status: 'ACTIVE_MESH',
     ipAddress: '192.168.10.88',
     lastSeen: 'ئێستا (Active)',
+    lastSeenEn: 'Active Now',
     pendingSyncCount: 1
   },
   {
@@ -106,6 +110,7 @@ export const initialHoldingMeshNodes: MeshNode[] = [
     status: 'STANDBY',
     ipAddress: '172.16.2.40',
     lastSeen: '٤٥ خولەک پێش ئێستا',
+    lastSeenEn: '45 mins ago',
     pendingSyncCount: 0
   }
 ];
