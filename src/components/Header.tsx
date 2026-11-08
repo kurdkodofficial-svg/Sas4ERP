@@ -23,12 +23,24 @@ import {
   WifiOff,
   Printer,
   PenTool,
-  CloudLightning
+  CloudLightning,
+  Wrench,
+  BookOpen,
+  FileText,
+  Key,
+  Lock,
+  Unlock,
+  Menu,
+  X
 } from 'lucide-react';
 import { useERP } from '../context/ERPContext';
 import { useLanguage } from '../context/LanguageContext';
 import { Language, UserProfile } from '../types/erp';
 import { HoldingMeshSyncHubModal } from './dashboard/HoldingMeshSyncHubModal';
+import { UserManualModal } from './UserManualModal';
+import { LicenseActivationModal } from './LicenseActivationModal';
+import { PWAInstallButton } from './common/PWAInstallButton';
+import { getStoredSystemLicense, SystemLicenseInfo, getRemainingTrialDays } from '../utils/licenseManager';
 import { getUIText } from '../utils/langHelper';
 
 export const Header: React.FC = () => {
@@ -50,6 +62,7 @@ export const Header: React.FC = () => {
     setIsMeetingModalOpen,
     setIsImportModalOpen,
     setIsHoldingSetupOpen,
+    setIsUserRolesModalOpen,
     startCallWithManager,
     setActiveTab,
     searchQuery,
@@ -60,6 +73,12 @@ export const Header: React.FC = () => {
     printQueue,
     setIsCloudSyncModalOpen,
     holdingCloudSyncStatus,
+    isSkylineBgEnabled,
+    setIsSkylineModalOpen,
+    isMobileMenuOpen,
+    setIsMobileMenuOpen,
+    isUserManualOpen,
+    setIsUserManualOpen,
   } = useERP();
 
   const { language, setLanguage, userNativeLanguage, setUserNativeLanguage, t, isRtl } = useLanguage();
@@ -68,6 +87,8 @@ export const Header: React.FC = () => {
   const [isLangMenuOpen, setIsLangMenuOpen] = useState(false);
   const [isNotifOpen, setIsNotifOpen] = useState(false);
   const [isMeshHubOpen, setIsMeshHubOpen] = useState(false);
+  const [isLicenseModalOpen, setIsLicenseModalOpen] = useState(false);
+  const [systemLicense, setSystemLicense] = useState<SystemLicenseInfo>(() => getStoredSystemLicense());
   const [isOnline, setIsOnline] = useState(typeof navigator !== 'undefined' ? navigator.onLine : true);
 
   useEffect(() => {
@@ -115,8 +136,18 @@ export const Header: React.FC = () => {
     <header className="sticky top-0 z-40 bg-white/95 backdrop-blur-md border-b border-slate-200/90 text-slate-800 shadow-xs">
       <div className="max-w-[1920px] mx-auto px-4 sm:px-6 py-2.5 flex items-center justify-between gap-4">
         
-        {/* Left: Brand & Holding Logo */}
-        <div className="flex items-center gap-3.5 min-w-max">
+        {/* Left: Brand & Holding Logo + Mobile Hamburger Toggle */}
+        <div className="flex items-center gap-2.5 sm:gap-3.5 min-w-max">
+          {/* Mobile Hamburger Menu Toggle Button */}
+          <button
+            onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
+            className="md:hidden p-2 rounded-xl bg-slate-900 text-white hover:bg-slate-800 transition cursor-pointer shadow-xs flex items-center justify-center"
+            aria-label="Toggle Navigation Menu"
+            id="mobile-nav-toggle-btn"
+          >
+            {isMobileMenuOpen ? <X className="w-4 h-4 text-amber-400" /> : <Menu className="w-4 h-4 text-white" />}
+          </button>
+
           <button
             onClick={() => setActiveTab('holding-dashboard')}
             className="flex items-center gap-2.5 group text-left transition-all hover:opacity-90 cursor-pointer"
@@ -357,6 +388,101 @@ export const Header: React.FC = () => {
             </span>
           </button>
 
+          {/* Architectural Skyline Background Toggle Button */}
+          <button
+            onClick={() => setIsSkylineModalOpen(true)}
+            className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl text-xs font-bold border transition cursor-pointer shadow-2xs ${
+              isSkylineBgEnabled
+                ? 'bg-blue-50/90 text-blue-900 border-blue-200/90 hover:bg-blue-100'
+                : 'bg-slate-100 text-slate-500 border-slate-200 hover:bg-slate-200/80'
+            }`}
+            id="skyline-bg-modal-btn"
+            title={
+              language === 'ku'
+                ? 'ڕێکخستنی باکگراوندی باڵاخانە ڕەنگکراوەکان'
+                : language === 'ar'
+                ? 'تخصيص خلفية الأبراج المعمارية الملونة'
+                : 'Architectural Skyline Background Settings'
+            }
+          >
+            <Building2 className={`w-3.5 h-3.5 ${isSkylineBgEnabled ? 'text-blue-600' : 'text-slate-400'}`} />
+            <span className="hidden xl:inline">
+              {language === 'ku' ? 'باڵاخانەکان' : language === 'ar' ? 'الأبراج' : 'Skyline'}
+            </span>
+            {isSkylineBgEnabled && (
+              <span className="w-1.5 h-1.5 rounded-full bg-blue-600 inline-block animate-pulse" />
+            )}
+          </button>
+
+          {/* Trilingual User Manual (Word .docx) Button */}
+          <button
+            onClick={() => setIsUserManualOpen(true)}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold bg-gradient-to-r from-blue-700 to-indigo-700 hover:from-blue-800 hover:to-indigo-800 text-white border border-blue-600 transition cursor-pointer shadow-sm shadow-blue-700/20"
+            id="user-manual-word-btn"
+            title={
+              language === 'ku'
+                ? 'ڕێبەری فەرمی و گۆڕەری دوولایەنەی دۆکیومێنت (Word ⇄ PDF)'
+                : language === 'ar'
+                ? 'دليل الاستخدام الشامل ومحوّل المستندات (Word ⇄ PDF)'
+                : 'User Manual & Two-Way Document Converter (Word ⇄ PDF)'
+            }
+          >
+            <FileText className="w-3.5 h-3.5 text-blue-200" />
+            <span className="hidden sm:inline">
+              {language === 'ku' ? 'ڕێبەری سیستەم و گۆڕەر' : language === 'ar' ? 'دليل النظام والمحوّل' : 'Manual & Converter'}
+            </span>
+            <span className="text-[9px] px-1.5 py-0.2 rounded-full bg-amber-400 text-slate-950 font-mono font-black">
+              Word ⇄ PDF
+            </span>
+          </button>
+
+          {/* In-App PWA Install Button */}
+          <PWAInstallButton />
+
+          {/* System License & Hardware Lock Status Button */}
+          <button
+            onClick={() => setIsLicenseModalOpen(true)}
+            className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl text-xs font-bold border transition cursor-pointer shadow-2xs ${
+              systemLicense.licenseType === 'VIP_OWNER_GIFT'
+                ? 'bg-amber-50 text-amber-900 border-amber-300 hover:bg-amber-100 ring-1 ring-amber-400/40'
+                : systemLicense.licenseType === 'COMMERCIAL_ACTIVE'
+                ? 'bg-emerald-50 text-emerald-900 border-emerald-300 hover:bg-emerald-100'
+                : systemLicense.licenseType === 'EXPIRED'
+                ? 'bg-rose-100 text-rose-900 border-rose-400 hover:bg-rose-200 animate-pulse'
+                : 'bg-indigo-50 text-indigo-900 border-indigo-200 hover:bg-indigo-100'
+            }`}
+            id="system-license-header-btn"
+            title={
+              language === 'ku'
+                ? `سیستەمی لایسنس و بەستنەوە بە کلیل - باری ئێستا: ${systemLicense.licenseType}`
+                : `System License & Hardware Lock: ${systemLicense.licenseType}`
+            }
+          >
+            {systemLicense.licenseType === 'VIP_OWNER_GIFT' ? (
+              <Crown className="w-3.5 h-3.5 text-amber-600" />
+            ) : systemLicense.licenseType === 'COMMERCIAL_ACTIVE' ? (
+              <ShieldCheck className="w-3.5 h-3.5 text-emerald-600" />
+            ) : systemLicense.licenseType === 'EXPIRED' ? (
+              <AlertTriangle className="w-3.5 h-3.5 text-rose-600" />
+            ) : (
+              <Key className="w-3.5 h-3.5 text-indigo-600" />
+            )}
+
+            <span className="hidden lg:inline">
+              {systemLicense.licenseType === 'VIP_OWNER_GIFT'
+                ? (language === 'ku' ? 'VIP (خاوەن)' : 'VIP Gift')
+                : systemLicense.licenseType === 'COMMERCIAL_ACTIVE'
+                ? (language === 'ku' ? 'مۆڵەتی بازرگانی' : 'Enterprise')
+                : systemLicense.licenseType === 'EXPIRED'
+                ? (language === 'ku' ? 'بەسەرچووە' : 'Expired')
+                : (language === 'ku' ? `تاقیکردنەوە (${getRemainingTrialDays(systemLicense.expiresAt)} ڕۆژ)` : `Trial (${getRemainingTrialDays(systemLicense.expiresAt)}d)`)}
+            </span>
+
+            {systemLicense.isPerpetual && (
+              <span className="w-1.5 h-1.5 rounded-full bg-amber-500 inline-block animate-ping" />
+            )}
+          </button>
+
           {/* Language Switcher Dropdown */}
           <div className="relative">
             <button
@@ -465,11 +591,16 @@ export const Header: React.FC = () => {
                           if (notif.type === 'BUDGET_THRESHOLD_ALERT') {
                             setActiveTab('companies-projects');
                             setIsNotifOpen(false);
+                          } else if (notif.type === 'HARDWARE_ALERT') {
+                            setActiveTab('it-infrastructure');
+                            setIsNotifOpen(false);
                           }
                         }}
                         className={`p-2.5 rounded-xl border text-xs cursor-pointer transition ${
                           notif.isRead
                             ? 'bg-slate-50 border-slate-100 text-slate-500'
+                            : notif.type === 'HARDWARE_ALERT'
+                            ? 'bg-rose-50/70 border-rose-300 text-slate-800 shadow-2xs'
                             : 'bg-blue-50/60 border-blue-200 text-slate-800 shadow-2xs'
                         }`}
                       >
@@ -478,11 +609,22 @@ export const Header: React.FC = () => {
                         {notif.type === 'OWNER_APPROVAL_REQUIRED' && <Crown className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />}
                         {notif.type === 'EXPIRY_WARNING' && <AlertTriangle className="w-4 h-4 text-rose-600 shrink-0 mt-0.5" />}
                         {notif.type === 'BUDGET_THRESHOLD_ALERT' && <Sparkles className="w-4 h-4 text-blue-600 shrink-0 mt-0.5 animate-pulse" />}
+                        {notif.type === 'HARDWARE_ALERT' && (
+                          <div className="relative shrink-0 mt-0.5">
+                            <Wrench className="w-4 h-4 text-rose-600" />
+                            <span className="absolute -top-1 -right-1 w-2 h-2 bg-rose-500 rounded-full animate-ping" />
+                          </div>
+                        )}
                         <div className="flex-1">
                           <div className="flex items-center gap-1.5 flex-wrap">
                             <p className="font-bold text-slate-900">
                               {language === 'ku' && notif.titleKu ? notif.titleKu : language === 'ar' && notif.titleAr ? notif.titleAr : notif.title}
                             </p>
+                            {notif.type === 'HARDWARE_ALERT' && (
+                              <span className="px-1.5 py-0.2 rounded text-[9px] font-black bg-rose-100 text-rose-800 border border-rose-300">
+                                {language === 'ku' ? 'هۆشداری ئایتی مەیدانی' : 'IT Fleet Alert'}
+                              </span>
+                            )}
                             {notif.targetRole && (
                               <span className="px-1.5 py-0.2 rounded text-[9px] font-black bg-blue-100 text-blue-800 border border-blue-200">
                                 {notif.targetRole === 'PROJECT_MANAGER' ? 'بۆ بەڕێوەبەری پڕۆژە (PM)' : 'بۆ بەڕێوەبەری گشتی (GM)'}
@@ -561,7 +703,20 @@ export const Header: React.FC = () => {
                   ))}
                 </div>
 
-                <div className="pt-2 mt-2 border-t border-slate-100">
+                <div className="pt-2 mt-2 border-t border-slate-100 space-y-1.5">
+                  {(currentUser.role === 'HOLDING_OWNER' || currentUser.role === 'SUPER_ADMIN') && (
+                    <button
+                      onClick={() => {
+                        setIsUserMenuOpen(false);
+                        setIsUserRolesModalOpen(true);
+                      }}
+                      className="w-full flex items-center justify-center gap-2 p-2 rounded-xl text-xs font-bold bg-indigo-50 hover:bg-indigo-100 text-indigo-900 border border-indigo-200 transition cursor-pointer"
+                    >
+                      <ShieldCheck className="w-3.5 h-3.5 text-indigo-600" />
+                      <span>{getUIText(language, { en: 'Manage Roles & RBAC', ku: 'بەڕێوەبردنی ڕۆڵ و دەسەڵاتەکان', ar: 'إدارة الأدوار وصلاحيات الوصول' })}</span>
+                    </button>
+                  )}
+
                   <button
                     onClick={() => {
                       setIsUserMenuOpen(false);
@@ -585,6 +740,20 @@ export const Header: React.FC = () => {
       <HoldingMeshSyncHubModal
         isOpen={isMeshHubOpen}
         onClose={() => setIsMeshHubOpen(false)}
+      />
+
+      {/* Trilingual User Manual (Word .docx) Modal */}
+      <UserManualModal
+        isOpen={isUserManualOpen}
+        onClose={() => setIsUserManualOpen(false)}
+      />
+
+      {/* System License & Hardware Lock Activation Modal */}
+      <LicenseActivationModal
+        isOpen={isLicenseModalOpen}
+        onClose={() => setIsLicenseModalOpen(false)}
+        license={systemLicense}
+        onLicenseUpdated={(updated) => setSystemLicense(updated)}
       />
     </header>
   );

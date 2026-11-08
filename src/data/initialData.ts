@@ -170,6 +170,28 @@ export const initialCompanies: Company[] = [
     establishedDate: '2020-07-01',
     color: 'from-purple-600 to-violet-700',
     iconName: 'Boxes'
+  },
+  {
+    id: 'comp-5',
+    name: 'Al-Najaf Cement & Building Materials Industrial Co.',
+    nameKu: 'کۆمپانیای پیشەسازی چیمەنتۆ و کەرەستەی بیناسازی نەجەف',
+    nameAr: 'شركة صناعة الإسمنت ومواد البناء بالنجف الأشرف',
+    code: 'CMP-NJF-CMT',
+    industry: 'Cement Production, Clinker & Bulk Distribution',
+    location: 'Najaf - Industrial City & Quarry Zone',
+    generalManager: 'ئەندازیار حەیدەر ئەلحوسەینی',
+    gmPhone: '+964 780 332 5588',
+    gmEmail: 'haider.najaf@cement.holding.com',
+    annualBudgetUSD: 24000000,
+    spentUSD: 14200000,
+    activeProjectsCount: 1,
+    employeeCount: 310,
+    isHoldingOwnerApproved: true,
+    holdingLinkStatus: 'CONNECTED_LIVE',
+    logoUrl: '',
+    establishedDate: '2022-04-15',
+    color: 'from-amber-700 to-stone-800',
+    iconName: 'Factory'
   }
 ];
 
@@ -358,6 +380,27 @@ export const initialProjects: Project[] = [
     status: 'ACTIVE',
     holdingLinkStatus: 'CONNECTED_LIVE',
     holdingConnectionId: 'LINK-SITE-PRJ-108'
+  },
+  {
+    id: 'proj-109',
+    companyId: 'comp-5',
+    name: 'Najaf Cement Kiln & Rotary Clinker Plant',
+    nameKu: 'کارگەی بەرهەمهێنانی چیمەنتۆ و فڕنی خولاوەی کڵینکەر - نەجەف',
+    nameAr: 'مصنع إنتاج الإسمنت والأفران الدوارة للكلنكر - النجف الأشرف',
+    code: 'PRJ-NJF-CMT-01',
+    manager: 'ئەندازیار عەباس جاسم',
+    managerPhone: '+964 780 998 7766',
+    budgetUSD: 16500000,
+    spentUSD: 9800000,
+    startDate: '2024-02-01',
+    targetCompletionDate: '2028-12-31',
+    progressPercentage: 62,
+    location: 'Najaf - Bahr Al-Najaf Industrial Sector',
+    engineersCount: 22,
+    workersCount: 280,
+    status: 'ACTIVE',
+    holdingLinkStatus: 'CONNECTED_LIVE',
+    holdingConnectionId: 'LINK-SITE-PRJ-109'
   }
 ];
 
@@ -462,6 +505,28 @@ export const initialPurchaseOrders: PurchaseOrder[] = [
     purpose: 'Quality assurance sonic logging for 180 bored piles',
     originalLanguage: 'en',
     createdDate: '2026-10-12',
+    status: 'PENDING_OWNER_APPROVAL',
+    transactionType: 'PURCHASE_ORDER'
+  },
+  {
+    id: 'po-njf-001',
+    poNumber: 'PO-SAS-NJF-001',
+    companyId: 'comp-5',
+    projectId: 'proj-109',
+    requestedBy: 'ئەندازیار عەباس جاسم',
+    requesterRole: 'Cement Plant Director',
+    supplierName: 'Al-Furat Refractory Bricks & Minerals Co.',
+    items: [
+      { id: 'item-njf-1', name: 'High-Alumina Refractory Bricks for Kiln Burning Zone', nameKu: 'خشتی حەراری بەرز بۆ فڕنی چیمەنتۆ', quantity: 45, unit: 'Tons', unitPriceUSD: 1450, totalUSD: 65250, category: 'Refractory' },
+      { id: 'item-njf-2', name: 'High Purity Natural Gypsum Rock for Finish Grinding', nameKu: 'بەردی گەچی سروشتی بۆ هاڕینی چیمەنتۆ', quantity: 1200, unit: 'Tons', unitPriceUSD: 48, totalUSD: 57600, category: 'Raw Materials' }
+    ],
+    subtotalUSD: 122850,
+    taxUSD: 0,
+    totalAmountUSD: 122850,
+    currency: 'USD',
+    purpose: 'Urgent maintenance refractories for Najaf Rotary Kiln #2 overhaul & monthly raw gypsum intake',
+    originalLanguage: 'ku',
+    createdDate: '2026-10-18',
     status: 'PENDING_OWNER_APPROVAL',
     transactionType: 'PURCHASE_ORDER'
   },
@@ -1111,5 +1176,17 @@ export const currentUserProfiles: UserProfile[] = [
     phone: '+964 750 000 0004',
     nativeLanguage: 'ku',
     title: 'Central Warehouse Controller',
+  },
+  {
+    id: 'user-employee-1',
+    name: 'کارمەندی مەیدانی (Site Operations Employee)',
+    role: 'EMPLOYEE',
+    companyId: 'comp-1',
+    projectId: 'proj-101',
+    email: 'employee@holding.com',
+    avatar: '👷',
+    phone: '+964 750 000 0005',
+    nativeLanguage: 'ku',
+    title: 'Site Operations & Field Employee',
   }
 ];

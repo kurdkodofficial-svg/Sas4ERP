@@ -19,6 +19,10 @@ export interface SyncNodeDevice {
   role: 'HOLDING_HQ' | 'BRANCH_PROJECT' | 'FIELD_OFFICE' | 'PEER';
   lastPing: string;
   ipAddress?: string;
+  ipHistory?: string[];
+  ipChangesCount?: number;
+  lastIpChangeTime?: string;
+  ipRoamingResilient?: boolean;
   isCurrentDevice?: boolean;
 }
 
@@ -32,6 +36,12 @@ export interface HoldingCloudSyncStatus {
   isSyncing: boolean;
   pendingChangesCount: number;
   connectionMode: 'LIVE_CLOUD' | 'CONNECTING' | 'OFFLINE_RETRY';
+  currentIp?: string;
+  ipChangesCount?: number;
+  ipHistory?: string[];
+  lastIpChangeTime?: string | null;
+  lastIpEventMessage?: string | null;
+  isIpRoamingResilient: boolean;
 }
 
 const STORAGE_SYNC_KEY = 'sas4erp_holding_sync_key';
@@ -53,6 +63,8 @@ class HoldingCloudSyncService {
   private pushDebounceTimer: any = null;
   private isPushing: boolean = false;
   private pendingUpdates: Record<string, any> = {};
+  private reconnectTimer: any = null;
+  private reconnectAttempts: number = 0;
 
   private statusSubscribers: Set<(status: HoldingCloudSyncStatus) => void> = new Set();
   private remoteUpdateSubscribers: Set<(remoteState: any, meta: { version: number; updatedBy: string }) => void> = new Set();
@@ -67,10 +79,22 @@ class HoldingCloudSyncService {
     isSyncing: false,
     pendingChangesCount: 0,
     connectionMode: 'CONNECTING',
+    currentIp: '127.0.0.1',
+    ipChangesCount: 0,
+    ipHistory: [],
+    lastIpChangeTime: null,
+    lastIpEventMessage: null,
+    isIpRoamingResilient: true,
   };
 
   constructor() {
     this.initNodeProfile();
+    if (typeof window !== 'undefined') {
+      window.addEventListener('online', () => {
+        console.log('[Dynamic IP Roaming] Network online event detected - verifying sync state...');
+        this.scheduleAutoReconnect('WINDOW_ONLINE');
+      });
+    }
   }
 
   private initNodeProfile() {
@@ -208,11 +232,20 @@ class HoldingCloudSyncService {
       if (data.success) {
         this.status.connected = true;
         this.status.connectionMode = 'LIVE_CLOUD';
-        this.status.version = data.storeVersion || 1;
+        this.status.version = data.version || data.storeVersion || 1;
         this.status.lastSyncTime = new Date().toISOString();
+        this.reconnectAttempts = 0;
 
-        // Map active laptops
+        // Map active laptops and extract this node's IP details
         if (Array.isArray(data.connectedNodes)) {
+          const thisNode = data.connectedNodes.find((n: any) => n.nodeId === this.nodeId);
+          if (thisNode) {
+            this.status.currentIp = thisNode.ipAddress || this.status.currentIp;
+            this.status.ipChangesCount = thisNode.ipChangesCount || 0;
+            this.status.ipHistory = thisNode.ipHistory || [];
+            this.status.lastIpChangeTime = thisNode.lastIpChangeTime || null;
+          }
+
           this.status.activeLaptops = data.connectedNodes.map((n: any) => ({
             ...n,
             isCurrentDevice: n.nodeId === this.nodeId,
@@ -232,12 +265,30 @@ class HoldingCloudSyncService {
         return true;
       }
     } catch (err) {
-      console.warn('Holding Cloud Sync connect failed, falling back to offline retry mode:', err);
+      console.warn('Holding Cloud Sync connect failed, scheduling dynamic IP auto-retry:', err);
       this.status.connected = false;
       this.status.connectionMode = 'OFFLINE_RETRY';
       this.notifyStatus();
+      this.scheduleAutoReconnect('CONNECT_FAILED');
     }
     return false;
+  }
+
+  /**
+   * Resilient automatic reconnect engine with exponential backoff & jitter
+   * Guarantees automatic recovery when Iraqi/Kurdistan dynamic ISPs rotate IP addresses
+   */
+  private scheduleAutoReconnect(reason: string) {
+    if (this.reconnectTimer) clearTimeout(this.reconnectTimer);
+    const delay = Math.min(1000 * Math.pow(1.3, this.reconnectAttempts), 6000) + Math.random() * 400;
+    this.reconnectTimer = setTimeout(async () => {
+      this.reconnectAttempts++;
+      console.log(`[Dynamic IP Roaming] Reconnecting after ${reason} (attempt ${this.reconnectAttempts})...`);
+      const ok = await this.connect();
+      if (ok) {
+        this.reconnectAttempts = 0;
+      }
+    }, delay);
   }
 
   /**
@@ -251,6 +302,7 @@ class HoldingCloudSyncService {
       this.eventSource.onopen = () => {
         this.status.connected = true;
         this.status.connectionMode = 'LIVE_CLOUD';
+        this.reconnectAttempts = 0;
         this.notifyStatus();
       };
 
@@ -259,6 +311,22 @@ class HoldingCloudSyncService {
           const payload = JSON.parse(event.data);
           if (payload.type === 'HANDSHAKE') {
             this.status.version = payload.version;
+            if (payload.ipAddress) {
+              this.status.currentIp = payload.ipAddress;
+            }
+            this.notifyStatus();
+          } else if (payload.type === 'IP_MIGRATION_EVENT') {
+            // Dynamic IP roamed or rotated on an active node
+            if (payload.nodeId === this.nodeId) {
+              this.status.currentIp = payload.newIp;
+              this.status.ipChangesCount = (this.status.ipChangesCount || 0) + 1;
+              this.status.lastIpChangeTime = payload.timestamp;
+            }
+            this.status.lastIpEventMessage = payload.message;
+            this.status.lastSyncTime = payload.timestamp || new Date().toISOString();
+            
+            // Re-ping to refresh active devices table
+            this.triggerInstantPing();
             this.notifyStatus();
           } else if (payload.type === 'STATE_UPDATED') {
             // New updates pushed by another laptop (e.g. Halabja or Erbil)
@@ -275,14 +343,17 @@ class HoldingCloudSyncService {
       };
 
       this.eventSource.onerror = () => {
-        if (this.eventSource?.readyState === EventSource.CLOSED) {
+        if (this.eventSource?.readyState === EventSource.CLOSED || this.eventSource?.readyState === EventSource.CONNECTING) {
           this.status.connected = false;
           this.status.connectionMode = 'OFFLINE_RETRY';
           this.notifyStatus();
+          // Automatically recover when IP shifts or connection flickers
+          this.scheduleAutoReconnect('SSE_DROPPED_OR_IP_CHANGED');
         }
       };
     } catch (e) {
       console.warn('Failed to initialize SSE EventSource:', e);
+      this.scheduleAutoReconnect('INIT_ERROR');
     }
   }
 
@@ -290,30 +361,79 @@ class HoldingCloudSyncService {
    * Heartbeat ping to server
    */
   private startPing() {
+    if (this.pingInterval) clearInterval(this.pingInterval);
     this.pingInterval = setInterval(async () => {
-      try {
-        const res = await fetch('/api/sync/ping', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            holdingKey: this.holdingKey,
-            nodeId: this.nodeId,
-          }),
-        });
-        if (res.ok) {
-          const data = await res.json();
-          if (data.activeNodes) {
-            this.status.activeLaptops = data.activeNodes.map((n: any) => ({
-              ...n,
-              isCurrentDevice: n.nodeId === this.nodeId,
-            }));
-            this.notifyStatus();
-          }
-        }
-      } catch (err) {
-        // network silent
-      }
+      await this.triggerInstantPing();
     }, 25000);
+  }
+
+  public async triggerInstantPing() {
+    try {
+      const res = await fetch('/api/sync/ping', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          holdingKey: this.holdingKey,
+          nodeId: this.nodeId,
+        }),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        if (data.activeNodes) {
+          const thisNode = data.activeNodes.find((n: any) => n.nodeId === this.nodeId);
+          if (thisNode) {
+            this.status.currentIp = thisNode.ipAddress || this.status.currentIp;
+            this.status.ipChangesCount = thisNode.ipChangesCount || 0;
+            this.status.ipHistory = thisNode.ipHistory || [];
+            this.status.lastIpChangeTime = thisNode.lastIpChangeTime || null;
+          }
+          this.status.activeLaptops = data.activeNodes.map((n: any) => ({
+            ...n,
+            isCurrentDevice: n.nodeId === this.nodeId,
+          }));
+          this.notifyStatus();
+        }
+      }
+    } catch (err) {
+      // network silent
+    }
+  }
+
+  /**
+   * Simulate a dynamic IP change / cellular hop (e.g. Fastlink, Korek, Asiacell, Newroz)
+   * to demonstrate 100% resilient synchronization without disconnection
+   */
+  public async simulateDynamicIpHop(simulatedIsp?: string): Promise<{ success: boolean; newIp?: string; ispName?: string; message?: string }> {
+    try {
+      const res = await fetch('/api/sync/simulate-ip-change', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          holdingKey: this.holdingKey,
+          nodeId: this.nodeId,
+          simulatedIsp
+        }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        this.status.currentIp = data.newIp;
+        this.status.ipChangesCount = data.ipChangesCount;
+        this.status.lastIpChangeTime = data.lastIpChangeTime;
+        this.status.lastIpEventMessage = data.message;
+        this.status.lastSyncTime = new Date().toISOString();
+        if (Array.isArray(data.activeNodes)) {
+          this.status.activeLaptops = data.activeNodes.map((n: any) => ({
+            ...n,
+            isCurrentDevice: n.nodeId === this.nodeId,
+          }));
+        }
+        this.notifyStatus();
+        return data;
+      }
+      return { success: false, message: data.message };
+    } catch (err: any) {
+      return { success: false, message: err.message };
+    }
   }
 
   /**

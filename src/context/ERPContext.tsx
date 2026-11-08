@@ -146,6 +146,11 @@ interface ERPContextType {
   currentUser: UserProfile;
   setCurrentUser: (user: UserProfile) => void;
   userProfiles: UserProfile[];
+  updateUserProfile: (id: string, updates: Partial<UserProfile>) => void;
+  addUserProfile: (profile: Omit<UserProfile, 'id'>) => void;
+  deleteUserProfile: (id: string) => void;
+  isUserRolesModalOpen: boolean;
+  setIsUserRolesModalOpen: (open: boolean) => void;
 
   purchaseOrders: PurchaseOrder[];
   addPurchaseOrder: (po: Omit<PurchaseOrder, 'id' | 'poNumber' | 'createdDate' | 'status'>) => void;
@@ -210,6 +215,7 @@ interface ERPContextType {
   notifications: AppNotification[];
   markNotificationAsRead: (id: string) => void;
   addNotification: (notif: Omit<AppNotification, 'id' | 'timestamp' | 'isRead'>) => void;
+  syncHardwareThresholdAlertsNow: () => Promise<void>;
 
   // Active Modals & Views
   isGateScannerOpen: boolean;
@@ -238,6 +244,23 @@ interface ERPContextType {
 
   isHoldingSetupOpen: boolean;
   setIsHoldingSetupOpen: (open: boolean) => void;
+  isUserManualOpen: boolean;
+  setIsUserManualOpen: (open: boolean) => void;
+  isMobileMenuOpen: boolean;
+  setIsMobileMenuOpen: (open: boolean) => void;
+
+  // Skyline Background Theme State
+  isSkylineBgEnabled: boolean;
+  setIsSkylineBgEnabled: (enabled: boolean) => void;
+  skylineBgPreset: 'corporate_prism' | 'district_violet' | 'skyline_waterfront';
+  setSkylineBgPreset: (preset: 'corporate_prism' | 'district_violet' | 'skyline_waterfront') => void;
+  skylineBgOpacity: number;
+  setSkylineBgOpacity: (opacity: number) => void;
+  skylineBgBlur: boolean;
+  setSkylineBgBlur: (blur: boolean) => void;
+  isSkylineModalOpen: boolean;
+  setIsSkylineModalOpen: (open: boolean) => void;
+
   activeTab: string;
   setActiveTab: (tab: string) => void;
 
@@ -896,6 +919,62 @@ export const ERPProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [activeTab, setActiveTab] = useState<string>('holding-dashboard');
   const [searchQuery, setSearchQuery] = useState<string>('');
 
+  // User Profiles and RBAC Management State
+  const [userProfiles, setUserProfiles] = useState<UserProfile[]>(() => {
+    try {
+      const saved = localStorage.getItem('sas4erp_user_profiles');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          return parsed;
+        }
+      }
+    } catch {}
+    return currentUserProfiles;
+  });
+  const [isUserRolesModalOpen, setIsUserRolesModalOpen] = useState(false);
+
+  const updateUserProfile = useCallback((id: string, updates: Partial<UserProfile>) => {
+    setUserProfiles(prev => {
+      const updated = prev.map(u => u.id === id ? { ...u, ...updates } : u);
+      try {
+        localStorage.setItem('sas4erp_user_profiles', JSON.stringify(updated));
+      } catch {}
+      return updated;
+    });
+
+    setCurrentUser(curr => {
+      if (curr.id === id) {
+        return { ...curr, ...updates };
+      }
+      return curr;
+    });
+  }, []);
+
+  const addUserProfile = useCallback((profile: Omit<UserProfile, 'id'>) => {
+    const newUser: UserProfile = {
+      ...profile,
+      id: `user-${Date.now()}`
+    };
+    setUserProfiles(prev => {
+      const updated = [...prev, newUser];
+      try {
+        localStorage.setItem('sas4erp_user_profiles', JSON.stringify(updated));
+      } catch {}
+      return updated;
+    });
+  }, []);
+
+  const deleteUserProfile = useCallback((id: string) => {
+    setUserProfiles(prev => {
+      const updated = prev.filter(u => u.id !== id);
+      try {
+        localStorage.setItem('sas4erp_user_profiles', JSON.stringify(updated));
+      } catch {}
+      return updated;
+    });
+  }, []);
+
   // Intercompany Bilateral Operations & Mirror Postings
   const createBilateralIntercompanyInvoice = useCallback((params: CreateBilateralInvoiceParams) => {
     const { expenseInvoice, revenueInvoice } = ConsolidationEngine.generateBilateralPair(params, companies);
@@ -997,9 +1076,86 @@ export const ERPProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [isCallModalOpen, setIsCallModalOpen] = useState<boolean>(false);
   const [isImportModalOpen, setIsImportModalOpen] = useState<boolean>(false);
   const [isHoldingSetupOpen, setIsHoldingSetupOpen] = useState<boolean>(false);
+  const [isUserManualOpen, setIsUserManualOpen] = useState<boolean>(false);
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState<boolean>(false);
   const [activeCallingManager, setActiveCallingManager] = useState<{ name: string; role: string; phone: string; company: string; avatar: string } | null>(null);
   const [activeMeeting, setActiveMeeting] = useState<VirtualMeeting | null>(initialVirtualMeetings[0]);
   const [activeInspectingDept, setActiveInspectingDept] = useState<{ companyId: string; projectId?: string; department: DepartmentOverview } | null>(null);
+
+  // Skyline Architectural Colored Background State
+  const [isSkylineBgEnabled, setIsSkylineBgEnabledState] = useState<boolean>(() => {
+    try {
+      const saved = localStorage.getItem('sas4erp_skyline_enabled');
+      return saved !== null ? saved === 'true' : true;
+    } catch {
+      return true;
+    }
+  });
+
+  const [skylineBgPreset, setSkylineBgPresetState] = useState<'corporate_prism' | 'district_violet' | 'skyline_waterfront'>(() => {
+    try {
+      const saved = localStorage.getItem('sas4erp_skyline_preset');
+      if (saved === 'district_violet' || saved === 'skyline_waterfront' || saved === 'corporate_prism') {
+        return saved;
+      }
+      return 'corporate_prism';
+    } catch {
+      return 'corporate_prism';
+    }
+  });
+
+  const [skylineBgOpacity, setSkylineBgOpacityState] = useState<number>(() => {
+    try {
+      const saved = localStorage.getItem('sas4erp_skyline_opacity');
+      if (saved !== null) {
+        const parsed = parseInt(saved, 10);
+        if (!isNaN(parsed) && parsed >= 5 && parsed <= 60) return parsed;
+      }
+      return 22; // Default 22% ensures vibrant colors without washing out text
+    } catch {
+      return 22;
+    }
+  });
+
+  const [skylineBgBlur, setSkylineBgBlurState] = useState<boolean>(() => {
+    try {
+      const saved = localStorage.getItem('sas4erp_skyline_blur');
+      return saved !== null ? saved === 'true' : true;
+    } catch {
+      return true;
+    }
+  });
+
+  const [isSkylineModalOpen, setIsSkylineModalOpen] = useState<boolean>(false);
+
+  const setIsSkylineBgEnabled = (enabled: boolean) => {
+    setIsSkylineBgEnabledState(enabled);
+    try {
+      localStorage.setItem('sas4erp_skyline_enabled', String(enabled));
+    } catch {}
+  };
+
+  const setSkylineBgPreset = (preset: 'corporate_prism' | 'district_violet' | 'skyline_waterfront') => {
+    setSkylineBgPresetState(preset);
+    try {
+      localStorage.setItem('sas4erp_skyline_preset', preset);
+    } catch {}
+  };
+
+  const setSkylineBgOpacity = (opacity: number) => {
+    const val = Math.max(5, Math.min(60, opacity));
+    setSkylineBgOpacityState(val);
+    try {
+      localStorage.setItem('sas4erp_skyline_opacity', String(val));
+    } catch {}
+  };
+
+  const setSkylineBgBlur = (blur: boolean) => {
+    setSkylineBgBlurState(blur);
+    try {
+      localStorage.setItem('sas4erp_skyline_blur', String(blur));
+    } catch {}
+  };
 
   // Holding Cloud Real-Time Multi-Laptop Synchronization State (Erbil HQ <-> Halabja Site)
   const [isCloudSyncModalOpen, setIsCloudSyncModalOpen] = useState<boolean>(false);
@@ -3010,6 +3166,57 @@ export const ERPProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setNotifications(prev => [newNotif, ...prev]);
   };
 
+  const syncHardwareThresholdAlertsNow = useCallback(async () => {
+    try {
+      const res = await fetch('/api/it-alerts/status');
+      if (!res.ok) return;
+      const contentType = res.headers.get('content-type') || '';
+      if (!contentType.includes('application/json')) return;
+      const data = await res.json();
+      if (data.success && Array.isArray(data.alerts)) {
+        setNotifications((prevNotifs) => {
+          const updatedNotifs = [...prevNotifs];
+          let changed = false;
+
+          data.alerts.forEach((alert: any) => {
+            if (alert.dispatchedToNotificationCenter && !alert.acknowledged) {
+              const alreadyExists = updatedNotifs.some(n => n.relatedId === alert.id);
+              if (!alreadyExists) {
+                changed = true;
+                updatedNotifs.unshift({
+                  id: `notif-${alert.id}`,
+                  title: alert.titleEn,
+                  titleKu: alert.titleKu,
+                  message: alert.messageEn,
+                  messageKu: alert.messageKu,
+                  timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+                  type: 'HARDWARE_ALERT',
+                  isRead: false,
+                  relatedId: alert.id,
+                  targetRole: alert.targetRoles?.[0] || 'PROJECT_MANAGER',
+                  targetRecipientName: alert.assignedManagerName,
+                  targetEntityId: alert.assetId,
+                  directives: alert.directivesEn
+                });
+              }
+            }
+          });
+
+          return changed ? updatedNotifs : prevNotifs;
+        });
+      }
+    } catch (err) {
+      console.error('Error syncing hardware threshold alerts:', err);
+    }
+  }, []);
+
+  // Automated background threshold evaluation sync
+  useEffect(() => {
+    syncHardwareThresholdAlertsNow();
+    const interval = setInterval(syncHardwareThresholdAlertsNow, 45000);
+    return () => clearInterval(interval);
+  }, [syncHardwareThresholdAlertsNow]);
+
   return (
     <ERPContext.Provider
       value={{
@@ -3038,17 +3245,22 @@ export const ERPProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         setSelectedProjectId,
         currentUser,
         setCurrentUser,
-        userProfiles: currentUserProfiles.map(p => {
+        userProfiles: userProfiles.map(p => {
           if (p.role === 'HOLDING_OWNER') {
             return {
               ...p,
               name: holding.chairmanName?.trim()
                 ? `${holding.chairmanName.trim()} (خاوەنی هۆلدینگ)`
-                : 'خاوەنی هۆلدینگ (Holding Owner)',
+                : p.name,
             };
           }
           return p;
         }),
+        updateUserProfile,
+        addUserProfile,
+        deleteUserProfile,
+        isUserRolesModalOpen,
+        setIsUserRolesModalOpen,
         purchaseOrders,
         addPurchaseOrder,
         deletePurchaseOrder,
@@ -3100,6 +3312,7 @@ export const ERPProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         notifications,
         markNotificationAsRead,
         addNotification,
+        syncHardwareThresholdAlertsNow,
         isGateScannerOpen,
         setIsGateScannerOpen,
         isMeetingModalOpen,
@@ -3122,6 +3335,20 @@ export const ERPProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         importBatchWarehouseItems,
         isHoldingSetupOpen,
         setIsHoldingSetupOpen,
+        isUserManualOpen,
+        setIsUserManualOpen,
+        isMobileMenuOpen,
+        setIsMobileMenuOpen,
+        isSkylineBgEnabled,
+        setIsSkylineBgEnabled,
+        skylineBgPreset,
+        setSkylineBgPreset,
+        skylineBgOpacity,
+        setSkylineBgOpacity,
+        skylineBgBlur,
+        setSkylineBgBlur,
+        isSkylineModalOpen,
+        setIsSkylineModalOpen,
         activeTab,
         setActiveTab,
         searchQuery,

@@ -32,11 +32,24 @@ import {
   Printer,
   FolderKanban,
   Radio,
-  PenTool
+  PenTool,
+  LayoutGrid,
+  ShoppingCart,
+  Boxes,
+  Truck,
+  Zap,
+  Home,
+  ShieldAlert,
+  Cpu,
+  Activity,
+  CalendarRange,
+  Mail,
+  BookOpen
 } from 'lucide-react';
 import { useERP } from '../context/ERPContext';
 import { useLanguage } from '../context/LanguageContext';
 import { resolveEntityText, getUIText } from '../utils/langHelper';
+import { hasModuleAccess } from '../utils/rbacPermissions';
 import { Company, PurchaseOrder } from '../types/erp';
 import {
   DashboardSettings,
@@ -79,6 +92,8 @@ export const HoldingOwnerDashboard: React.FC = () => {
     setSelectedCompanyId,
     setIsSignatureModalOpen,
     setIsPrinterModalOpen,
+    setIsUserRolesModalOpen,
+    setIsUserManualOpen,
     currentUser,
   } = useERP();
 
@@ -201,6 +216,137 @@ export const HoldingOwnerDashboard: React.FC = () => {
   });
 
   const criticalMlAlerts = anomalyAlerts.filter(a => a.severity === 'CRITICAL' && (a.status === 'TRIGGERED' || a.status === 'INVESTIGATING'));
+
+  const systemModuleCards = [
+    {
+      id: 'procurement',
+      icon: ShoppingCart,
+      badge: 'PO',
+      title: language === 'ku' ? 'کڕین و داواکارییەکان' : language === 'ar' ? 'المشتريات' : 'Procurement & POs',
+      subtitle: `${purchaseOrders.length} ${language === 'ku' ? 'داواکاری تۆمارکراو' : 'Orders'}`, 
+      onClick: () => setActiveTab('procurement')
+    },
+    {
+      id: 'finance',
+      icon: Wallet,
+      badge: 'USD',
+      title: language === 'ku' ? 'دارایی و گەنجینە' : language === 'ar' ? 'المالية والمحاسبة' : 'Finance & Accounting',
+      subtitle: language === 'ku' ? 'سەند و بودجە' : 'Vouchers & Ledgers',
+      onClick: () => setActiveTab('finance')
+    },
+    {
+      id: 'companies-projects',
+      icon: Building2,
+      badge: 'GRP',
+      title: language === 'ku' ? 'کۆمپانیا و پڕۆژەکان' : language === 'ar' ? 'الشركات والمشاريع' : 'Companies & Projects',
+      subtitle: `${filteredCompanies.length} ${language === 'ku' ? 'کۆمپانیا' : 'Cos'} • ${filteredProjects.length} ${language === 'ku' ? 'پڕۆژە' : 'Projs'}`, 
+      onClick: () => setActiveTab('companies-projects')
+    },
+    {
+      id: 'it-systems',
+      icon: Activity,
+      badge: 'NET',
+      title: language === 'ku' ? 'ئایتی و چاودێری نۆدەکان' : language === 'ar' ? 'أنظمة IT والشبكة' : 'IT Systems & Radar',
+      subtitle: language === 'ku' ? 'خێرایی تۆڕ و سێرڤەر' : 'Node Latency Ping',
+      onClick: () => setActiveTab('it-systems')
+    },
+    {
+      id: 'gate-scanner',
+      icon: ScanLine,
+      badge: 'SCAN',
+      title: language === 'ku' ? 'سکێنەری دەروازە (Gate)' : language === 'ar' ? 'ماسح البوابة' : 'Gate QR Scanner',
+      subtitle: `${gateLogs.length} ${language === 'ku' ? 'تۆماری هاتووچۆ' : 'Gate Scans'}`, 
+      onClick: () => {
+        setActiveTab('gate-scanner');
+        setIsGateScannerOpen(true);
+      }
+    },
+    {
+      id: 'warehouse',
+      icon: Boxes,
+      badge: 'INV',
+      title: language === 'ku' ? 'کۆگا و کەرەستەکان' : language === 'ar' ? 'المستودعات والمخزون' : 'Warehouse Inventory',
+      subtitle: language === 'ku' ? 'کەرەستە و چیمەنتۆ' : 'Materials & Batches',
+      onClick: () => setActiveTab('warehouse')
+    },
+    {
+      id: 'dispatch-logistics',
+      icon: Truck,
+      badge: 'FLEET',
+      title: language === 'ku' ? 'بارکردن و لۆجستی' : language === 'ar' ? 'الشحن واللوجستيات' : 'Dispatch Logistics',
+      subtitle: language === 'ku' ? 'بارنامە و قەپان' : 'Waybills & Weighbridge',
+      onClick: () => setActiveTab('dispatch-logistics')
+    },
+    {
+      id: 'foreign-workers',
+      icon: Users,
+      badge: 'VISA',
+      title: language === 'ku' ? 'کرێکارانی بیانی و ڤیزا' : language === 'ar' ? 'العمالة والإقامات' : 'Foreign Labor & Visas',
+      subtitle: `${foreignWorkers.length} ${language === 'ku' ? 'کارمەند تۆمارکراوە' : 'Workers'}`, 
+      onClick: () => setActiveTab('foreign-workers')
+    },
+    {
+      id: 'ml-anomaly-detection',
+      icon: BrainCircuit,
+      badge: 'AI',
+      title: language === 'ku' ? 'چاودێری ژیری دەستکرد' : language === 'ar' ? 'رادار الذكاء الاصطناعي' : 'AI Sentinel Radar',
+      subtitle: `${anomalyAlerts.length} ${language === 'ku' ? 'هۆشداری دارایی' : 'Alerts'}`, 
+      onClick: () => setActiveTab('ml-anomaly-detection')
+    },
+    {
+      id: 'project-reports',
+      icon: CalendarRange,
+      badge: 'GANTT',
+      title: language === 'ku' ? 'هێڵکاری گانت و ڕاپۆرت' : language === 'ar' ? 'مخطط جانت والتقارير' : 'Gantt Progress & Reports',
+      subtitle: language === 'ku' ? 'ڕاپۆرتی خولی و خشتە' : 'Periodic Submissions',
+      onClick: () => setActiveTab('project-reports')
+    },
+    {
+      id: 'owner-approvals',
+      icon: Crown,
+      badge: 'EXEC',
+      title: language === 'ku' ? 'واژۆی سەرۆکایەتی هۆلدینگ' : language === 'ar' ? 'موافقات الرئاسة' : 'Owner Approvals',
+      subtitle: `${pendingPOs.length} ${language === 'ku' ? 'داواکاری چاوەڕوان' : 'Pending Release'}`, 
+      onClick: () => setActiveTab('owner-approvals')
+    },
+    {
+      id: 'virtual-meetings',
+      icon: Video,
+      badge: 'LIVE',
+      title: language === 'ku' ? 'کۆبوونەوەی ڤیدیۆیی ڕاستەوخۆ' : language === 'ar' ? 'اجتماعات مرئية فورية' : 'Virtual Meeting Hub',
+      subtitle: language === 'ku' ? 'پەیوەندی لەگەڵ لقەکان' : 'Branch HQ Calls',
+      onClick: () => {
+        setActiveTab('virtual-meetings');
+        setIsMeetingModalOpen(true);
+      }
+    },
+    {
+      id: 'technical-electrical',
+      icon: Zap,
+      badge: 'PWR',
+      title: language === 'ku' ? 'تەکنیکی، کارەبا و مۆلیدە' : language === 'ar' ? 'الصيانة والمولدات' : 'Power & Generator Plant',
+      subtitle: language === 'ku' ? 'سوتەمەنی و پشکنین' : 'Turbine & Fuel Sync',
+      onClick: () => setActiveTab('technical-electrical')
+    },
+    {
+      id: 'hse-fire-security',
+      icon: ShieldAlert,
+      badge: 'HSE',
+      title: language === 'ku' ? 'سەلامەتی مەیدانی (HSE)' : language === 'ar' ? 'السلامة والصحة المهنية' : 'HSE Safety & Fire',
+      subtitle: language === 'ku' ? 'ئاگرکوژێنەوە و پێکان' : 'Fire & Incident Logs',
+      onClick: () => setActiveTab('hse-fire-security')
+    },
+    {
+      id: 'camps-accommodation',
+      icon: Home,
+      badge: 'CAMP',
+      title: language === 'ku' ? 'کەمپ و مانەوە' : language === 'ar' ? 'مجمعات السكن' : 'Camps & Rooms',
+      subtitle: language === 'ku' ? 'ژوور و کارمەندان' : 'Housing & Beds',
+      onClick: () => setActiveTab('camps-accommodation')
+    }
+  ];
+
+  const visibleModuleCards = systemModuleCards.filter(m => hasModuleAccess(currentUser, m.id));
 
   const formatCurrency = (valUSD: number) => {
     if (settings.currencyDisplay === 'IQD') {
@@ -837,6 +983,38 @@ export const HoldingOwnerDashboard: React.FC = () => {
             <Printer className="w-4 h-4 text-emerald-400 shrink-0" />
             <span className="truncate">{getUIText(language, { en: 'Export PDF', ku: 'داگرتنی PDF', ar: 'تصدير PDF' })}</span>
           </button>
+
+          {/* User Roles & Permissions Button (Exclusive for Holding Owner & Admins) */}
+          {(currentUser.role === 'HOLDING_OWNER' || currentUser.role === 'SUPER_ADMIN') && (
+            <button
+              onClick={() => setIsUserRolesModalOpen(true)}
+              className="flex items-center justify-center gap-2 px-3 py-2.5 rounded-xl text-xs font-bold bg-purple-600 hover:bg-purple-500 text-white shadow-md transition transform active:scale-95 cursor-pointer text-center"
+              id="dashboard-user-roles-btn"
+              title={getUIText(language, {
+                en: 'User Roles & Access Permissions Management (RBAC)',
+                ku: 'بەڕێوەبردنی ڕۆڵی بەکارهێنەران و دەسەڵاتەکان',
+                ar: 'إدارة أدوار المستخدمين وصلاحيات الوصول'
+              })}
+            >
+              <Users className="w-4 h-4 text-purple-200 shrink-0" />
+              <span className="truncate">{getUIText(language, { en: 'Roles & RBAC', ku: 'ڕۆڵ و دەسەڵاتەکان', ar: 'الأدوار والصلاحيات' })}</span>
+            </button>
+          )}
+
+          {/* Trilingual User Manual & Word <-> PDF Converter Button */}
+          <button
+            onClick={() => setIsUserManualOpen(true)}
+            className="flex items-center justify-center gap-2 px-3 py-2.5 rounded-xl text-xs font-bold bg-blue-700 hover:bg-blue-600 text-white shadow-md transition transform active:scale-95 cursor-pointer text-center"
+            id="dashboard-user-manual-btn"
+            title={getUIText(language, {
+              en: 'Comprehensive User Manual & Two-Way Word ⇄ PDF Converter',
+              ku: 'ڕێبەری گشتگیر و گۆڕەری دوولایەنەی وۆرد ⇄ پی دی ئێف',
+              ar: 'دليل الاستخدام الشامل ومحوّل المستندات المزدوج Word ⇄ PDF'
+            })}
+          >
+            <BookOpen className="w-4 h-4 text-blue-200 shrink-0" />
+            <span className="truncate">{getUIText(language, { en: 'Manual & Converter (Word ⇄ PDF)', ku: 'ڕێبەر و گۆڕەر (Word ⇄ PDF)', ar: 'الدليل والمحوّل (Word ⇄ PDF)' })}</span>
+          </button>
         </div>
 
         {/* Holding Owner Rule Highlight Banner */}
@@ -848,6 +1026,65 @@ export const HoldingOwnerDashboard: React.FC = () => {
           <span className="hidden sm:inline-block text-[11px] text-slate-400 font-mono">
             {holding.legalRegistration || 'REG-SAS-2026'}
           </span>
+        </div>
+      </div>
+
+      {/* Enterprise System Modules Directory (سەرجەم بەشە سەرەکییەکان لەژێر دەستی خاوەن و بە تایبەت بۆ دیتنی مۆبایل) */}
+      <div className="bg-white border border-slate-200/90 rounded-3xl p-5 shadow-xs space-y-4">
+        <div className="flex items-center justify-between border-b border-slate-100 pb-3 flex-wrap gap-2">
+          <div className="flex items-center gap-2.5">
+            <div className="w-9 h-9 rounded-2xl bg-blue-50 border border-blue-200 text-blue-700 flex items-center justify-center font-bold">
+              <LayoutGrid className="w-4 h-4" />
+            </div>
+            <div>
+              <h3 className="text-sm font-extrabold text-slate-900 flex items-center gap-2">
+                <span>{language === 'ku' ? 'بەشەکانی سیستەم (مۆدیوڵە کارگێڕی و مەیدانییەکان)' : language === 'ar' ? 'أقسام النظام الشاملة' : 'Enterprise Modules Directory'}</span>
+                <span className="text-[10px] px-2 py-0.5 rounded-full bg-blue-100 text-blue-800 font-bold font-mono">
+                  All Modules
+                </span>
+              </h3>
+              <p className="text-[11px] text-slate-500">
+                {language === 'ku'
+                  ? 'دەستگەیشتنی خێرا بە سەرجەم بەشەکان بۆ هەردوو دیتنی مۆبایل و کۆمپیوتەر'
+                  : 'Instant one-tap navigation to every system module across mobile and desktop.'}
+              </p>
+            </div>
+          </div>
+          <span className="text-[11px] text-slate-400 font-mono hidden sm:inline">
+            {visibleModuleCards.length} {language === 'ku' ? 'بەشی ڕێگەپێدراو بۆ ئەم ڕۆڵە' : 'Accessible Modules'}
+          </span>
+        </div>
+
+        {/* Responsive Grid for Filtered System Sections */}
+        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-2.5">
+          {visibleModuleCards.map((m) => {
+            const Icon = m.icon;
+            return (
+              <button
+                key={m.id}
+                onClick={m.onClick}
+                id={`dashboard-nav-${m.id}`}
+                className="p-3 rounded-2xl bg-slate-50 hover:bg-indigo-50/80 border border-slate-200/80 hover:border-indigo-300 text-left transition flex flex-col justify-between group cursor-pointer shadow-2xs hover:shadow-xs"
+              >
+                <div className="flex items-center justify-between mb-2">
+                  <div className="w-8 h-8 rounded-xl bg-indigo-100 text-indigo-700 flex items-center justify-center group-hover:scale-105 transition-transform">
+                    <Icon className="w-4 h-4" />
+                  </div>
+                  <span className="text-[9px] px-1.5 py-0.5 rounded bg-slate-200/80 text-slate-700 font-bold border border-slate-300 font-mono">
+                    {m.badge}
+                  </span>
+                </div>
+                <div>
+                  <span className="text-xs font-bold text-slate-800 block truncate group-hover:text-indigo-700">
+                    {m.title}
+                  </span>
+                  <span className="text-[10px] text-slate-400 block truncate">
+                    {m.subtitle}
+                  </span>
+                </div>
+              </button>
+            );
+          })}
         </div>
       </div>
 

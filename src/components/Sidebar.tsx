@@ -17,17 +17,20 @@ import {
   Truck,
   FolderArchive,
   Cpu,
+  Activity,
   ChevronRight,
   Sparkles,
   FileCheck2,
   BrainCircuit,
   CalendarRange,
   PanelLeftClose,
-  PanelLeftOpen
+  PanelLeftOpen,
+  X
 } from 'lucide-react';
 import { useERP } from '../context/ERPContext';
 import { useLanguage } from '../context/LanguageContext';
 import { getUIText } from '../utils/langHelper';
+import { hasModuleAccess } from '../utils/rbacPermissions';
 
 export const Sidebar: React.FC = () => {
   const {
@@ -38,7 +41,9 @@ export const Sidebar: React.FC = () => {
     gateLogs,
     projectReports,
     anomalyAlerts,
-    currentUser
+    currentUser,
+    isMobileMenuOpen,
+    setIsMobileMenuOpen
   } = useERP();
   const { t, language, isRtl } = useLanguage();
 
@@ -169,64 +174,104 @@ export const Sidebar: React.FC = () => {
         { id: 'foreign-workers', label: t('navForeignWorkers'), icon: Users, badge: expiringIqamasCount > 0 ? expiringIqamasCount : null, badgeColor: 'bg-rose-500/20 text-rose-300 border-rose-500/40' },
         { id: 'hr-payroll', label: t('navHrPayroll'), icon: Users, badge: null },
         { id: 'correspondence', label: t('navCorrespondence'), icon: Mail, badge: null },
-        { id: 'doc-archive', label: t('navDocArchive'), icon: FolderArchive, badge: null },
-        { id: 'it-systems', label: t('navItSystems'), icon: Cpu, badge: null },
+        {
+          id: 'it-systems',
+          label: getUIText(language, { en: 'IT Systems, Latency & Sync', ku: 'ئایتی، چاودێری تۆڕ و سینک', ar: 'أنظمة IT وسرعة الاتصال والمزامنة' }),
+          icon: Activity,
+          badge: 'PING RADAR',
+          badgeColor: 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40'
+        },
       ]
     }
   ];
 
-  return (
-    <aside
-      className={`${
-        isCollapsed ? 'w-16' : 'w-64 sm:w-72'
-      } bg-[#0F172A] border-r border-slate-800/90 flex flex-col shrink-0 h-[calc(100vh-61px)] sticky top-[61px] overflow-y-auto transition-all duration-300 ease-in-out z-30`}
-    >
-      {/* Sidebar Header with Collapse Toggle */}
-      <div className={`p-2.5 border-b border-slate-800/80 flex items-center ${isCollapsed ? 'justify-center' : 'justify-between'}`}>
-        {!isCollapsed && (
-          <span className="text-[11px] font-black uppercase tracking-wider text-slate-400 pl-2">
-            {getUIText(language, { en: 'Holding Navigation', ku: 'مێنیوی هۆلدینگ', ar: 'قائمة المجموعة' })}
-          </span>
-        )}
-        <button
-          onClick={toggleCollapsed}
-          className="p-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white transition cursor-pointer"
-          title={isCollapsed ? (isRtl ? 'فراوانکردنی مێنیو' : 'Expand Sidebar') : (isRtl ? 'بچووککردنەوەی مێنیو' : 'Collapse Sidebar')}
-        >
-          {isCollapsed ? (
-            <PanelLeftOpen className="w-4 h-4 text-amber-400" />
-          ) : (
-            <PanelLeftClose className="w-4 h-4 text-slate-300" />
-          )}
-        </button>
-      </div>
+  // Filter navigation items by currentUser role & custom permissions (RBAC)
+  const visibleNavGroups = navGroups
+    .map(group => ({
+      ...group,
+      items: group.items.filter(item => hasModuleAccess(currentUser, item.id))
+    }))
+    .filter(group => group.items.length > 0);
 
-      <div className={`${isCollapsed ? 'p-2' : 'p-3.5'} space-y-5 flex-1`}>
-        {navGroups.map((group, idx) => (
-          <div key={idx} className="space-y-1">
-            {!isCollapsed && (
-              <div className="px-3 py-1 text-[10px] font-extrabold uppercase tracking-wider text-slate-400/90">
-                {group.groupTitle}
-              </div>
-            )}
-            <div className="space-y-0.5">
-              {group.items.map((item) => {
-                const Icon = item.icon;
-                const isActive = activeTab === item.id;
-                return (
-                  <button
-                    key={item.id}
-                    onClick={() => setActiveTab(item.id)}
-                    id={`sidebar-nav-${item.id}`}
-                    title={isCollapsed ? item.label : undefined}
-                    className={`w-full flex items-center ${
-                      isCollapsed ? 'justify-center p-2.5' : 'justify-between px-3 py-2.5'
-                    } rounded-xl text-xs font-semibold transition-all group cursor-pointer relative ${
-                      isActive
-                        ? 'bg-gradient-to-r from-blue-600 to-indigo-600 text-white shadow-md shadow-blue-600/30 border border-blue-400/40'
-                        : 'text-slate-400 hover:text-slate-100 hover:bg-slate-800/70 border border-transparent'
-                    }`}
-                  >
+  return (
+    <>
+      {/* Mobile Backdrop Overlay */}
+      {isMobileMenuOpen && (
+        <div
+          onClick={() => setIsMobileMenuOpen(false)}
+          className="fixed inset-0 bg-slate-950/70 backdrop-blur-xs z-40 md:hidden animate-in fade-in"
+        />
+      )}
+
+      <aside
+        className={`fixed md:sticky top-[61px] left-0 md:left-auto ${
+          isMobileMenuOpen ? 'translate-x-0 w-72' : '-translate-x-full md:translate-x-0'
+        } ${
+          isCollapsed ? 'md:w-16' : 'md:w-64 sm:w-72'
+        } bg-[#0F172A] border-r border-slate-800/90 flex flex-col shrink-0 h-[calc(100vh-61px)] overflow-y-auto transition-all duration-300 ease-in-out z-50 md:z-30 shadow-2xl md:shadow-none`}
+      >
+        {/* Sidebar Header with Collapse Toggle & Mobile Close */}
+        <div className={`p-2.5 border-b border-slate-800/80 flex items-center ${isCollapsed ? 'justify-center' : 'justify-between'}`}>
+          {!isCollapsed && (
+            <span className="text-[11px] font-black uppercase tracking-wider text-slate-400 pl-2">
+              {getUIText(language, { en: 'Holding Navigation', ku: 'مێنیوی هۆلدینگ', ar: 'قائمة المجموعة' })}
+            </span>
+          )}
+
+          <div className="flex items-center gap-1">
+            {/* Close button on mobile */}
+            <button
+              onClick={() => setIsMobileMenuOpen(false)}
+              className="p-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white md:hidden cursor-pointer"
+              title="Close menu"
+            >
+              <X className="w-4 h-4 text-amber-400" />
+            </button>
+
+            {/* Desktop Collapse Toggle */}
+            <button
+              onClick={toggleCollapsed}
+              className="hidden md:flex p-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white transition cursor-pointer"
+              title={isCollapsed ? (isRtl ? 'فراوانکردنی مێنیو' : 'Expand Sidebar') : (isRtl ? 'بچووککردنەوەی مێنیو' : 'Collapse Sidebar')}
+            >
+              {isCollapsed ? (
+                <PanelLeftOpen className="w-4 h-4 text-amber-400" />
+              ) : (
+                <PanelLeftClose className="w-4 h-4 text-slate-300" />
+              )}
+            </button>
+          </div>
+        </div>
+
+        <div className={`${isCollapsed ? 'p-2' : 'p-3.5'} space-y-5 flex-1`}>
+          {visibleNavGroups.map((group, idx) => (
+            <div key={idx} className="space-y-1">
+              {!isCollapsed && (
+                <div className="px-3 py-1 text-[10px] font-extrabold uppercase tracking-wider text-slate-400/90">
+                  {group.groupTitle}
+                </div>
+              )}
+              <div className="space-y-0.5">
+                {group.items.map((item) => {
+                  const Icon = item.icon;
+                  const isActive = activeTab === item.id;
+                  return (
+                    <button
+                      key={item.id}
+                      onClick={() => {
+                        setActiveTab(item.id);
+                        setIsMobileMenuOpen(false);
+                      }}
+                      id={`sidebar-nav-${item.id}`}
+                      title={isCollapsed ? item.label : undefined}
+                      className={`w-full flex items-center ${
+                        isCollapsed ? 'justify-center p-2.5' : 'justify-between px-3 py-2.5'
+                      } rounded-xl text-xs font-semibold transition-all group cursor-pointer relative ${
+                        isActive
+                          ? 'bg-gradient-to-r from-blue-600 to-indigo-600 text-white shadow-md shadow-blue-600/30 border border-blue-400/40'
+                          : 'text-slate-400 hover:text-slate-100 hover:bg-slate-800/70 border border-transparent'
+                      }`}
+                    >
                     <div className="flex items-center gap-2.5 truncate">
                       <Icon className={`w-4 h-4 shrink-0 transition-colors ${isActive ? 'text-white' : 'text-slate-400 group-hover:text-slate-200'}`} />
                       {!isCollapsed && <span className="truncate">{item.label}</span>}
@@ -249,38 +294,63 @@ export const Sidebar: React.FC = () => {
         ))}
       </div>
 
-      {/* Holding Owner Direct Access Banner (Collapsible) */}
+      {/* Role-Specific Portal Badge (Collapsible) */}
       {!isCollapsed ? (
         <div className="p-3.5 border border-slate-800/80 bg-slate-950/60 m-2.5 rounded-2xl shadow-xs">
           <div className="flex items-center gap-2 mb-1.5">
-            <Crown className="w-4 h-4 text-amber-400" />
-            <span className="text-xs font-bold text-slate-200">
-              {getUIText(language, {
-                en: 'Owner Gatekeeper Active',
-                ku: 'دەروازەی خاوەنی هۆلدینگ چالاکە',
-                ar: 'بوابة مالك المجموعة نشطة'
-              })}
+            {currentUser.role === 'HOLDING_OWNER' ? (
+              <Crown className="w-4 h-4 text-amber-400" />
+            ) : currentUser.role === 'COMPANY_GM' ? (
+              <Building2 className="w-4 h-4 text-blue-400" />
+            ) : currentUser.role === 'PROJECT_MANAGER' ? (
+              <FileCheck2 className="w-4 h-4 text-emerald-400" />
+            ) : (
+              <Users className="w-4 h-4 text-slate-300" />
+            )}
+            <span className="text-xs font-bold text-slate-200 truncate">
+              {currentUser.role === 'HOLDING_OWNER'
+                ? getUIText(language, { en: 'Owner Gatekeeper Active', ku: 'دەروازەی خاوەنی هۆلدینگ', ar: 'بوابة مالك المجموعة نشطة' })
+                : currentUser.role === 'COMPANY_GM'
+                ? getUIText(language, { en: 'General Manager Portal', ku: 'پۆرتاڵی بەڕێوەبەری گشتی (GM)', ar: 'بوابة المدير العام للشركة' })
+                : currentUser.role === 'PROJECT_MANAGER'
+                ? getUIText(language, { en: 'Project Manager Portal', ku: 'پۆرتاڵی بەڕێوەبەری پرۆژە (PM)', ar: 'بوابة مدير المشروع' })
+                : currentUser.role === 'EMPLOYEE'
+                ? getUIText(language, { en: 'Employee Self-Service', ku: 'خزمەتگوزاری کارمەند (Employee)', ar: 'بوابة الموظف' })
+                : getUIText(language, { en: 'Authorized Workspace', ku: 'بەشی ڕێگەپێدراوی کارمەند', ar: 'مساحة العمل المصرحة' })}
             </span>
           </div>
           <p className="text-[11px] text-slate-400 leading-snug">
-            {getUIText(language, {
-              en: 'Centralized pre-approval gate & triple sync scanner protecting holding assets.',
-              ku: 'دەروازەی پەسەندکردنی پێشوەختە و سکانی سێقۆڵی پارێزەری سەروەت و سامانی هۆلدینگ.',
-              ar: 'بوابة الموافقة المسبقة المركزية والماسح الثلاثي لحماية أصول المجموعة.'
-            })}
+            {currentUser.role === 'HOLDING_OWNER'
+              ? getUIText(language, {
+                  en: 'Centralized pre-approval gate & triple sync scanner protecting holding assets.',
+                  ku: 'دەروازەی پەسەندکردنی پێشوەختە و سکانی سێقۆڵی پارێزەری سەروەت و سامانی هۆلدینگ.',
+                  ar: 'بوابة الموافقة المسبقة المركزية والماسح الثلاثي لحماية أصول المجموعة.'
+                })
+              : getUIText(language, {
+                  en: 'Role-based access applied. You have visibility only to authorized company and project modules.',
+                  ku: 'دەسەڵاتی ڕۆڵ جێبەجێکراوە. تەنها ئەو بەشانە دەبینیت کە بەستراونەتەوە بە ئەرکەکەت.',
+                  ar: 'تم تطبيق صلاحيات الدور. يمكنك رؤية الأقسام المخصصة لاختصاصك فقط.'
+                })}
           </p>
         </div>
       ) : (
         <div className="p-2 border-t border-slate-800 flex justify-center pb-3">
           <button
-            onClick={() => setActiveTab('owner-approvals')}
+            onClick={() => {
+              if (hasModuleAccess(currentUser, 'owner-approvals')) {
+                setActiveTab('owner-approvals');
+              } else if (hasModuleAccess(currentUser, 'procurement')) {
+                setActiveTab('procurement');
+              }
+            }}
             className="p-2 rounded-xl bg-amber-500/20 text-amber-400 hover:bg-amber-500/30 transition cursor-pointer"
-            title={getUIText(language, { en: 'Owner Approvals', ku: 'پەسەندکردنی خاوەن', ar: 'موافقات المالك' })}
+            title={getUIText(language, { en: 'Authorized Module', ku: 'بەشی چالاک', ar: 'القسم المصرح' })}
           >
             <Crown className="w-4 h-4" />
           </button>
         </div>
       )}
-    </aside>
+      </aside>
+    </>
   );
 };

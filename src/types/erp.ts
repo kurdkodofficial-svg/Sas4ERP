@@ -7,6 +7,7 @@ export type UserRole =
   | 'SUPER_ADMIN'
   | 'COMPANY_GM'
   | 'PROJECT_MANAGER'
+  | 'EMPLOYEE'
   | 'FINANCE_HEAD'
   | 'WAREHOUSE_OFFICER'
   | 'SECURITY_GATE'
@@ -25,6 +26,7 @@ export interface UserProfile {
   phone: string;
   nativeLanguage: Language;
   title: string;
+  accessibleModules?: string[]; // Specific module IDs this user is authorized to access
 }
 
 export type DepartmentCategory = 
@@ -766,7 +768,7 @@ export interface AppNotification {
   messageKu?: string;
   messageAr?: string;
   timestamp: string;
-  type: 'GATE_ALERT' | 'OWNER_APPROVAL_REQUIRED' | 'MEETING_INVITE' | 'EXPIRY_WARNING' | 'FINANCE_ENTRY' | 'ML_ANOMALY_ALERT' | 'BUDGET_THRESHOLD_ALERT';
+  type: 'GATE_ALERT' | 'OWNER_APPROVAL_REQUIRED' | 'MEETING_INVITE' | 'EXPIRY_WARNING' | 'FINANCE_ENTRY' | 'ML_ANOMALY_ALERT' | 'BUDGET_THRESHOLD_ALERT' | 'HARDWARE_ALERT';
   isRead: boolean;
   relatedId?: string;
   targetRole?: UserRole;
