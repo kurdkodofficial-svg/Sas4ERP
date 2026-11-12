@@ -25,6 +25,18 @@ export function openUserManualPrintView(options: ManualPrintOptions) {
         دۆکیومێنتی فەرمی و دەستووری کارپێکردنی سەرجەم بەشەکان و پڕۆسە کارگێڕی و مەیدانییەکان بۆ خاوەنی هۆڵدینگ، بەڕێوەبەرانی گشتی، بەڕێوەبەرانی پڕۆژە و کارمەندان.
       </p>
 
+      <div style="background: #eff6ff; border: 1.5px solid #bfdbfe; border-radius: 12px; padding: 14px; margin-bottom: 20px;">
+        <h3 style="margin: 0 0 8px 0; color: #1e3a8a; font-size: 14px;">★ خاڵە جیاکارییە سەرەکییەکانی SAS4ERP لەگەڵ سیستەمەکانی تر:</h3>
+        <ul style="margin: 0; padding-right: 18px; font-size: 12px; color: #1e293b;">
+          <li><strong>١. بەکارهێنانی ٣ زمانی هاوکات لە یەک سیستەمدا:</strong> هەر بەکارهێنەرێک (خاوەن هۆڵدینگ بە کوردی، ئەندازیار بە ئینگلیزی، بەڵێندەر بە عەرەبی) لە یەک ساتدا بە زمانی دڵخوازی خۆی داتاکان دەبینێت.</li>
+          <li><strong>٢. دروستبوونی خۆکارانەی ٩ بەش و کەمپی نیشتەجێبوون:</strong> دەستبەجێ بە تۆمارکردنی هەر کۆمپانیا یان پڕۆژەیەک، هەموو بەشەکانی بۆ دادەمەزرێت بەبێ پێویستی بە دروستکردنی دەستی.</li>
+          <li><strong>٣. گۆڕەری دوولایەنەی فۆرماتەکان (Word ⇄ PDF):</strong> گۆڕینی خێرای پەڕگەی وۆرد بۆ پی دی ئێف و بە پێچەوانەشەوە لەناو خودی سیستەمدا.</li>
+          <li><strong>٤. هاوردەکردنی داتا و بەڵگەنامە بە Drag & Drop:</strong> هەر بەشێک سەکۆی فڕێدانی فایلەکانی هەیە بۆ ڕێگری لە کات بەفیڕۆدان بە دووبارە نووسینەوە.</li>
+          <li><strong>٥. ڕاداری ژیری دەستکرد (AI Sentinel) و کارکردنی ئۆفلاین (Offline PWA):</strong> چاودێری فێڵ و کارکردنی بەردەوام بەبێ ئینتەرنێت.</li>
+          <li><strong>٦. دەستکاریکردنی تێبینی چەسپاو، پەسەندکردن و بودجە بە شێوازی ڕاستەوخۆ:</strong> توانای دەستکاریکردنی ڕاستەوخۆی Sticky Notes، واژۆکردنی داواکارییە هەڵپەسێردراوەکان، و گۆڕینی ژمارەکانی بودجە و داتاکان لە کاتی پێویستدا.</li>
+        </ul>
+      </div>
+
       <h2>١. لایسنس، ماوەی تاقیکردنەوەی ١٤ ڕۆژ و قفڵی ئامێر (Hardware Lock)</h2>
       <p>سیستەمی SAS4ERP بە شێوەی خزمەتگوزاری پێشکەش دەکرێت. کاتێک کۆمپانیایەک یان هۆڵدینگێک وەریدەگرێت، ئەم پرۆسانە پێویستە جێبەجێ بکرێن:</p>
       <ul>
@@ -112,6 +124,18 @@ export function openUserManualPrintView(options: ManualPrintOptions) {
         Official comprehensive technical and field documentation for Holding Owners, Managing Directors, Project Managers, and Operational Staff across all 21 modules.
       </p>
 
+      <div style="background: #eff6ff; border: 1.5px solid #bfdbfe; border-radius: 12px; padding: 14px; margin-bottom: 20px;">
+        <h3 style="margin: 0 0 8px 0; color: #1e3a8a; font-size: 14px;">★ Core Strategic Differentiators of SAS4ERP vs Legacy Systems:</h3>
+        <ul style="margin: 0; padding-left: 18px; font-size: 12px; color: #1e293b;">
+          <li><strong>1. Simultaneous Native Trilingual Operation:</strong> Every persona interacts in their native language simultaneously (Kurdish, English, Arabic) against unified live ledgers.</li>
+          <li><strong>2. 0-Second Automated Department & Camp Provisioning:</strong> Instant automated creation of 9 specialized departments, housing camps, and GM profiles per entity.</li>
+          <li><strong>3. Integrated Two-Way Word ⇄ PDF Studio:</strong> In-browser bi-directional conversion between Microsoft Word (.docx) and Adobe PDF files.</li>
+          <li><strong>4. Universal Drag & Drop Data Ingestion:</strong> Zero retyping—drag and drop Excel spreadsheets, PDFs, and Word contracts straight into department files.</li>
+          <li><strong>5. AI Anomaly Sentinel & True Offline-First PWA:</strong> Active ML fraud detection with 100% field operation in remote blackouts.</li>
+          <li><strong>6. In-Place Dynamic Editing for Sticky Notes, Approvals & Live Budgets:</strong> Instant direct modification of executive sticky notes, pending approvals, and project/holding budget figures with immediate audit trails.</li>
+        </ul>
+      </div>
+
       <h2>1. Architecture, Licensing & 14-Day Free Trial</h2>
       <ul>
         <li><strong>14-Day Free Trial:</strong> Any new deployment operates in full-feature trial mode for 14 days without requiring immediate license entry.</li>
@@ -193,6 +217,18 @@ export function openUserManualPrintView(options: ManualPrintOptions) {
       <p class="lead-text">
         الوثيقة الرسمية المتكاملة لإدارة المجموعة، الشركات التابعة، المشاريع الميدانية، واعتماد الصلاحيات لمالك المجموعة، المدراء العامين، ومدراء المشاريع والموظفين.
       </p>
+
+      <div style="background: #eff6ff; border: 1.5px solid #bfdbfe; border-radius: 12px; padding: 14px; margin-bottom: 20px;">
+        <h3 style="margin: 0 0 8px 0; color: #1e3a8a; font-size: 14px;">★ الخصائص الاستراتيجية الحصرية لمنظومة SAS4ERP مقارنة بالأنظمة التقليدية:</h3>
+        <ul style="margin: 0; padding-right: 18px; font-size: 12px; color: #1e293b;">
+          <li><strong>١. تشغيل ثلاث لغات متزامنة في نظام واحد:</strong> إمكانية تفاعل كل مستخدم بلغته المفضلة في نفس اللحظة (الكردية، الإنجليزية، العربية) على نفس قاعدة البيانات.</li>
+          <li><strong>٢. التوليد التلقائي الفوري لـ ٩ أقسام وسكن العمال:</strong> إنشاء آلي مباشر للأقسام وسكن العمال وملف المدير العام لأي شركة أو مشروع جديد.</li>
+          <li><strong>٣. استوديو تحويل المستندات المزدوج (Word ⇄ PDF):</strong> تحويل مباشر وسريع ثنائي الاتجاه بين ملفات Word وملفات PDF.</li>
+          <li><strong>٤. استيراد المستندات بالسحب والإفلات (Drag & Drop):</strong> توفير مئات الساعات عبر سحب وإفلات ملفات Excel و PDF و Word فورياً دون إعادة كتابة.</li>
+          <li><strong>٥. رادار الذكاء الاصطناعي (AI Sentinel) والتشغيل دون إنترنت:</strong> كشف الاحتيال وتجزئة المشتريات مع تشغيل ميداني متواصل ١٠٠٪ في المواقع المنقطعة.</li>
+          <li><strong>٦. التعديل المباشر للملاحظات اللاصقة والموافقات وتحديث أرقام الميزانيات:</strong> إمكانية تحرير الملاحظات القيادية، البت في المعاملات المعلقة، وتعديل أرقام الميزانيات وأي رقم بالمنظومة فورياً.</li>
+        </ul>
+      </div>
 
       <h2>١. الهيكلية العامة، الترخيص، وفترة التجربة المجانية</h2>
       <ul>

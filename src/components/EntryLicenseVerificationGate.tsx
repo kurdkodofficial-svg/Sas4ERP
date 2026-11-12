@@ -228,10 +228,23 @@ export const EntryLicenseVerificationGate: React.FC<EntryLicenseVerificationGate
                   type="text"
                   value={inputKey}
                   onChange={(e) => setInputKey(e.target.value)}
-                  placeholder="SAS-PRO-XXXX-XXXX یان کلیلی بەخشراوی خاوەن"
+                  placeholder="SAS-MON-XXXX-XXXX یان کلیلی بەخشراوی خاوەن"
                   className="w-full pl-9 pr-3 py-2.5 rounded-xl border border-slate-700 bg-slate-950 font-mono text-xs text-white uppercase font-bold focus:outline-none focus:border-blue-500"
                   required
                 />
+              </div>
+
+              {/* Clear Writings & Instructions under the key */}
+              <div className="p-3 rounded-2xl bg-slate-950/80 border border-slate-800 text-xs space-y-1.5 mt-1">
+                <span className="font-extrabold text-amber-300 text-xs flex items-center gap-1.5">
+                  <Key className="w-3.5 h-3.5 text-amber-400" />
+                  <span>{language === 'ku' ? 'نووسین و ڕێنماییەکانی تایبەت بە کلیلەکە:' : 'License Key Terms & Instructions:'}</span>
+                </span>
+                <p className="text-[11px] text-slate-300 leading-relaxed">
+                  {language === 'ku'
+                    ? '📌 ئەم کلیلە مۆڵەتی فەرمی بەکارهێنانە لەلایەن خاوەنی سەکۆوە. کلیلەکە بەستراوەتەوە بە ناسنامەی ئامێرەکەت (Hardware Node ID) و مانگانە نوێ دەکرێتەوە بۆ دڵنیایی لە کارکردنی بەردەوامی سیستەم.'
+                    : '📌 This key is provided by the platform author and bound to your workstation node ID with periodic renewal.'}
+                </p>
               </div>
             </div>
 

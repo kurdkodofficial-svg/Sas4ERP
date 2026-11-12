@@ -29,7 +29,8 @@ import {
   ProjectPeriodicReport,
   SubProject,
   PrinterDeviceConfig,
-  ExecutiveSignatureProfile
+  ExecutiveSignatureProfile,
+  DelegatedSpendingMandate
 } from '../types/erp';
 import { initialSubProjects } from '../data/initialSubProjects';
 import { generateDefaultDepartments } from '../data/departmentsData';
@@ -66,6 +67,7 @@ import { holdingCloudSyncService, HoldingCloudSyncStatus } from '../services/hol
 import { PrintManagerService } from '../services/printManager';
 import { PrintJob, PrintOptions, PrintResult, PrintableReportData } from '../types/print';
 import { HoldingSectorKpi } from '../types/kpi';
+import { SystemLicenseInfo, getStoredSystemLicense } from '../utils/licenseManager';
 import { getHoldingSectorsData } from '../data/holdingSectorsData';
 import {
   IntercompanyInvoice,
@@ -159,7 +161,14 @@ interface ERPContextType {
   rejectPurchaseByOwner: (poId: string, comments?: string) => void;
 
   gateLogs: GateEntryLog[];
-  processGateScan: (barcodeOrPo: string, customDetails?: any) => Promise<{ success: boolean; po?: PurchaseOrder; message: string }>;
+  processGateScan: (barcodeOrPo: string, customDetails?: any) => Promise<{
+    success: boolean;
+    po?: PurchaseOrder;
+    message: string;
+    itemsUpdated?: { name: string; quantityAdded: number; newTotal: number; unit: string }[];
+    voucherNo?: string;
+    notificationsDispatched?: string[];
+  }>;
   deleteGateLog: (id: string) => void;
 
   foreignWorkers: ForeignWorker[];
@@ -246,6 +255,15 @@ interface ERPContextType {
   setIsHoldingSetupOpen: (open: boolean) => void;
   isUserManualOpen: boolean;
   setIsUserManualOpen: (open: boolean) => void;
+  isLicenseModalOpen: boolean;
+  setIsLicenseModalOpen: (open: boolean) => void;
+  licenseModalInitialTab: 'activate' | 'generator';
+  setLicenseModalInitialTab: (tab: 'activate' | 'generator') => void;
+  openLicenseModal: (tab?: 'activate' | 'generator') => void;
+  isOwnerVerifyModalOpen: boolean;
+  setIsOwnerVerifyModalOpen: (open: boolean) => void;
+  systemLicense: SystemLicenseInfo;
+  setSystemLicense: React.Dispatch<React.SetStateAction<SystemLicenseInfo>>;
   isMobileMenuOpen: boolean;
   setIsMobileMenuOpen: (open: boolean) => void;
 
@@ -295,6 +313,44 @@ interface ERPContextType {
   approvalAuditTrail: ApprovalAuditEntry[];
   processWorkflowStep: (poId: string, stepNumber: number, decision: 'APPROVED' | 'REJECTED' | 'REQUEST_MORE_INFO', comments?: string) => void;
   submitPurchaseRequest: (data: Omit<PurchaseOrder, 'id' | 'poNumber' | 'createdDate' | 'status'> & { transactionType?: TransactionType }) => void;
+  isPoFullyApproved: (po: PurchaseOrder) => boolean;
+  canPoEnterProject: (po: PurchaseOrder) => {
+    allowed: boolean;
+    reasonKu: string;
+    reasonEn: string;
+    isCeoPreApproved?: boolean;
+    missingSignersKu?: string;
+  };
+  grantCeoPreApproval: (poId: string, comments?: string) => void;
+  delegatePoSpendingAuthority: (poId: string, notes?: string, decreeNumber?: string) => { success: boolean; message: string };
+  setEntitySpendingAutonomy: (type: 'COMPANY' | 'PROJECT', id: string, mandate: DelegatedSpendingMandate | null) => void;
+  isPoDelegatedOrAutonomous: (po: PurchaseOrder) => { isDelegated: boolean; mandate?: DelegatedSpendingMandate };
+  signPmReleaseForProcurement: (poId: string, comments?: string) => { success: boolean; message: string };
+  collectFundsByProcurement: (poId: string) => { success: boolean; message: string };
+  canUserApproveWorkflowStep: (
+    user: UserProfile,
+    po: PurchaseOrder,
+    stepNumber: number
+  ) => { allowed: boolean; reasonKu: string; reasonEn: string; requiresOverride?: boolean };
+  approveWorkflowStep: (
+    poId: string,
+    stepNumber: number,
+    decision: 'APPROVED' | 'REJECTED' | 'REQUEST_MORE_INFO',
+    comments?: string,
+    signatureImage?: string,
+    sealStampImage?: string,
+    isOverride?: boolean
+  ) => { success: boolean; message: string };
+  disbursePoPayment: (
+    poId: string,
+    paymentMethod?: string,
+    notes?: string
+  ) => { success: boolean; message: string };
+  receiveApprovedPoToWarehouse: (
+    poId: string,
+    binLocation?: string,
+    condition?: string
+  ) => { success: boolean; message: string };
 
   // General Manager Budget Policies & Decisions
   gmBudgetPolicies: GMProjectBudgetPolicy[];
@@ -863,6 +919,16 @@ export const ERPProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [financeLedgers, setFinanceLedgers] = useState<FinanceLedgerEntry[]>(initialFinanceLedgers);
   const [virtualMeetings, setVirtualMeetings] = useState<VirtualMeeting[]>(initialVirtualMeetings);
   const [notifications, setNotifications] = useState<AppNotification[]>(initialNotifications);
+
+  const addNotification = useCallback((notif: Omit<AppNotification, 'id' | 'timestamp' | 'isRead'>) => {
+    const newNotif: AppNotification = {
+      ...notif,
+      id: `notif-${Date.now()}`,
+      timestamp: 'Just now',
+      isRead: false,
+    };
+    setNotifications(prev => [newNotif, ...prev]);
+  }, []);
   const [dispatchShipments, setDispatchShipments] = useState<DispatchShipment[]>(initialDispatchShipments);
   const [itAssets, setItAssets] = useState<ItSystemAsset[]>(initialItAssets);
   const [employees, setEmployees] = useState<Employee[]>(initialEmployees);
@@ -902,19 +968,35 @@ export const ERPProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [selectedProjectId, setSelectedProjectId] = useState<string | 'ALL'>('ALL');
   const [currentUser, setCurrentUser] = useState<UserProfile>(() => {
     const defaultUser = currentUserProfiles[0];
-    const saved = localStorage.getItem('sas4erp_holding');
+    const isOwnerVerifiedStorage = typeof localStorage !== 'undefined' && (
+      localStorage.getItem('sas4erp_verified_owner_email') === 'kurdkodofficial@gmail.com' ||
+      localStorage.getItem('sas4erp_owner_session') === 'verified'
+    );
+    const verifiedAtStorage = typeof localStorage !== 'undefined' ? localStorage.getItem('sas4erp_owner_verified_at') : undefined;
+    const baseUser: UserProfile = isOwnerVerifiedStorage ? {
+      ...defaultUser,
+      email: 'kurdkodofficial@gmail.com',
+      isOwnerVerified: true,
+      verifiedAt: verifiedAtStorage || new Date().toISOString(),
+      name: 'خاوەنی سیستەم و هۆڵدینگ (kurdkodofficial@gmail.com)',
+      title: 'سەرۆک و خاوەنی سەکۆ و هۆڵدینگ',
+      role: 'HOLDING_OWNER',
+      avatar: '👑'
+    } : defaultUser;
+
+    const saved = typeof localStorage !== 'undefined' ? localStorage.getItem('sas4erp_holding') : null;
     if (saved) {
       try {
         const parsed = JSON.parse(saved);
-        if (parsed.chairmanName?.trim()) {
+        if (parsed.chairmanName?.trim() && !isOwnerVerifiedStorage) {
           return {
-            ...defaultUser,
+            ...baseUser,
             name: parsed.chairmanName.trim(),
           };
         }
       } catch (e) {}
     }
-    return defaultUser;
+    return baseUser;
   });
   const [activeTab, setActiveTab] = useState<string>('holding-dashboard');
   const [searchQuery, setSearchQuery] = useState<string>('');
@@ -1077,7 +1159,16 @@ export const ERPProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [isImportModalOpen, setIsImportModalOpen] = useState<boolean>(false);
   const [isHoldingSetupOpen, setIsHoldingSetupOpen] = useState<boolean>(false);
   const [isUserManualOpen, setIsUserManualOpen] = useState<boolean>(false);
+  const [isLicenseModalOpen, setIsLicenseModalOpen] = useState<boolean>(false);
+  const [licenseModalInitialTab, setLicenseModalInitialTab] = useState<'activate' | 'generator'>('activate');
+  const [isOwnerVerifyModalOpen, setIsOwnerVerifyModalOpen] = useState<boolean>(false);
+  const [systemLicense, setSystemLicense] = useState<SystemLicenseInfo>(() => getStoredSystemLicense());
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState<boolean>(false);
+
+  const openLicenseModal = (tab: 'activate' | 'generator' = 'activate') => {
+    setLicenseModalInitialTab(tab);
+    setIsLicenseModalOpen(true);
+  };
   const [activeCallingManager, setActiveCallingManager] = useState<{ name: string; role: string; phone: string; company: string; avatar: string } | null>(null);
   const [activeMeeting, setActiveMeeting] = useState<VirtualMeeting | null>(initialVirtualMeetings[0]);
   const [activeInspectingDept, setActiveInspectingDept] = useState<{ companyId: string; projectId?: string; department: DepartmentOverview } | null>(null);
@@ -2041,31 +2132,336 @@ export const ERPProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     });
   };
 
-  const processWorkflowStep = (
+  const isPoDelegatedOrAutonomous = useCallback((po: PurchaseOrder): { isDelegated: boolean; mandate?: DelegatedSpendingMandate } => {
+    if (po.delegatedToLocal && po.delegatedMandate) {
+      return { isDelegated: true, mandate: po.delegatedMandate };
+    }
+    if (po.projectId) {
+      const prj = projects.find(p => p.id === po.projectId);
+      if (prj?.delegatedSpendingMandate?.isAutonomous) {
+        if (!prj.delegatedSpendingMandate.maxAutonomousLimitUSD || po.totalAmountUSD <= prj.delegatedSpendingMandate.maxAutonomousLimitUSD) {
+          return { isDelegated: true, mandate: prj.delegatedSpendingMandate };
+        }
+      }
+    }
+    if (po.companyId) {
+      const comp = companies.find(c => c.id === po.companyId);
+      if (comp?.delegatedSpendingMandate?.isAutonomous) {
+        if (!comp.delegatedSpendingMandate.maxAutonomousLimitUSD || po.totalAmountUSD <= comp.delegatedSpendingMandate.maxAutonomousLimitUSD) {
+          return { isDelegated: true, mandate: comp.delegatedSpendingMandate };
+        }
+      }
+    }
+    return { isDelegated: false };
+  }, [projects, companies]);
+
+  const isPoFullyApproved = useCallback((po: PurchaseOrder): boolean => {
+    if (po.status === 'APPROVED_BY_OWNER' || po.status === 'ARRIVED_AT_GATE' || po.status === 'INSPECTED_AND_STORED' || po.status === 'FINANCIALLY_SETTLED') {
+      return true;
+    }
+    if (po.workflowState) {
+      if (po.workflowState.finalDecision === 'APPROVED') return true;
+
+      // Check if PO is delegated to local / branch autonomy:
+      const delegation = isPoDelegatedOrAutonomous(po);
+      if (delegation.isDelegated) {
+        const hasPmApproval = po.workflowState.steps.some(s => s.role === 'PROJECT_MANAGER' && s.status === 'APPROVED');
+        const hasGmApproval = po.workflowState.steps.some(s => s.role === 'GENERAL_MANAGER' && s.status === 'APPROVED');
+        const hasRejected = po.workflowState.steps.some(s => s.status === 'REJECTED');
+        if (!hasRejected && (hasPmApproval || hasGmApproval)) {
+          return true;
+        }
+
+        const pending = po.workflowState.steps.filter(s => s.status === 'PENDING');
+        const nonHoldingPending = pending.filter(s => s.role !== 'HOLDING_OWNER' && s.role !== 'HOLDING_VP');
+        if (nonHoldingPending.length === 0 && po.workflowState.steps.length > 0 && !hasRejected) {
+          return true;
+        }
+      }
+
+      const pending = po.workflowState.steps.filter(s => s.status === 'PENDING');
+      return pending.length === 0 && po.workflowState.steps.length > 0;
+    }
+    return false;
+  }, [isPoDelegatedOrAutonomous]);
+
+  // Specialized Project Gate & Site Inward Entry Rule:
+  // "کاتێک CEO پێشتر ڕەزامەندی لەسەر کڕینێک کردبێت، بۆ هاتنە ناو پڕۆژە تەنها رەزامەندی بەڕێوەبەری پڕۆژە یان بەڕێوەبەری کارگێری پێویستە"
+  // "هەندێک حاڵەت ، CEO ماوە دەداتە کۆمپانیا یا پرۆژەکان کە خۆیان بریاردەری خەرجکردن بدەن بەبێ گەڕانەوە بۆ بنکەی سەرەکی"
+  const canPoEnterProject = useCallback((po: PurchaseOrder): {
+    allowed: boolean;
+    reasonKu: string;
+    reasonEn: string;
+    isCeoPreApproved?: boolean;
+    isDelegated?: boolean;
+    missingSignersKu?: string;
+  } => {
+    if (po.status === 'APPROVED_BY_OWNER' || po.status === 'ARRIVED_AT_GATE' || po.status === 'INSPECTED_AND_STORED' || po.status === 'FINANCIALLY_SETTLED') {
+      return { allowed: true, reasonKu: 'تەواوی مەرجەکان بەسەرکەوتوویی پەسەندکراون', reasonEn: 'All conditions fully met' };
+    }
+    if (po.workflowState?.finalDecision === 'APPROVED') {
+      return { allowed: true, reasonKu: 'بڕیاری کۆتایی پەسەندکردنی جێبەجێکاری هەیە', reasonEn: 'Final approval decree granted' };
+    }
+
+    // SPECIAL BUSINESS RULE: DELEGATED SPENDING AUTHORITY FROM HQ TO BRANCH/PROJECT:
+    const delegation = isPoDelegatedOrAutonomous(po);
+    if (delegation.isDelegated) {
+      const hasPmApproval = po.workflowState?.steps.some(
+        s => s.role === 'PROJECT_MANAGER' && s.status === 'APPROVED'
+      );
+      const hasGmApproval = po.workflowState?.steps.some(
+        s => s.role === 'GENERAL_MANAGER' && s.status === 'APPROVED'
+      );
+
+      if (hasPmApproval || hasGmApproval) {
+        const signedBy = hasPmApproval && hasGmApproval
+          ? 'بەڕێوەبەری پڕۆژە و بەڕێوەبەری کارگێڕی'
+          : hasPmApproval ? 'بەڕێوەبەری پڕۆژە (PM)' : 'بەڕێوەبەری کارگێڕی (GM)';
+        return {
+          allowed: true,
+          isDelegated: true,
+          reasonKu: `⚡ بەپێی بڕیاری شۆڕکردنەوەی دەسەڵاتی بنکەی سەرەکی (${delegation.mandate?.decreeNumber || 'سەربەخۆیی مەیدانی'})، ${signedBy} بڕیاری خەرجی داوە بەبێ پێویستی گەڕانەوە بۆ بنکەی سەرەکی. هاتنە ناو پڕۆژە پەسەندە.`,
+          reasonEn: `Spending authority delegated downward by HQ (${delegation.mandate?.decreeNumber || 'Autonomous Mandate'}). Approved locally by ${signedBy}. Project entry cleared without HQ referral.`
+        };
+      } else {
+        return {
+          allowed: false,
+          isDelegated: true,
+          missingSignersKu: 'بەڕێوەبەری پڕۆژە (PM) یان بەڕێوەبەری کارگێڕی (GM)',
+          reasonKu: '⚡ بنکەی سەرەکی دەسەڵاتی خەرجکردنی شۆڕکردۆتەوە بۆ خوارەوە؛ تەنها واژۆی بەڕێوەبەری پڕۆژە یان بەڕێوەبەری کارگێڕی ماوە بۆ هاتنە ناو پڕۆژە.',
+          reasonEn: 'HQ delegated spending authority downward; awaiting Project Manager or Admin General Manager signature to clear entry.'
+        };
+      }
+    }
+
+    // SPECIAL BUSINESS RULE (CEO PRE-APPROVAL + PM OR GM SIGN-OFF FOR SITE ENTRY):
+    const hasCeoApproval = po.ceoPreApproved || 
+      po.workflowState?.steps.some(s => (s.role === 'HOLDING_OWNER' || s.role === 'HOLDING_VP') && s.status === 'APPROVED') ||
+      po.holdingApproval?.decision === 'APPROVED';
+
+    if (hasCeoApproval) {
+      const hasPmApproval = po.workflowState?.steps.some(
+        s => s.role === 'PROJECT_MANAGER' && s.status === 'APPROVED'
+      );
+      const hasGmApproval = po.workflowState?.steps.some(
+        s => s.role === 'GENERAL_MANAGER' && s.status === 'APPROVED'
+      );
+
+      if (hasPmApproval || hasGmApproval) {
+        const approvedBy = hasPmApproval && hasGmApproval
+          ? 'بەڕێوەبەری پڕۆژە و بەڕێوەبەری کارگێڕی'
+          : hasPmApproval ? 'بەڕێوەبەری پڕۆژە (PM)' : 'بەڕێوەبەری کارگێڕی (GM)';
+        return {
+          allowed: true,
+          isCeoPreApproved: true,
+          reasonKu: `ڕەزامەندی CEO پێشتر دراوە + ${approvedBy} واژۆی کردووە. مۆڵەتی هاتنە ناو پڕۆژە بەتەواوی پەسەندە.`,
+          reasonEn: `CEO pre-approved + signed by ${hasPmApproval ? 'Project Manager' : 'Admin Manager'}. Project entry cleared.`
+        };
+      } else {
+        return {
+          allowed: false,
+          isCeoPreApproved: true,
+          missingSignersKu: 'بەڕێوەبەری پڕۆژە (PM) یان بەڕێوەبەری کارگێڕی (GM)',
+          reasonKu: 'ڕەزامەندی پێشوەختەی CEO هەیە، بەڵام بۆ هاتنە ناو پڕۆژە تەنها ڕەزامەندی بەڕێوەبەری پڕۆژە یان بەڕێوەبەری کارگێڕی پێویستە و هێشتا واژۆ نەکراوە.',
+          reasonEn: 'CEO approved, but project site entry strictly requires sign-off from either the Project Manager or Administrative Manager.'
+        };
+      }
+    }
+
+    // Default sequential workflow check
+    if (po.workflowState) {
+      const pendingSteps = po.workflowState.steps.filter(s => s.status === 'PENDING');
+      if (pendingSteps.length === 0 && po.workflowState.steps.length > 0) {
+        return { allowed: true, reasonKu: 'تەواوی قۆناغەکان پەسەندکراون', reasonEn: 'All workflow steps fully approved' };
+      }
+      const nextPending = pendingSteps[0];
+      return {
+        allowed: false,
+        missingSignersKu: nextPending?.titleKu || nextPending?.titleEn,
+        reasonKu: `هێشتا زنجیرەی پەسەندکردن تەواو نەبووە (چاوەڕوانی: ${nextPending?.titleKu || nextPending?.titleEn})`,
+        reasonEn: `Approval chain pending (${nextPending?.titleEn})`
+      };
+    }
+
+    return { allowed: false, reasonKu: 'داواکارییەکە پەسەند نەکراوە', reasonEn: 'PO is unapproved' };
+  }, [isPoDelegatedOrAutonomous]);
+
+  const canUserApproveWorkflowStep = useCallback((
+    user: UserProfile,
+    po: PurchaseOrder,
+    stepNumber: number
+  ): { allowed: boolean; reasonKu: string; reasonEn: string; requiresOverride?: boolean } => {
+    if (!po.workflowState) {
+      return { allowed: false, reasonKu: 'هیچ ڕێڕەوێکی پەسەندکردن بوونی نییە', reasonEn: 'No workflow chain attached' };
+    }
+
+    const targetStep = po.workflowState.steps.find(s => s.stepNumber === stepNumber);
+    if (!targetStep) {
+      return { allowed: false, reasonKu: 'قۆناغی داواکراو نەدۆزرایەوە', reasonEn: 'Requested step not found' };
+    }
+
+    if (targetStep.status !== 'PENDING') {
+      return {
+        allowed: false,
+        reasonKu: `ئەم قۆناغە پێشتر بڕیاری لەسەر دراوە (${targetStep.status})`,
+        reasonEn: `This step has already been processed (${targetStep.status})`
+      };
+    }
+
+    // Check if authority is delegated from HQ downwards
+    const delegation = isPoDelegatedOrAutonomous(po);
+    const isDelegatedStep = delegation.isDelegated && (targetStep.role === 'HOLDING_OWNER' || targetStep.role === 'HOLDING_VP');
+    if (isDelegatedStep) {
+      return {
+        allowed: false,
+        reasonKu: 'ئەم قۆناغە لەلایەن بنکەی سەرەکییەوە شۆڕکراوەتەوە بۆ لقی کۆمپانیا/پڕۆژە؛ پێویست بە واژۆی سەرۆکایەتی ناکات.',
+        reasonEn: 'This step was delegated downward to branch/project autonomy; HQ referral bypassed.'
+      };
+    }
+
+    // Check Sequential Gating: All prior steps (stepNumber < current) MUST be APPROVED
+    // EXCEPTION 1: When CEO pre-approved, PM or GM can approve directly without waiting for other prior steps!
+    // EXCEPTION 2: When delegated from HQ, local PM/GM can approve without holding owner blockage!
+    const isCeoApproved = po.ceoPreApproved || po.workflowState.steps.some(s => (s.role === 'HOLDING_OWNER' || s.role === 'HOLDING_VP') && (s.status === 'APPROVED' || s.status === 'DELEGATED_TO_BRANCH'));
+    const isTargetPmOrGm = targetStep.role === 'PROJECT_MANAGER' || targetStep.role === 'GENERAL_MANAGER' || targetStep.role === 'DEPARTMENT_HEAD';
+
+    const priorPendingSteps = po.workflowState.steps.filter(s => {
+      if (s.stepNumber >= stepNumber) return false;
+      if (s.status === 'APPROVED' || s.status === 'DELEGATED_TO_BRANCH' || s.status === 'SKIPPED') return false;
+      if (delegation.isDelegated && (s.role === 'HOLDING_OWNER' || s.role === 'HOLDING_VP')) return false;
+      return true;
+    });
+
+    if (priorPendingSteps.length > 0 && !(isCeoApproved && isTargetPmOrGm) && !delegation.isDelegated) {
+      const priorStepNames = priorPendingSteps.map(s => s.titleKu || s.titleEn).join(', ');
+      const isExecutive = user.role === 'HOLDING_OWNER' || user.role === 'SUPER_ADMIN';
+      return {
+        allowed: false,
+        requiresOverride: isExecutive,
+        reasonKu: `قۆناغەکانی پێشوو هێشتا پەسەند نەکراون: (${priorStepNames}). پێویستە سەرەتا ئەوان تەواو بکرێن.`,
+        reasonEn: `Prior steps must be approved first: (${priorPendingSteps.map(s => s.titleEn).join(', ')}).`
+      };
+    }
+
+    // Role-based authorization
+    const isSuperAdmin = user.role === 'SUPER_ADMIN';
+    const isOwner = user.role === 'HOLDING_OWNER';
+    const isGM = user.role === 'COMPANY_GM';
+    const isPM = user.role === 'PROJECT_MANAGER' || user.role === 'TECHNICAL_HEAD';
+    const isFinance = user.role === 'FINANCE_HEAD';
+    const isWarehouse = user.role === 'WAREHOUSE_OFFICER';
+
+    let roleMatches = false;
+    switch (targetStep.role) {
+      case 'PROJECT_MANAGER':
+        roleMatches = isPM || isSuperAdmin;
+        break;
+      case 'WAREHOUSE_OFFICER':
+        roleMatches = isWarehouse || isSuperAdmin;
+        break;
+      case 'FINANCE_HEAD':
+      case 'COST_CONTROLLER':
+        roleMatches = isFinance || isSuperAdmin;
+        break;
+      case 'DEPARTMENT_HEAD':
+        roleMatches = isFinance || isGM || isPM || isSuperAdmin;
+        break;
+      case 'GENERAL_MANAGER':
+        roleMatches = isGM || isSuperAdmin;
+        break;
+      case 'HOLDING_VP':
+      case 'HOLDING_OWNER':
+        roleMatches = isOwner || isSuperAdmin;
+        break;
+      default:
+        roleMatches = isSuperAdmin;
+    }
+
+    if (!roleMatches) {
+      return {
+        allowed: false,
+        reasonKu: `تۆ دەسەڵاتی پەسەندکردنی (${targetStep.titleKu || targetStep.titleEn})ت نییە وەک ${user.title || user.role}.`,
+        reasonEn: `You lack authority for (${targetStep.titleEn}) as ${user.title || user.role}.`
+      };
+    }
+
+    return {
+      allowed: true,
+      reasonKu: 'ڕێگەپێدراوە بۆ پەسەندکردن',
+      reasonEn: 'Authorized to approve step'
+    };
+  }, [isPoDelegatedOrAutonomous]);
+
+  const approveWorkflowStep = useCallback((
     poId: string,
     stepNumber: number,
     decision: 'APPROVED' | 'REJECTED' | 'REQUEST_MORE_INFO',
-    comments: string = ''
-  ) => {
+    comments: string = '',
+    signatureImage?: string,
+    sealStampImage?: string,
+    isOverride: boolean = false
+  ): { success: boolean; message: string } => {
     const targetPO = purchaseOrders.find(p => p.id === poId);
-    if (!targetPO || !targetPO.workflowState) return;
+    if (!targetPO || !targetPO.workflowState) {
+      return { success: false, message: 'Purchase order or workflow not found' };
+    }
+
+    const check = canUserApproveWorkflowStep(currentUser, targetPO, stepNumber);
+    if (!check.allowed && (!isOverride || !check.requiresOverride)) {
+      addNotification({
+        title: 'Approval Blocked / ڕێگری لە پەسەندکردن',
+        titleKu: 'ڕێگری لە پەسەندکردن بەپێی زنجیرەی یاسایی',
+        titleAr: 'تم منع الموافقة لمخالفة التسلسل الإداري',
+        message: check.reasonKu || check.reasonEn,
+        type: 'OWNER_APPROVAL_REQUIRED'
+      });
+      return { success: false, message: check.reasonEn };
+    }
 
     const currentStep = targetPO.workflowState.steps.find(s => s.stepNumber === stepNumber);
     const performerRole = currentStep ? currentStep.role : currentUser.role;
     const performerName = currentUser.name;
+    const finalComment = isOverride
+      ? `[EXECUTIVE OVERRIDE BY ${currentUser.name}] ${comments || 'Authorized with holding sovereign authority overriding prior pending steps.'}`
+      : (comments || (decision === 'APPROVED' ? `Step approved by ${performerName} (${performerRole})` : `Step rejected: ${comments}`));
 
-    const updatedWorkflow = advanceWorkflowStep(
+    let updatedWorkflow = advanceWorkflowStep(
       targetPO.workflowState,
       targetPO.poNumber,
       stepNumber,
       decision,
       performerName,
       performerRole,
-      comments || (decision === 'APPROVED' ? `Step approved by ${performerName}` : `Step rejected: ${comments}`)
+      finalComment
     );
+
+    if (isOverride) {
+      const updatedSteps = updatedWorkflow.steps.map(s => {
+        if (s.stepNumber < stepNumber && s.status === 'PENDING') {
+          return {
+            ...s,
+            status: 'APPROVED' as const,
+            approverName: `${currentUser.name} (Override Decree)`,
+            actionDate: new Date().toISOString().split('T')[0],
+            comments: `Automatically endorsed by Holding Chairman override decree.`
+          };
+        }
+        return s;
+      });
+      const remainingPending = updatedSteps.find(s => s.status === 'PENDING');
+      updatedWorkflow = {
+        ...updatedWorkflow,
+        steps: updatedSteps,
+        currentStepNumber: remainingPending ? remainingPending.stepNumber : updatedWorkflow.totalSteps,
+        finalDecision: !remainingPending ? 'APPROVED' : updatedWorkflow.finalDecision
+      };
+    }
 
     const isFinalApproved = updatedWorkflow.finalDecision === 'APPROVED';
     const isRejected = updatedWorkflow.finalDecision === 'REJECTED';
+
+    const appliedSig = signatureImage || defaultSignature?.signatureDataUrl;
+    const appliedSeal = sealStampImage || defaultSignature?.officialSealDataUrl;
 
     const newPOStatus: POStatus = isFinalApproved 
       ? 'APPROVED_BY_OWNER'
@@ -2084,13 +2480,16 @@ export const ERPProvider: React.FC<{ children: React.ReactNode }> = ({ children 
               approvedBy: performerName,
               approvedAt: new Date().toLocaleString(),
               decision: 'APPROVED' as const,
-              comments: comments || 'Workflow chain completed with full executive authorization',
-              signatureHash: updatedWorkflow.steps.find(s => s.role === 'HOLDING_OWNER')?.signatureHash || `SIG-SAS-${Math.random().toString(36).substring(2, 9).toUpperCase()}`
+              comments: finalComment,
+              signatureHash: updatedWorkflow.steps.find(s => s.role === 'HOLDING_OWNER')?.signatureHash || `SIG-SAS-${Math.random().toString(36).substring(2, 9).toUpperCase()}`,
+              signatureImage: appliedSig,
+              sealStampImage: appliedSeal,
+              signerRole: performerRole
             } : isRejected ? {
               approvedBy: performerName,
               approvedAt: new Date().toLocaleString(),
               decision: 'REJECTED' as const,
-              comments: comments || 'Request rejected during workflow review',
+              comments: finalComment,
               signatureHash: `REJ-SAS-${Math.random().toString(36).substring(2, 9).toUpperCase()}`
             } : p.holdingApproval
           };
@@ -2104,7 +2503,6 @@ export const ERPProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       return updated;
     });
 
-    // Update global audit trail
     if (updatedWorkflow.auditTrail && updatedWorkflow.auditTrail[0]) {
       setApprovalAuditTrail(prev => {
         const updated = [updatedWorkflow.auditTrail[0], ...prev];
@@ -2115,26 +2513,72 @@ export const ERPProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       });
     }
 
+    // FINANCE INTEGRATION: Auto-Post Approved Commitment to Ledger
     if (isFinalApproved) {
+      const commitmentEntry: FinanceLedgerEntry = {
+        id: `fin-wf-commit-${Date.now()}`,
+        companyId: targetPO.companyId,
+        projectId: targetPO.projectId || 'proj-101',
+        entryDate: new Date().toISOString().split('T')[0],
+        voucherNumber: `VCH-COMMITTED-${Math.floor(1000 + Math.random() * 9000)}`,
+        accountName: `Accounts Payable & Committed Capital (PO: ${targetPO.poNumber})`,
+        debitUSD: targetPO.totalAmountUSD,
+        creditUSD: 0,
+        description: `Approved Purchase Commitment: ${targetPO.purpose} - Supplier: ${targetPO.supplierName} (PO: ${targetPO.poNumber}) [Fully Authorized by ${currentUser.name}]`,
+        sourceModule: 'WORKFLOW_ENGINE_AUTO',
+        postedBy: `${currentUser.name} (Holding Executive Approval Engine)`
+      };
+
+      setFinanceLedgers(prev => [commitmentEntry, ...prev]);
+
       try {
-        confetti({ particleCount: 70, spread: 60, origin: { y: 0.6 } });
+        confetti({ particleCount: 80, spread: 70, origin: { y: 0.6 } });
       } catch {}
+
       addNotification({
-        title: `PO ${targetPO.poNumber} Fully Authorized!`,
-        titleKu: `داواکاری کڕینی ${targetPO.poNumber} بە تەواوی پەسەندکرا!`,
-        titleAr: `تم اعتماد أمر الشراء ${targetPO.poNumber} بالكامل!`,
-        message: `All approval workflow tiers verified. Released for gate scanner and warehouse receiving.`,
-        type: 'OWNER_APPROVAL_REQUIRED'
+        title: `✅ PO ${targetPO.poNumber} Fully Authorized & Committed!`,
+        titleKu: `✅ داواکاری ${targetPO.poNumber} بە تەواوی لەلایەن خاوەنی هۆڵدینگ پەسەندکرا!`,
+        titleAr: `✅ تم اعتماد أمر الشراء ${targetPO.poNumber} بالكامل وتقييده مالياً!`,
+        message: `All approval chain tiers satisfied ($${targetPO.totalAmountUSD.toLocaleString()}). Financial commitment posted to ledger, gate access unlocked, and purchase execution authorized.`,
+        messageKu: `سەرجەم قۆناغەکانی پەسەندکردن (کۆگا، دارایی، بەڕێوەبەر و واژۆی کۆتایی خاوەنی هۆڵدینگ) تەواو بوون. داواکارییەکە ئێستا بە فەرمی ئامادەی جێبەجێکردنە.`,
+        type: 'OWNER_APPROVAL_REQUIRED',
+        relatedId: targetPO.id,
       });
     } else if (decision === 'REJECTED') {
       addNotification({
         title: `PO ${targetPO.poNumber} Rejected`,
         titleKu: `داواکاری کڕینی ${targetPO.poNumber} ڕەتکرایەوە`,
         titleAr: `تم رفض أمر الشراء ${targetPO.poNumber}`,
-        message: `Reason: ${comments || 'Rejected during workflow review'}`,
-        type: 'OWNER_APPROVAL_REQUIRED'
+        message: `Reason: ${finalComment}`,
+        messageKu: `هۆکار: ${finalComment}`,
+        type: 'OWNER_APPROVAL_REQUIRED',
+        relatedId: targetPO.id,
+      });
+    } else {
+      const nextPending = updatedWorkflow.steps.find(s => s.status === 'PENDING');
+      const nextRole = nextPending ? nextPending.role : 'HOLDING_OWNER';
+      addNotification({
+        title: `Step ${stepNumber} Approved for PO ${targetPO.poNumber}`,
+        titleKu: `قۆناغی ${stepNumber} پەسەندکرا بۆ ${targetPO.poNumber} - گەیشتە ${nextPending ? nextPending.titleKu : 'واژۆی کۆتایی خاوەن'}`,
+        titleAr: `تم اعتماد المرحلة ${stepNumber} لأمر الشراء ${targetPO.poNumber}`,
+        message: `Approved by ${performerName}. Advanced to: ${nextPending ? nextPending.titleEn : 'Holding Owner'}.`,
+        messageKu: `لە لایەن ${performerName} پەسەندکرا. ڕێڕەوەکە گەیشتە بەردەم: ${nextPending ? nextPending.titleKu : 'واژۆی کۆتایی خاوەن'}.`,
+        type: 'OWNER_APPROVAL_REQUIRED',
+        relatedId: targetPO.id,
+        targetRole: nextRole as any
       });
     }
+
+    return { success: true, message: `Step ${stepNumber} processed successfully.` };
+  }, [purchaseOrders, currentUser, canUserApproveWorkflowStep, defaultSignature]);
+
+  const processWorkflowStep = (
+    poId: string,
+    stepNumber: number,
+    decision: 'APPROVED' | 'REJECTED' | 'REQUEST_MORE_INFO',
+    comments: string = ''
+  ) => {
+    approveWorkflowStep(poId, stepNumber, decision, comments);
   };
 
   const submitPurchaseRequest = (poData: Omit<PurchaseOrder, 'id' | 'poNumber' | 'createdDate' | 'status'> & { transactionType?: TransactionType }) => {
@@ -2187,11 +2631,53 @@ export const ERPProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       });
     }
 
+    // 1. Warehouse Officer Alert
     addNotification({
-      title: `New Approval Workflow Initiated (${poNumber})`,
-      titleKu: `ڕێڕەوی نوێی پەسەندکردن دەستیپێکرد (${poNumber})`,
-      titleAr: `بدأت دورة اعتماد جديدة (${poNumber})`,
-      message: `${poData.requestedBy} requested $${poData.totalAmountUSD.toLocaleString()} for ${poData.purpose}. Routed to: ${matchedRule.nameEn}.`,
+      title: `📦 Warehouse Alert: New Purchase Request (${poNumber})`,
+      titleKu: `📦 ئاگاداری کۆگا: داواکاری نوێی کڕین تۆمارکرا (${poNumber})`,
+      titleAr: `📦 إشعار المستودع: تم تسجيل طلب شراء جديد (${poNumber})`,
+      message: `Requisition initiated for ${poData.purpose} ($${poData.totalAmountUSD.toLocaleString()}). Check warehouse stock availability and clear Step 2.`,
+      messageKu: `داواکارییەکی نوێی کڕین بۆ (${poData.purpose}) بە بڕی $${poData.totalAmountUSD.toLocaleString()} تۆمارکرا. تکایە بوونی کەرەستە لە کۆگادا بپشکنە پێش بەردەوامبوونی کڕین.`,
+      messageAr: `تم تسجيل طلب شراء بقيمة $${poData.totalAmountUSD.toLocaleString()} لمواد (${poData.purpose}). يرجى تدقيق توفر المواد بالمستودع.`,
+      type: 'GATE_ALERT',
+      relatedId: newPO.id,
+      targetRole: 'WAREHOUSE_OFFICER',
+    });
+
+    // 2. Finance Head Alert
+    addNotification({
+      title: `💰 Finance Alert: Budget Clearance Required (${poNumber})`,
+      titleKu: `💰 ئاگاداری دارایی: پشکنینی بودجەی داواکاری (${poNumber})`,
+      titleAr: `💰 إشعار المالية: تدقيق ميزانية طلب الشراء (${poNumber})`,
+      message: `Requisition initiated for $${poData.totalAmountUSD.toLocaleString()} (${comp?.name || 'Subsidiary'}). Review project budget ceiling and prepare financial clearance.`,
+      messageKu: `داواکاری نوێی کڕین بە بڕی $${poData.totalAmountUSD.toLocaleString()} بۆ (${comp ? comp.nameKu || comp.name : 'کۆمپانیا'}) تۆمارکرا. پێویستی بە پشکنینی بودجەی پڕۆژە و تەرخانکردنی داراییە.`,
+      messageAr: `تم تقديم طلب شراء جديد بقيمة $${poData.totalAmountUSD.toLocaleString()}. يتطلب تدقيق ميزانية المشروع والاعتماد المالي.`,
+      type: 'BUDGET_THRESHOLD_ALERT',
+      relatedId: newPO.id,
+      targetRole: 'FINANCE_HEAD',
+    });
+
+    // 3. Project / Company Manager Alert
+    addNotification({
+      title: `🏢 Manager Alert: Site Purchase Request Initiated (${poNumber})`,
+      titleKu: `🏢 ئاگاداری بەڕێوەبەر: داواکاری کڕین لە پڕۆژەدا (${poNumber})`,
+      titleAr: `🏢 إشعار الإدارة: طلب شراء جديد للمشروع / الشركة (${poNumber})`,
+      message: `Purchase requisition initiated by ${poData.requestedBy} for $${poData.totalAmountUSD.toLocaleString()} (${poData.purpose}). Operational endorsement required.`,
+      messageKu: `داواکاری کڕین لە پڕۆژەکەتەوە تۆمارکرا بە بڕی $${poData.totalAmountUSD.toLocaleString()} لەلایەن ${poData.requestedBy}. پێویستی بە پێداچوونەوە و ڕەزامەندیی بەڕێوەبەرە.`,
+      messageAr: `تم تسجيل طلب شراء من قبل ${poData.requestedBy} بقيمة $${poData.totalAmountUSD.toLocaleString()}. يتطلب الاعتماد التشغيلي للمدير.`,
+      type: 'OWNER_APPROVAL_REQUIRED',
+      relatedId: newPO.id,
+      targetRole: 'PROJECT_MANAGER',
+    });
+
+    // 4. Holding Company Owner Alert
+    addNotification({
+      title: `👑 Holding Owner: Purchase Request Initiated (${poNumber})`,
+      titleKu: `👑 داواکاری نوێ لە زنجیرەی پەسەندکردندایە (${poNumber})`,
+      titleAr: `👑 إشعار مالك المجموعة: طلب شراء جديد في مسار الاعتماد (${poNumber})`,
+      message: `${poData.requestedBy} initiated purchase for $${poData.totalAmountUSD.toLocaleString()} (${poData.purpose}). Proceeds sequentially through Warehouse, Finance, and GM to Holding Owner for final approval before purchase execution.`,
+      messageKu: `داواکارییەکی نوێ بە بڕی $${poData.totalAmountUSD.toLocaleString()} بۆ (${poData.purpose}) لە پڕۆژەوە نێردرا. دوای پشکنینی کۆگا، دارایی و بەڕێوەبەر، دەگاتە واژۆی کۆتایی جەنابت پێش جێبەجێکردن.`,
+      messageAr: `طلب شراء جديد بقيمة $${poData.totalAmountUSD.toLocaleString()} انطلق في مسار الاعتماد، وسيصل لمالك المجموعة للموافقة والختم النهائي قبل التنفيذ.`,
       type: 'OWNER_APPROVAL_REQUIRED',
       relatedId: newPO.id,
       targetRole: 'HOLDING_OWNER',
@@ -2305,7 +2791,8 @@ export const ERPProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         || targetPO.workflowState.steps[targetPO.workflowState.steps.length - 1];
 
       if (ownerStep) {
-        processWorkflowStep(poId, ownerStep.stepNumber, 'APPROVED', comments);
+        approveWorkflowStep(poId, ownerStep.stepNumber, 'APPROVED', comments, signatureImage, sealStampImage, true);
+        return;
       }
     }
 
@@ -2342,7 +2829,6 @@ export const ERPProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       return updated;
     });
 
-    // Check if auto-print is configured on default printer
     if (defaultPrinter?.autoPrintOnApproval && finalApprovedPO) {
       setTimeout(() => {
         setPrintPreviewPO(finalApprovedPO);
@@ -2361,6 +2847,550 @@ export const ERPProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       type: 'OWNER_APPROVAL_REQUIRED',
     });
   };
+
+  const disbursePoPayment = useCallback((
+    poId: string,
+    paymentMethod: string = 'Central Treasury Bank Transfer',
+    notes: string = ''
+  ): { success: boolean; message: string } => {
+    const targetPO = purchaseOrders.find(p => p.id === poId);
+    if (!targetPO) {
+      return { success: false, message: 'Purchase order not found' };
+    }
+
+    if (!isPoFullyApproved(targetPO)) {
+      addNotification({
+        title: 'Payment Disbursal Blocked! / پارەدان ڕاگیرا',
+        titleKu: 'خەرجکردنی پارە ڕاگیرا: داواکارییەکە هێشتا پەسەندکردنی تەواوی نییە!',
+        titleAr: 'تم إيقاف صرف المبلغ: أمر الشراء لم يستكمل سلسلة الموافقات التنفيذية!',
+        message: 'Strict Treasury Policy: Funds cannot be disbursed without full PM, GM, and Holding Owner authorization.',
+        type: 'FINANCE_ENTRY'
+      });
+      return { success: false, message: 'Cannot disburse unapproved purchase order.' };
+    }
+
+    const timestamp = new Date().toISOString().split('T')[0];
+    const voucherNumber = `VCH-PAY-${Math.floor(1000 + Math.random() * 9000)}`;
+
+    const paymentVoucher: FinanceLedgerEntry = {
+      id: `fin-pay-${Date.now()}`,
+      companyId: targetPO.companyId,
+      projectId: targetPO.projectId || 'proj-101',
+      entryDate: timestamp,
+      voucherNumber,
+      accountName: 'Holding Central Treasury Liquidity',
+      debitUSD: 0,
+      creditUSD: targetPO.totalAmountUSD,
+      description: `Disbursement for PO ${targetPO.poNumber} (${targetPO.supplierName}) via ${paymentMethod}. Cleared by full workflow chain. Notes: ${notes || 'Cleared'}`,
+      sourceModule: 'TREASURY_DISBURSEMENT',
+      postedBy: `${currentUser.name} (Finance Treasury)`
+    };
+
+    setFinanceLedgers(prev => [paymentVoucher, ...prev]);
+
+    setPurchaseOrders(prev => {
+      const updated = prev.map(p => {
+        if (p.id === poId) {
+          return {
+            ...p,
+            status: 'FINANCIALLY_SETTLED' as const,
+            financeEntry: {
+              postedAt: new Date().toLocaleString(),
+              journalRef: voucherNumber,
+              paymentStatus: 'PAID' as const,
+              voucherNo: voucherNumber
+            }
+          };
+        }
+        return p;
+      });
+      try {
+        localStorage.setItem('sas4erp_pos', JSON.stringify(updated));
+      } catch {}
+      return updated;
+    });
+
+    addNotification({
+      title: `Disbursement Cleared: $${targetPO.totalAmountUSD.toLocaleString()}`,
+      titleKu: `پارەی داواکاری ${targetPO.poNumber} خەرجکرا: $${targetPO.totalAmountUSD.toLocaleString()}`,
+      titleAr: `تم صرف مستحقات أمر الشراء ${targetPO.poNumber}: $${targetPO.totalAmountUSD.toLocaleString()}`,
+      message: `Payment successfully released to ${targetPO.supplierName} under voucher #${voucherNumber}.`,
+      type: 'FINANCE_ENTRY'
+    });
+
+    return { success: true, message: `Disbursement successful under voucher ${voucherNumber}` };
+  }, [purchaseOrders, isPoFullyApproved, currentUser.name]);
+
+  const receiveApprovedPoToWarehouse = useCallback((
+    poId: string,
+    binLocation: string = 'Zone A-Primary Stacking',
+    condition: string = 'Verified & Inspected'
+  ): { success: boolean; message: string } => {
+    const targetPO = purchaseOrders.find(p => p.id === poId);
+    if (!targetPO) {
+      return { success: false, message: 'Purchase order not found' };
+    }
+
+    const inwardCheck = canPoEnterProject(targetPO);
+    if (!inwardCheck.allowed) {
+      addNotification({
+        title: 'Warehouse Inward Blocked! / وەرگرتنی کەرەستە ڕاگیرا',
+        titleKu: 'وەرگرتنی کەرەستە لە کۆگا ڕاگیرا: داواکاری پەسەندکراوی تەواوی نییە!',
+        titleAr: 'تم منع إدخال المواد للمستودع: أمر الشراء غير معتمد!',
+        message: inwardCheck.reasonKu,
+        type: 'GATE_ALERT'
+      });
+      return { success: false, message: `Cannot receive items: ${inwardCheck.reasonKu}` };
+    }
+
+    const timestamp = new Date().toLocaleString();
+
+    // Check if Finance already paid. If not, auto-deduct from project budget and transfer to procurement
+    const isFinancePaid = targetPO.status === 'FINANCIALLY_SETTLED' || targetPO.financeEntry?.paymentStatus === 'PAID';
+    let autoProjectDeduction = targetPO.projectFundDeduction;
+
+    if (!isFinancePaid && !autoProjectDeduction) {
+      const targetProjId = targetPO.projectId || 'proj-101';
+      let targetProjName = 'پڕۆژەی دیاریکراو';
+
+      setProjects(prevProjs => {
+        const updated = prevProjs.map(prj => {
+          if (prj.id === targetProjId || (!targetPO.projectId && prj.id === 'proj-101')) {
+            targetProjName = prj.nameKu || prj.name;
+            return {
+              ...prj,
+              spentUSD: (prj.spentUSD || 0) + targetPO.totalAmountUSD
+            };
+          }
+          return prj;
+        });
+        try {
+          localStorage.setItem('sas4erp_projects', JSON.stringify(updated));
+        } catch {}
+        return updated;
+      });
+
+      const escrowLedgerEntry: FinanceLedgerEntry = {
+        id: `fin-escrow-${Date.now()}`,
+        companyId: targetPO.companyId,
+        projectId: targetProjId,
+        entryDate: timestamp,
+        voucherNumber: `VCH-AUTO-ESCROW-${Math.floor(1000 + Math.random() * 9000)}`,
+        accountName: `Project Budget Deduction -> Procurement Escrow Allocation`,
+        debitUSD: targetPO.totalAmountUSD,
+        creditUSD: 0,
+        description: `خۆکارانە لە پارەی پڕۆژەی (${targetProjName}) کەمکرایەوە و بۆ بەشی کڕین زیادکرا بەهۆی وەرگرتنی کەلوپەل بۆ پڕۆژە (PO: ${targetPO.poNumber}) پێش خەرجکردنی دارایی.`,
+        sourceModule: 'WORKFLOW_ENGINE_AUTO',
+        referencePoId: targetPO.id,
+        postedBy: 'SAS4ERP Project-to-Procurement Auto Escrow Engine'
+      };
+      setFinanceLedgers(prev => [escrowLedgerEntry, ...prev]);
+
+      autoProjectDeduction = {
+        deductedAt: timestamp,
+        amountUSD: targetPO.totalAmountUSD,
+        projectId: targetProjId,
+        projectName: targetProjName,
+        transferredToProcurement: true,
+        procurementStatus: 'HELD_IN_ESCROW',
+        notes: 'دارایی هێشتا پارەکەی خەرج نەکردبوو، کاتێک شتەکە گەیشت خۆکارانە لە پارەی پڕۆژە کەمکرایەوە و بۆ بەشی کڕین زیادکرا. کاتێک بەشی کڕین دەتوانێت وەریگرێت کە یەک لە بەڕێوەبەرانی پڕۆژە واژۆی بکات.'
+      };
+
+      // Notify Finance
+      addNotification({
+        title: `💼 ئاگاداری دارایی: کەلوپەلەکانی ${targetPO.poNumber} گەیشتە پڕۆژە`,
+        titleKu: `💼 ئاگاداری دارایی: کەلوپەلەکانی ${targetPO.poNumber} گەیشتە پڕۆژە`,
+        titleAr: `💼 إشعار الإدارة المالية: وصول مواد ${targetPO.poNumber} إلى المشروع`,
+        message: `کەرەستەی کڕینی ${targetPO.poNumber} گەیشتە ناو پڕۆژە پێش ئەوەی دارایی پارەکەی خەرج بکات. بڕەکە خۆکارانە لە پارەی پڕۆژە کەمکرایەوە و بۆ بەشی کڕین زیادکرا.`,
+        type: 'FINANCE_ENTRY',
+        relatedId: targetPO.id
+      });
+    }
+
+    setWarehouseItems(prev => {
+      let updated = [...prev];
+      targetPO.items.forEach(it => {
+        const existingIdx = updated.findIndex(w => w.name.toLowerCase() === it.name.toLowerCase() || (it.category && w.category === it.category));
+        if (existingIdx >= 0) {
+          updated[existingIdx] = {
+            ...updated[existingIdx],
+            quantityOnHand: updated[existingIdx].quantityOnHand + it.quantity,
+            lastRestockedDate: new Date().toISOString().split('T')[0]
+          };
+        } else {
+          updated.push({
+            id: `wh-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
+            sku: `SKU-${targetPO.companyId.slice(-3).toUpperCase()}-${Math.floor(1000 + Math.random() * 9000)}`,
+            name: it.name,
+            category: it.category || 'Materials & Components',
+            companyId: targetPO.companyId,
+            projectId: targetPO.projectId || 'proj-101',
+            quantityOnHand: it.quantity,
+            minimumThreshold: 5,
+            unit: it.unit || 'Units',
+            unitCostUSD: it.unitPriceUSD || (it.totalUSD / (it.quantity || 1)),
+            binLocation,
+            lastRestockedDate: new Date().toISOString().split('T')[0]
+          });
+        }
+      });
+      try {
+        localStorage.setItem('sas4erp_warehouse_items', JSON.stringify(updated));
+      } catch {}
+      return updated;
+    });
+
+    setPurchaseOrders(prev => {
+      const updated = prev.map(p => {
+        if (p.id === poId) {
+          return {
+            ...p,
+            status: 'INSPECTED_AND_STORED' as const,
+            projectFundDeduction: autoProjectDeduction || p.projectFundDeduction,
+            warehouseReceipt: {
+              receivedAt: timestamp,
+              receivedBy: `${currentUser.name} (Warehouse Receiving)`,
+              binLocation,
+              condition
+            }
+          };
+        }
+        return p;
+      });
+      try {
+        localStorage.setItem('sas4erp_pos', JSON.stringify(updated));
+      } catch {}
+      return updated;
+    });
+
+    addNotification({
+      title: `Warehouse Stock Received: ${targetPO.poNumber}`,
+      titleKu: `کەرەستەکانی داواکاری ${targetPO.poNumber} بەسەرکەوتوویی لە کۆگا وەرگیران`,
+      titleAr: `تم استلام مواد أمر الشراء ${targetPO.poNumber} وتخزينها في المستودع`,
+      message: `${targetPO.items.length} item lines added to inventory at ${binLocation}. Verified against executive authorization.`,
+      type: 'GATE_ALERT'
+    });
+
+    return { success: true, message: 'Materials stocked successfully into warehouse' };
+  }, [purchaseOrders, canPoEnterProject, currentUser.name]);
+
+  const grantCeoPreApproval = useCallback((
+    poId: string,
+    comments: string = 'CEO Sovereign Pre-Approval Granted'
+  ) => {
+    setPurchaseOrders(prev => {
+      const updated = prev.map(p => {
+        if (p.id === poId) {
+          const timestamp = new Date().toLocaleString();
+          const sigHash = `SIG-CEO-PRE-${Math.random().toString(36).substring(2, 9).toUpperCase()}`;
+
+          let updatedWorkflow = p.workflowState;
+          if (updatedWorkflow) {
+            const steps = updatedWorkflow.steps.map(s => {
+              if (s.role === 'HOLDING_OWNER' || s.role === 'HOLDING_VP') {
+                return {
+                  ...s,
+                  status: 'APPROVED' as const,
+                  approverName: `${currentUser.name} (CEO Pre-Approval)`,
+                  approvalDate: timestamp,
+                  signatureHash: sigHash,
+                  notes: comments
+                };
+              }
+              return s;
+            });
+            updatedWorkflow = {
+              ...updatedWorkflow,
+              steps,
+              finalDecision: steps.every(s => s.status === 'APPROVED') ? 'APPROVED' : 'IN_PROGRESS'
+            };
+          }
+
+          return {
+            ...p,
+            ceoPreApproved: true,
+            ceoPreApprovedAt: timestamp,
+            ceoPreApprovedBy: currentUser.name,
+            workflowState: updatedWorkflow,
+            holdingApproval: {
+              approvedBy: currentUser.name,
+              approvedAt: timestamp,
+              decision: 'APPROVED' as const,
+              comments: `[CEO PRE-APPROVAL] ${comments}`,
+              signatureHash: sigHash,
+              signerRole: 'HOLDING_OWNER'
+            }
+          };
+        }
+        return p;
+      });
+      try {
+        localStorage.setItem('sas4erp_pos', JSON.stringify(updated));
+      } catch {}
+      return updated;
+    });
+
+    addNotification({
+      title: '👑 CEO Fast-Track Pre-Approval Granted',
+      titleKu: '👑 ڕەزامەندی پێشوەختەی CEO پێبەخشرا',
+      titleAr: '👑 تم منح الموافقة المسبقة من الرئيس التنفيذي (CEO)',
+      message: `داواکاری کڕین ڕەزامەندی CEOی پێدرا. ئێستا بۆ هاتنە ناو پڕۆژە تەنها واژۆی بەڕێوەبەری پڕۆژە یان بەڕێوەبەری کارگێڕی پێویستە.`,
+      type: 'OWNER_APPROVAL_REQUIRED'
+    });
+  }, [currentUser.name]);
+
+  const delegatePoSpendingAuthority = useCallback((
+    poId: string,
+    notes: string = 'بڕیاری سەرۆکایەتی هۆڵدینگ: شۆڕکردنەوەی دەسەڵاتی خەرجکردن بۆ کۆمپانیا/پڕۆژە بەبێ پێویستی گەڕانەوە بۆ بنکەی سەرەکی',
+    decreeNumber?: string
+  ): { success: boolean; message: string } => {
+    const targetPo = purchaseOrders.find(p => p.id === poId);
+    if (!targetPo) {
+      return { success: false, message: 'Purchase order not found' };
+    }
+
+    const generatedDecree = decreeNumber || `DEC-HQ-${Math.floor(1000 + Math.random() * 9000)}`;
+    const timestamp = new Date().toLocaleString();
+    const sigHash = `SIG-DELEGATED-${Math.random().toString(36).substring(2, 9).toUpperCase()}`;
+
+    const mandate: DelegatedSpendingMandate = {
+      isAutonomous: true,
+      delegatedBy: currentUser.name,
+      delegatedAt: timestamp,
+      decreeNumber: generatedDecree,
+      notes,
+      scope: 'PO_SPECIFIC',
+      targetEntityId: targetPo.id
+    };
+
+    setPurchaseOrders(prev => {
+      const updated = prev.map(p => {
+        if (p.id === poId) {
+          let updatedWorkflow = p.workflowState;
+          if (updatedWorkflow) {
+            const steps = updatedWorkflow.steps.map(s => {
+              if (s.role === 'HOLDING_OWNER' || s.role === 'HOLDING_VP') {
+                return {
+                  ...s,
+                  status: 'DELEGATED_TO_BRANCH' as const,
+                  approverName: `${currentUser.name} (شۆڕکراوەتەوە بۆ لقی مەیدانی)`,
+                  actionDate: timestamp,
+                  comments: `[بڕیاری شۆڕکردنەوەی دەسەڵات: ${generatedDecree}] ${notes}`,
+                  signatureHash: sigHash
+                };
+              }
+              return s;
+            });
+
+            // Check if all non-holding steps are already approved
+            const pendingRemaining = steps.filter(s => s.status === 'PENDING' && s.role !== 'HOLDING_OWNER' && s.role !== 'HOLDING_VP');
+            const isFullyDone = pendingRemaining.length === 0;
+
+            updatedWorkflow = {
+              ...updatedWorkflow,
+              steps,
+              finalDecision: isFullyDone ? 'APPROVED' : updatedWorkflow.finalDecision,
+              finalDecisionAt: isFullyDone ? timestamp : updatedWorkflow.finalDecisionAt
+            };
+          }
+
+          return {
+            ...p,
+            delegatedToLocal: true,
+            delegatedMandate: mandate,
+            workflowState: updatedWorkflow,
+            holdingApproval: {
+              approvedBy: `${currentUser.name} (شاندرا بۆ لقی مەیدانی)`,
+              approvedAt: timestamp,
+              decision: 'APPROVED' as const,
+              comments: `[شۆڕکردنەوەی دەسەڵات بۆ خوارەوە - بڕیاری ${generatedDecree}] ${notes}`,
+              signatureHash: sigHash,
+              signerRole: 'HOLDING_OWNER'
+            }
+          };
+        }
+        return p;
+      });
+      try {
+        localStorage.setItem('sas4erp_pos', JSON.stringify(updated));
+      } catch {}
+      return updated;
+    });
+
+    // Record in audit trail
+    const auditEntry: ApprovalAuditEntry = {
+      id: `audit-del-${Date.now()}`,
+      requestId: targetPo.id,
+      poNumber: targetPo.poNumber,
+      stepNumber: 0,
+      action: 'DELEGATED_TO_BRANCH',
+      performedBy: currentUser.name,
+      performerRole: currentUser.role,
+      timestamp,
+      comments: `[بڕیاری سەرۆکایەتی ژمارە ${generatedDecree}] شۆڕکردنەوەی دەسەڵاتی خەرجکردن بۆ کۆمپانیا/پڕۆژە بەبێ گەڕانەوە بۆ بنکەی سەرەکی. تێبینی: ${notes}`,
+      signatureHash: sigHash
+    };
+    setApprovalAuditTrail(prev => [auditEntry, ...prev]);
+
+    addNotification({
+      title: '⚡ Authority Delegated Downward / شۆڕکردنەوەی دەسەڵاتی خەرجکردن',
+      titleKu: `⚡ بنکەی سەرەکی دەسەڵاتی خەرجکردنی بۆ ${targetPo.poNumber} شۆڕکردەوە بۆ کۆمپانیا/پڕۆژە (بێ گەڕانەوە بۆ بنکەی سەرەکی)`,
+      titleAr: `⚡ تفويض سلطة اتخاذ القرار لأمر الشراء ${targetPo.poNumber} للموقع والفرع مباشرة`,
+      message: `بەپێی فەرمانی سەرۆکایەتی هۆڵدینگ ژمارە ${generatedDecree}، بەڕێوەبەرانی کۆمپانیا و پڕۆژە دەسەڵاتی تەواویان هەیە لەسەر بڕیاردان بەبێ پێویستی ڕەزامەندی CEO.`,
+      type: 'FINANCE_ENTRY'
+    });
+
+    return { success: true, message: `دەسەڵاتی خەرجکردن شۆڕکرایەوە بەپێی فەرمانی ${generatedDecree}` };
+  }, [purchaseOrders, currentUser.name, currentUser.role, addNotification]);
+
+  const setEntitySpendingAutonomy = useCallback((
+    type: 'COMPANY' | 'PROJECT',
+    id: string,
+    mandate: DelegatedSpendingMandate | null
+  ) => {
+    if (type === 'COMPANY') {
+      setCompanies(prev => {
+        const updated = prev.map(c => c.id === id ? { ...c, delegatedSpendingMandate: mandate || undefined } : c);
+        try {
+          localStorage.setItem('sas4erp_companies', JSON.stringify(updated));
+        } catch {}
+        return updated;
+      });
+    } else {
+      setProjects(prev => {
+        const updated = prev.map(p => p.id === id ? { ...p, delegatedSpendingMandate: mandate || undefined } : p);
+        try {
+          localStorage.setItem('sas4erp_projects', JSON.stringify(updated));
+        } catch {}
+        return updated;
+      });
+    }
+
+    if (mandate && mandate.isAutonomous) {
+      addNotification({
+        title: '⚡ Spending Autonomy Granted / پێدانی سەربەخۆیی خەرجکردن',
+        titleKu: `⚡ بنکەی سەرەکی دەسەڵاتی بڕیاردانی خەرجکردنی شۆڕکردەوە بۆ ${type === 'COMPANY' ? 'کۆمپانیا' : 'پڕۆژە'} (بێ گەڕانەوە بۆ بنکەی سەرەکی)`,
+        titleAr: `⚡ منح صلاحيات الصرف المستقل للفرع/المشروع دون الرجوع للمقر الرئيسي`,
+        message: `بڕیاری سەرۆکایەتی هۆڵدینگ ژمارە ${mandate.decreeNumber}: پێدانی سەربەخۆیی تەواوی خەرجکردن ${mandate.maxAutonomousLimitUSD ? `تا سەقفی $${mandate.maxAutonomousLimitUSD.toLocaleString()}` : '(بێسنوور)'}.`,
+        type: 'FINANCE_ENTRY'
+      });
+    } else {
+      addNotification({
+        title: '🔒 Autonomy Revoked / هەڵوەشاندنەوەی دەسەڵاتی سەربەخۆیی',
+        titleKu: '🔒 دەسەڵاتی سەربەخۆیی خەرجکردن هەڵوەشێنرایەوە؛ سەرجەم خەرجییەکان دەبێت بگەڕێنەوە بۆ بنکەی سەرەکی',
+        titleAr: '🔒 إلغاء التفويض المالي وإعادة الارتباط بالمركز الرئيسي',
+        message: 'Spending mandate revoked. Standard holding approval chain enforced.',
+        type: 'BUDGET_THRESHOLD_ALERT'
+      });
+    }
+  }, [addNotification]);
+
+  const signPmReleaseForProcurement = useCallback((
+    poId: string,
+    comments: string = 'Authorized by Project Director for procurement funds release'
+  ): { success: boolean; message: string } => {
+    const isPM = currentUser.role === 'PROJECT_MANAGER' || currentUser.role === 'SUPER_ADMIN' || currentUser.role === 'HOLDING_OWNER';
+    if (!isPM) {
+      return {
+        success: false,
+        message: 'تەنها یەک لە بەڕێوەبەرانی پڕۆژە (PM) دەسەڵاتی واژۆکردنی ڕادەستکردنی ئەم پارەیەی هەیە بە بەشی کڕین.'
+      };
+    }
+
+    const targetPO = purchaseOrders.find(p => p.id === poId);
+    if (!targetPO || !targetPO.projectFundDeduction) {
+      return { success: false, message: 'داواکاری یان حیسابی تەرخانکراوی پڕۆژە نەدۆزرایەوە.' };
+    }
+
+    const timestamp = new Date().toLocaleString();
+    const sigHash = `SIG-PM-REL-${Math.random().toString(36).substring(2, 9).toUpperCase()}`;
+
+    setPurchaseOrders(prev => {
+      const updated = prev.map(p => {
+        if (p.id === poId && p.projectFundDeduction) {
+          return {
+            ...p,
+            projectFundDeduction: {
+              ...p.projectFundDeduction,
+              procurementStatus: 'PM_RELEASE_SIGNED' as const,
+              authorizedByPm: currentUser.name,
+              pmSignatureHash: sigHash,
+              pmSignedAt: timestamp,
+              notes: `${p.projectFundDeduction.notes || ''} [واژۆکرا لەلایەن بەڕێوەبەری پڕۆژە ${currentUser.name}: ${comments}]`
+            }
+          };
+        }
+        return p;
+      });
+      try {
+        localStorage.setItem('sas4erp_pos', JSON.stringify(updated));
+      } catch {}
+      return updated;
+    });
+
+    addNotification({
+      title: `واژۆی بەڕێوەبەری پڕۆژە بۆ بەشی کڕین: ${targetPO.poNumber}`,
+      titleKu: `واژۆی بەڕێوەبەری پڕۆژە درا بۆ بەشی کڕین: ${targetPO.poNumber}`,
+      titleAr: `تم توقيع مدير المشروع لصرف المبلغ لقسم المشتريات: ${targetPO.poNumber}`,
+      message: `بەڕێوەبەری پڕۆژە (${currentUser.name}) واژۆی ڕادەستکردنی بڕی $${targetPO.totalAmountUSD.toLocaleString()}ی کرد بۆ بەشی کڕین. ئێستا بەشی کڕین دەتوانێت وەریگرێت.`,
+      type: 'FINANCE_ENTRY',
+      relatedId: targetPO.id
+    });
+
+    return {
+      success: true,
+      message: `بە سەرکەوتوویی لەلایەن بەڕێوەبەری پڕۆژە واژۆکرا! بەشی کڕین دەتوانێت بڕی $${targetPO.totalAmountUSD.toLocaleString()} وەربگرێت.`
+    };
+  }, [purchaseOrders, currentUser]);
+
+  const collectFundsByProcurement = useCallback((poId: string): { success: boolean; message: string } => {
+    const targetPO = purchaseOrders.find(p => p.id === poId);
+    if (!targetPO || !targetPO.projectFundDeduction) {
+      return { success: false, message: 'زانیاری داواکاری نەدۆزرایەوە' };
+    }
+
+    if (targetPO.projectFundDeduction.procurementStatus !== 'PM_RELEASE_SIGNED') {
+      return {
+        success: false,
+        message: 'ناتوانرێت وەربگیرێت! پێویستە سەرەتا یەک لە بەڕێوەبەرانی پڕۆژە واژۆی ڕەزامەندی بکات.'
+      };
+    }
+
+    const timestamp = new Date().toLocaleString();
+    setPurchaseOrders(prev => {
+      const updated = prev.map(p => {
+        if (p.id === poId && p.projectFundDeduction) {
+          return {
+            ...p,
+            projectFundDeduction: {
+              ...p.projectFundDeduction,
+              procurementStatus: 'COLLECTED_BY_PROCUREMENT' as const,
+              collectedAt: timestamp
+            }
+          };
+        }
+        return p;
+      });
+      try {
+        localStorage.setItem('sas4erp_pos', JSON.stringify(updated));
+      } catch {}
+      return updated;
+    });
+
+    addNotification({
+      title: `وەرگرتنی پارە لەلایەن بەشی کڕین: ${targetPO.poNumber}`,
+      titleKu: `پارەی داواکاری ${targetPO.poNumber} لەلایەن بەشی کڕینەوە وەرگیرا`,
+      titleAr: `تم استلام المبلغ بنجاح من قبل قسم المشتريات: ${targetPO.poNumber}`,
+      message: `بڕی $${targetPO.totalAmountUSD.toLocaleString()} لەلایەن بەشی کڕین وەرگیرا پاش پەسەندکردنی واژۆی بەڕێوەبەری پڕۆژە.`,
+      type: 'FINANCE_ENTRY',
+      relatedId: targetPO.id
+    });
+
+    return {
+      success: true,
+      message: `بڕی $${targetPO.totalAmountUSD.toLocaleString()} بەسەرکەوتوویی لەلایەن بەشی کڕینەوە وەرگیرا.`
+    };
+  }, [purchaseOrders]);
 
   const rejectPurchaseByOwner = (poId: string, comments: string = 'Rejected by Holding Chairman') => {
     const targetPO = purchaseOrders.find(p => p.id === poId);
@@ -2409,19 +3439,46 @@ export const ERPProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   // Automated Gate Scanner Logic
-  const processGateScan = async (barcodeOrPo: string, customDetails?: any): Promise<{ success: boolean; po?: PurchaseOrder; message: string }> => {
+  const processGateScan = async (barcodeOrPo: string, customDetails?: any): Promise<{
+    success: boolean;
+    po?: PurchaseOrder;
+    message: string;
+    itemsUpdated?: { name: string; quantityAdded: number; newTotal: number; unit: string }[];
+    voucherNo?: string;
+    notificationsDispatched?: string[];
+  }> => {
     // Look up PO in system
     let po = purchaseOrders.find(p => p.poNumber.toLowerCase() === barcodeOrPo.toLowerCase() || p.id === barcodeOrPo);
     
-    // If not found, create or match fallback
+    // If not found, check approved PO
     if (!po) {
-      // Find an approved PO or create a valid gate delivery PO
-      const approvedPo = purchaseOrders.find(p => p.status === 'APPROVED_BY_OWNER' && !p.gateScanLog);
+      const approvedPo = purchaseOrders.find(p => canPoEnterProject(p).allowed && !p.gateScanLog);
       if (approvedPo) {
         po = approvedPo;
       } else {
         po = purchaseOrders[0];
       }
+    }
+
+    if (!po) {
+      return { success: false, message: 'No purchase order found for scanned barcode.' };
+    }
+
+    // STRICT EXECUTIVE GATING CHECK (SPECIAL RULE: CEO PRE-APPROVAL + PM OR GM SIGN-OFF FOR SITE ENTRY):
+    const gatePerm = canPoEnterProject(po);
+    if (!gatePerm.allowed) {
+      addNotification({
+        title: `⛔ Gate Entry Refused: ${po.poNumber}`,
+        titleKu: `⛔ ڕێگری لە هاتنە ناو پڕۆژە: ${po.poNumber}`,
+        titleAr: `⛔ تم منع دخول الشحنة عبر البوابة: ${po.poNumber}`,
+        message: gatePerm.reasonKu,
+        type: 'GATE_ALERT'
+      });
+      return {
+        success: false,
+        po,
+        message: `⛔ ڕێگری لە هاتنە ناو پڕۆژە: ${gatePerm.reasonKu}`
+      };
     }
 
     const timestamp = new Date().toLocaleString();
@@ -2430,12 +3487,68 @@ export const ERPProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     const gateName = customDetails?.gateName || 'Main Gate #1 (North Inbound Security)';
     const journalVoucherNo = `VCH-AUTO-${Math.floor(1000 + Math.random() * 9000)}`;
 
-    // 1. Update PO with Gate Scan Log
+    // Check if Finance already paid. If not: auto-deduct from project budget and credit to Procurement Escrow
+    const isFinancePaid = po.status === 'FINANCIALLY_SETTLED' || po.financeEntry?.paymentStatus === 'PAID';
+    let autoProjectDeduction = po.projectFundDeduction;
+
+    if (!isFinancePaid && !autoProjectDeduction) {
+      const targetProjId = po.projectId || 'proj-101';
+      let targetProjName = 'پڕۆژەی دیاریکراو';
+
+      // 1. Deduct from target project budget
+      setProjects(prevProjs => {
+        const updated = prevProjs.map(prj => {
+          if (prj.id === targetProjId || (!po!.projectId && prj.id === 'proj-101')) {
+            targetProjName = prj.nameKu || prj.name;
+            return {
+              ...prj,
+              spentUSD: (prj.spentUSD || 0) + po!.totalAmountUSD
+            };
+          }
+          return prj;
+        });
+        try {
+          localStorage.setItem('sas4erp_projects', JSON.stringify(updated));
+        } catch {}
+        return updated;
+      });
+
+      // 2. Transfer into Procurement Escrow ledger
+      const escrowLedgerEntry: FinanceLedgerEntry = {
+        id: `fin-escrow-${Date.now()}`,
+        companyId: po.companyId,
+        projectId: targetProjId,
+        entryDate: timestamp,
+        voucherNumber: `VCH-AUTO-ESCROW-${Math.floor(1000 + Math.random() * 9000)}`,
+        accountName: `Project Budget Deduction -> Procurement Escrow Allocation`,
+        debitUSD: po.totalAmountUSD,
+        creditUSD: 0,
+        description: `خۆکارانە لە پارەی پڕۆژەی (${targetProjName}) کەمکرایەوە و بۆ بەشی کڕین زیادکرا بەهۆی گەیشتنی کەلوپەل بۆ پڕۆژە (PO: ${po.poNumber}) پێش خەرجکردنی دارایی.`,
+        sourceModule: 'WORKFLOW_ENGINE_AUTO',
+        referencePoId: po.id,
+        postedBy: 'SAS4ERP Project-to-Procurement Auto Escrow Engine'
+      };
+      setFinanceLedgers(prev => [escrowLedgerEntry, ...prev]);
+
+      // 3. Mark deduction record on PO
+      autoProjectDeduction = {
+        deductedAt: timestamp,
+        amountUSD: po.totalAmountUSD,
+        projectId: targetProjId,
+        projectName: targetProjName,
+        transferredToProcurement: true,
+        procurementStatus: 'HELD_IN_ESCROW',
+        notes: 'دارایی هێشتا پارەکەی خەرج نەکردبوو، کاتێک کەلوپەلەکە گەیشتە ناو پڕۆژە خۆکارانە لە پارەی پڕۆژە کەمکرایەوە و بۆ بەشی کڕین زیادکرا. کاتێک بەشی کڕین دەتوانێت وەریگرێت کە یەک لە بەڕێوەبەرانی پڕۆژە واژۆی بکات.'
+      };
+    }
+
+    // 1. Update PO with Gate Scan Log and Project Fund Deduction
     setPurchaseOrders(prev => prev.map(p => {
       if (p.id === po!.id) {
         return {
           ...p,
           status: 'ARRIVED_AT_GATE',
+          projectFundDeduction: autoProjectDeduction || p.projectFundDeduction,
           gateScanLog: {
             scannedAt: timestamp,
             scannedBy: currentUser.name,
@@ -2453,7 +3566,7 @@ export const ERPProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           financeEntry: {
             postedAt: timestamp,
             journalRef: `JRNL-AUTO-${Math.floor(1000 + Math.random() * 9000)}`,
-            paymentStatus: 'ACCRUED',
+            paymentStatus: isFinancePaid ? 'PAID' : 'ACCRUED',
             voucherNo: journalVoucherNo,
           }
         };
@@ -2499,39 +3612,108 @@ export const ERPProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       accountName: `Accounts Payable - ${po.supplierName}`,
       debitUSD: po.totalAmountUSD,
       creditUSD: 0,
-      description: `Automated Journal Entry on Gate Barcode Scan for ${po.poNumber} (${po.items.length} items arrived)`,
+      description: `Automated Journal Entry on Gate Barcode Scan for ${po.poNumber} (${po.items.length} items arrived at site)`,
       sourceModule: 'GATE_SCAN_AUTO',
       referencePoId: po.id,
       postedBy: 'SAS4ERP Gate-to-Finance Automated Engine',
     };
-    setFinanceLedgers(prev => [autoFinanceEntry, ...prev]);
+    setFinanceLedgers(prev => {
+      const updated = [autoFinanceEntry, ...prev];
+      try {
+        localStorage.setItem('sas4erp_finance_ledgers', JSON.stringify(updated));
+      } catch (err) {}
+      return updated;
+    });
 
-    // 4. Update Warehouse stock
+    // 4. Automatically update inventory stock levels (increment existing or add new)
+    const itemsUpdatedSummary: { name: string; quantityAdded: number; newTotal: number; unit: string }[] = [];
     if (po.items && po.items.length > 0) {
       setWarehouseItems(prev => {
-        return prev.map(wh => {
-          const matchedItem = po!.items.find(i => i.name.toLowerCase().includes(wh.name.toLowerCase()) || wh.name.toLowerCase().includes(i.name.toLowerCase()));
-          if (matchedItem) {
-            return {
-              ...wh,
-              quantityOnHand: wh.quantityOnHand + matchedItem.quantity,
+        const updated = [...prev];
+        po!.items.forEach((item, idx) => {
+          const matchIndex = updated.findIndex(wh =>
+            (wh.name && wh.name.toLowerCase().trim() === item.name.toLowerCase().trim()) ||
+            (wh.sku && wh.sku.toLowerCase() === item.name.toLowerCase()) ||
+            (wh.name && item.name && (wh.name.toLowerCase().includes(item.name.toLowerCase()) || item.name.toLowerCase().includes(wh.name.toLowerCase())))
+          );
+
+          if (matchIndex >= 0) {
+            const currentQty = updated[matchIndex].quantityOnHand || 0;
+            const newQty = currentQty + item.quantity;
+            updated[matchIndex] = {
+              ...updated[matchIndex],
+              quantityOnHand: newQty,
               lastRestockedDate: new Date().toISOString().split('T')[0],
             };
+            itemsUpdatedSummary.push({
+              name: updated[matchIndex].name,
+              quantityAdded: item.quantity,
+              newTotal: newQty,
+              unit: item.unit || updated[matchIndex].unit || 'Units',
+            });
+          } else {
+            const newItem: WarehouseItem = {
+              id: `wh-gate-${Date.now()}-${idx}`,
+              itemCode: `ITM-${po!.poNumber.slice(-4)}-${idx + 1}`,
+              name: item.name,
+              category: item.category || 'Inward Procured Materials',
+              companyId: po!.companyId,
+              quantityOnHand: item.quantity,
+              minimumThreshold: Math.max(5, Math.floor(item.quantity * 0.2)),
+              unit: item.unit || 'Units',
+              binLocation: `Bay-${po!.projectId?.slice(-3) || '01'}-Rack01`,
+              averageUnitCostUSD: item.unitPriceUSD || (item.totalUSD / (item.quantity || 1)) || 100,
+              lastRestockedDate: new Date().toISOString().split('T')[0],
+              supplier: po!.supplierName || 'Verified Supplier',
+            };
+            updated.push(newItem);
+            itemsUpdatedSummary.push({
+              name: newItem.name,
+              quantityAdded: item.quantity,
+              newTotal: item.quantity,
+              unit: item.unit || 'Units',
+            });
           }
-          return wh;
         });
+
+        try {
+          localStorage.setItem('sas4erp_warehouse_items', JSON.stringify(updated));
+        } catch (err) {}
+        return updated;
       });
     }
 
-    // 5. Send Triple Notification System
+    // 5. Automated Real-Time Notification to WAREHOUSE:
     addNotification({
-      title: `Gate Inward: ${po.poNumber} Arrived!`,
-      titleKu: `دەرگای سەرەکی: باری پسوولەی ${po.poNumber} گەیشت و سکانکرا!`,
-      titleAr: `دخول البوابة: وصول شحنة أمر الشراء ${po.poNumber}!`,
-      message: `Triple Automation Activated: (1) Warehouse notified (2) Finance auto-posted voucher ${journalVoucherNo} for $${po.totalAmountUSD.toLocaleString()} (3) Project Director ${po.requestedBy} alerted.`,
-      messageAr: `تم تفعيل التزامن الثلاثي: إخطار المستودع، قيد آلي بالمالية (${journalVoucherNo})، وإشعار مدير المشروع.`,
+      title: `📦 کەلوپەلەکانی ${po.poNumber} گەیشتە کۆگا / پڕۆژە`,
+      titleKu: `📦 ئاگاداری ڕاستەوخۆ بۆ کۆگا: کەرەستەکانی ${po.poNumber} گەیشت و کۆگا نوێکرایەوە`,
+      titleAr: `📦 إشعار فوري للمستودع: استلام وتحديث مخزون مواد ${po.poNumber}`,
+      message: `بەپێی سکانی بارکۆد لە دەروازە، سەرجەم کەرەستەکانی فەرمانی ${po.poNumber} (${po.items.map(i => `${i.quantity} ${i.unit} ${i.name}`).join('، ')}) بە فەرمی وەرگیران و ڕێژەی کۆگا (Inventory Levels) خۆکارانە زیادکرا.`,
       type: 'GATE_ALERT',
       relatedId: po.id,
+      targetRole: 'WAREHOUSE_OFFICER',
+    });
+
+    // 6. Automated Real-Time Notification to FINANCE:
+    addNotification({
+      title: `💼 تۆماری دارایی خۆکار بۆ پسوولەی ${po.poNumber}`,
+      titleKu: `💼 ئاگاداری دارایی: تۆمارکردنی فەرمی خەرجی ${po.poNumber} لە سیستەمی دارایی`,
+      titleAr: `💼 إشعار الإدارة المالية: قيد محاسبي تلقائي لأمر الشراء ${po.poNumber}`,
+      message: `پسوولەی بارکۆدی داواکاری کڕینی ${po.poNumber} بە بەهای $${po.totalAmountUSD.toLocaleString()} USD لە دەروازە سکان کرا و قەواڵەی دارایی پەیوەندیدار (${journalVoucherNo}) خۆکارانە لە سیستەمی دارایی تۆمار کرا.`,
+      type: 'FINANCE_ENTRY',
+      relatedId: po.id,
+      targetRole: 'FINANCE_HEAD',
+    });
+
+    // 7. Automated Real-Time Notification to PROJECT / COMPANY MANAGER:
+    addNotification({
+      title: `🏢 ئاگاداری بەڕێوەبەری پڕۆژە/کۆمپانیا: گەیشتنی کەرەستەی ${po.poNumber}`,
+      titleKu: `🏢 ئاگاداری بەڕێوەبەر: کەرەستەکانی ${po.poNumber} داخڵی پڕۆژە بوون`,
+      titleAr: `🏢 إشعار مدير المشروع والشركة: استلام وتفريغ مواد ${po.poNumber} في الموقع`,
+      message: `بۆ بەڕێز بەڕێوەبەر (${po.requestedBy || 'Project Manager'}): کەرەستەکانی پڕۆژە بەپێی پسوولەی ${po.poNumber} لە خاڵی پشکنین و دەروازە سکان کرا و داخڵ کرا. تۆماری کۆگا و قەواڵەی دارایی خۆکارانە بەستراوەتەوە.`,
+      type: 'PROJECT_ALERT',
+      relatedId: po.id,
+      targetRole: 'PROJECT_MANAGER',
     });
 
     try {
@@ -2545,7 +3727,10 @@ export const ERPProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     return {
       success: true,
       po,
-      message: `Triple notification executed successfully! Warehouse, Finance, and Project Managers synced.`
+      message: `Triple notification executed successfully! Warehouse, Finance, and Project Managers synced.`,
+      itemsUpdated: itemsUpdatedSummary,
+      voucherNo: journalVoucherNo,
+      notificationsDispatched: ['Warehouse Officer', 'Finance Head', 'Project / Company Manager']
     };
   };
 
@@ -3156,16 +4341,6 @@ export const ERPProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setNotifications(prev => prev.map(n => n.id === id ? { ...n, isRead: true } : n));
   };
 
-  const addNotification = (notif: Omit<AppNotification, 'id' | 'timestamp' | 'isRead'>) => {
-    const newNotif: AppNotification = {
-      ...notif,
-      id: `notif-${Date.now()}`,
-      timestamp: 'Just now',
-      isRead: false,
-    };
-    setNotifications(prev => [newNotif, ...prev]);
-  };
-
   const syncHardwareThresholdAlertsNow = useCallback(async () => {
     try {
       const res = await fetch('/api/it-alerts/status');
@@ -3337,6 +4512,15 @@ export const ERPProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         setIsHoldingSetupOpen,
         isUserManualOpen,
         setIsUserManualOpen,
+        isLicenseModalOpen,
+        setIsLicenseModalOpen,
+        licenseModalInitialTab,
+        setLicenseModalInitialTab,
+        openLicenseModal,
+        isOwnerVerifyModalOpen,
+        setIsOwnerVerifyModalOpen,
+        systemLicense,
+        setSystemLicense,
         isMobileMenuOpen,
         setIsMobileMenuOpen,
         isSkylineBgEnabled,
@@ -3377,6 +4561,18 @@ export const ERPProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         approvalAuditTrail,
         processWorkflowStep,
         submitPurchaseRequest,
+        isPoFullyApproved,
+        canPoEnterProject,
+        grantCeoPreApproval,
+        delegatePoSpendingAuthority,
+        setEntitySpendingAutonomy,
+        isPoDelegatedOrAutonomous,
+        signPmReleaseForProcurement,
+        collectFundsByProcurement,
+        canUserApproveWorkflowStep,
+        approveWorkflowStep,
+        disbursePoPayment,
+        receiveApprovedPoToWarehouse,
         gmBudgetPolicies,
         addGmBudgetPolicy,
         updateGmBudgetPolicy,

@@ -25,12 +25,14 @@ import {
   FileCheck2,
   Bed,
   FileSignature,
-  FileSpreadsheet
+  FileSpreadsheet,
+  Zap,
+  Scale
 } from 'lucide-react';
 import { useERP } from '../context/ERPContext';
 import { useLanguage } from '../context/LanguageContext';
 import { resolveEntityText, getUIText } from '../utils/langHelper';
-import { Company, Project, DepartmentOverview } from '../types/erp';
+import { Company, Project, DepartmentOverview, DelegatedSpendingMandate } from '../types/erp';
 import { DepartmentInspectionModal } from './DepartmentInspectionModal';
 import { ProjectReportsModule } from './ProjectReportsModule';
 import { SmartBudgetAlertPanel } from './SmartBudgetAlertPanel';
@@ -54,7 +56,9 @@ export const CompaniesProjectsModule: React.FC = () => {
     setIsHoldingSetupOpen,
     projectReports,
     foreignWorkers,
-    setActiveTab
+    setActiveTab,
+    currentUser,
+    setEntitySpendingAutonomy
   } = useERP();
 
   const { t, language } = useLanguage();
@@ -71,6 +75,56 @@ export const CompaniesProjectsModule: React.FC = () => {
     name: string;
   } | null>(null);
   const [isClearMockModalOpen, setIsClearMockModalOpen] = useState(false);
+
+  // Delegation of Spending Authority (Holding HQ -> Company / Project)
+  const [delegationModalTarget, setDelegationModalTarget] = useState<{
+    type: 'COMPANY' | 'PROJECT';
+    id: string;
+    name: string;
+    currentMandate?: DelegatedSpendingMandate;
+  } | null>(null);
+
+  const [mandateDecree, setMandateDecree] = useState('');
+  const [mandateLimit, setMandateLimit] = useState<number>(0);
+  const [mandateNotes, setMandateNotes] = useState('');
+  const [mandateIsActive, setMandateIsActive] = useState(true);
+
+  const handleOpenDelegationModal = (type: 'COMPANY' | 'PROJECT', id: string, name: string, currentMandate?: DelegatedSpendingMandate) => {
+    setDelegationModalTarget({ type, id, name, currentMandate });
+    if (currentMandate) {
+      setMandateDecree(currentMandate.decreeNumber || `HQ-DEC-2026-${Math.floor(100 + Math.random() * 900)}`);
+      setMandateLimit(currentMandate.maxAutonomousLimitUSD || 0);
+      setMandateNotes(currentMandate.notes || '');
+      setMandateIsActive(currentMandate.isAutonomous);
+    } else {
+      setMandateDecree(`HQ-DEC-2026-${Math.floor(100 + Math.random() * 900)}`);
+      setMandateLimit(0);
+      setMandateNotes('بڕیاری سەرۆکایەتی هۆڵدینگ: ماف دەدرێتە بەڕێوەبەرایەتی کە بەشێوەی سەربەخۆ بڕیار لەسەر خەرجکردن بدەن بەبێ گەڕانەوە بۆ بنکەی سەرەکی.');
+      setMandateIsActive(true);
+    }
+  };
+
+  const handleSaveDelegation = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!delegationModalTarget) return;
+
+    if (!mandateIsActive) {
+      setEntitySpendingAutonomy(delegationModalTarget.type, delegationModalTarget.id, null);
+    } else {
+      setEntitySpendingAutonomy(delegationModalTarget.type, delegationModalTarget.id, {
+        isAutonomous: true,
+        delegatedBy: currentUser.name,
+        delegatedAt: new Date().toLocaleString(),
+        decreeNumber: mandateDecree || `HQ-DEC-2026-${Math.floor(1000 + Math.random() * 9000)}`,
+        maxAutonomousLimitUSD: Number(mandateLimit) > 0 ? Number(mandateLimit) : undefined,
+        notes: mandateNotes,
+        scope: delegationModalTarget.type,
+        targetEntityId: delegationModalTarget.id
+      });
+    }
+
+    setDelegationModalTarget(null);
+  };
 
   // Custom Department Modal State
   const [isAddDeptModalOpen, setIsAddDeptModalOpen] = useState(false);
@@ -611,6 +665,54 @@ export const CompaniesProjectsModule: React.FC = () => {
                         <span className="font-bold text-emerald-600 font-mono">${(comp.spentUSD || 0).toLocaleString()} USD</span>
                       </div>
                     </div>
+
+                    {/* Autonomous Spending Delegation Banner / Dedicated Action Button */}
+                    <div className="mt-4 pt-3 border-t border-slate-100">
+                      {comp.delegatedSpendingMandate?.isAutonomous ? (
+                        <div className="bg-gradient-to-r from-amber-50 to-orange-50 border border-amber-300 rounded-2xl p-3 flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
+                          <div className="flex items-start gap-2">
+                            <div className="p-1.5 rounded-xl bg-amber-500 text-white shadow-xs shrink-0">
+                              <Zap className="w-4 h-4 fill-white" />
+                            </div>
+                            <div>
+                              <div className="flex items-center gap-1.5">
+                                <span className="font-extrabold text-xs text-amber-950">
+                                  {language === 'ku' ? '⚡ دەسەڵاتی خەرجکردن شۆڕکراوەتەوە بۆ کۆمپانیا' : '⚡ Spending Authority Delegated from HQ'}
+                                </span>
+                                <span className="text-[10px] font-mono font-bold bg-amber-200/80 text-amber-900 px-2 py-0.2 rounded-md">
+                                  {comp.delegatedSpendingMandate.decreeNumber}
+                                </span>
+                              </div>
+                              <p className="text-[11px] text-amber-800 mt-0.5">
+                                {language === 'ku'
+                                  ? `سەربەخۆیە لە بڕیاردانی خەرجی بەبێ گەڕانەوە بۆ بنکەی سەرەکی ${comp.delegatedSpendingMandate.maxAutonomousLimitUSD ? `(تا سەقفی $${comp.delegatedSpendingMandate.maxAutonomousLimitUSD.toLocaleString()})` : '(بێسنوور)'}`
+                                  : `Autonomous spending without HQ referral ${comp.delegatedSpendingMandate.maxAutonomousLimitUSD ? `(Up to $${comp.delegatedSpendingMandate.maxAutonomousLimitUSD.toLocaleString()})` : '(Unlimited)'}`}
+                              </p>
+                            </div>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => handleOpenDelegationModal('COMPANY', comp.id, comp.nameKu || comp.name, comp.delegatedSpendingMandate)}
+                            className="px-3 py-1.5 rounded-xl bg-amber-600 hover:bg-amber-700 text-white font-bold text-xs shrink-0 transition cursor-pointer shadow-xs self-start sm:self-auto"
+                          >
+                            {language === 'ku' ? 'دەستکاری دەسەڵات' : 'Edit Mandate'}
+                          </button>
+                        </div>
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={() => handleOpenDelegationModal('COMPANY', comp.id, comp.nameKu || comp.name, comp.delegatedSpendingMandate)}
+                          className="w-full flex items-center justify-center gap-2 px-3.5 py-2.5 rounded-2xl bg-amber-50 hover:bg-amber-100 text-amber-900 border border-amber-300 text-xs font-black transition cursor-pointer shadow-2xs group"
+                        >
+                          <Zap className="w-4 h-4 text-amber-600 group-hover:scale-110 transition shrink-0 fill-amber-500" />
+                          <span>
+                            {language === 'ku'
+                              ? '⚡ پێدانی دەسەڵاتی خەرجکردن بەم کۆمپانیایە (بێ گەڕانەوە بۆ بنکەی سەرەکی)'
+                              : '⚡ Delegate Spending Authority to Company (No HQ Referral)'}
+                          </span>
+                        </button>
+                      )}
+                    </div>
                   </div>
 
                   <div className="pt-3 border-t border-slate-100 flex items-center justify-between text-xs text-slate-500">
@@ -858,6 +960,46 @@ export const CompaniesProjectsModule: React.FC = () => {
                       <span>خەرجکراو:</span>
                       <span className="font-bold text-emerald-600 font-mono">${(proj.spentUSD || 0).toLocaleString()} USD</span>
                     </div>
+                  </div>
+
+                  {/* Project Autonomous Spending Mandate */}
+                  <div className="pt-2 border-t border-slate-100">
+                    {proj.delegatedSpendingMandate?.isAutonomous ? (
+                      <div className="bg-gradient-to-r from-amber-50 to-orange-50 border border-amber-300 rounded-xl p-2.5 space-y-1.5">
+                        <div className="flex items-center justify-between">
+                          <span className="flex items-center gap-1.5 text-xs font-black text-amber-950">
+                            <Zap className="w-3.5 h-3.5 text-amber-600 fill-amber-500" />
+                            <span>{language === 'ku' ? '⚡ دەسەڵاتی خەرجکردنی پڕۆژە شۆڕکراوەتەوە' : '⚡ Spending Delegated to Project'}</span>
+                          </span>
+                          <span className="text-[10px] font-mono font-bold bg-amber-200/80 text-amber-900 px-1.5 py-0.2 rounded">
+                            {proj.delegatedSpendingMandate.decreeNumber}
+                          </span>
+                        </div>
+                        <div className="flex items-center justify-between text-[10px] text-amber-800">
+                          <span>{proj.delegatedSpendingMandate.maxAutonomousLimitUSD ? `سەقف: $${proj.delegatedSpendingMandate.maxAutonomousLimitUSD.toLocaleString()}` : 'سەربەخۆیی بێسنوور (بێ گەڕانەوە بۆ بنکەی سەرەکی)'}</span>
+                          <button
+                            type="button"
+                            onClick={() => handleOpenDelegationModal('PROJECT', proj.id, proj.nameKu || proj.name, proj.delegatedSpendingMandate)}
+                            className="font-bold text-amber-900 hover:text-amber-950 hover:underline cursor-pointer"
+                          >
+                            {language === 'ku' ? 'دەستکاری' : 'Edit'}
+                          </button>
+                        </div>
+                      </div>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={() => handleOpenDelegationModal('PROJECT', proj.id, proj.nameKu || proj.name, proj.delegatedSpendingMandate)}
+                        className="w-full flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl bg-amber-50 hover:bg-amber-100 text-amber-900 border border-amber-300 text-[11px] font-black transition cursor-pointer shadow-2xs group"
+                      >
+                        <Zap className="w-3.5 h-3.5 text-amber-600 group-hover:scale-110 transition shrink-0 fill-amber-500" />
+                        <span>
+                          {language === 'ku'
+                            ? '⚡ شۆڕکردنەوەی دەسەڵاتی خەرجکردن بۆ ئەم پڕۆژەیە (بێ HQ)'
+                            : '⚡ Delegate Spending Authority to Project (No HQ)'}
+                        </span>
+                      </button>
+                    )}
                   </div>
                 </div>
               );
@@ -1644,6 +1786,184 @@ export const CompaniesProjectsModule: React.FC = () => {
                 {t('yesDelete')}
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Executive Spending Authority Delegation Modal */}
+      {delegationModalTarget && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/70 backdrop-blur-sm animate-in fade-in">
+          <div className="bg-white rounded-3xl max-w-xl w-full p-6 sm:p-7 shadow-2xl border border-amber-200 space-y-5 max-h-[90vh] overflow-y-auto">
+            {/* Header */}
+            <div className="flex items-start justify-between gap-3 border-b border-slate-100 pb-4">
+              <div className="flex items-center gap-3">
+                <div className="w-12 h-12 rounded-2xl bg-amber-500/10 border border-amber-500/30 flex items-center justify-center text-amber-600 shadow-inner shrink-0">
+                  <Zap className="w-6 h-6 fill-amber-500" />
+                </div>
+                <div>
+                  <h3 className="text-base sm:text-lg font-black text-slate-900">
+                    {language === 'ku'
+                      ? '⚡ شۆڕکردنەوەی دەسەڵاتی خەرجکردن بۆ خوارەوە'
+                      : '⚡ Delegate Spending Authority Downward'}
+                  </h3>
+                  <p className="text-xs text-slate-500 font-medium mt-0.5">
+                    {language === 'ku'
+                      ? `مافدان بە (${delegationModalTarget.name}) بۆ بڕیاردانی سەربەخۆ بێ گەڕانەوە بۆ بنکەی سەرەکی`
+                      : `Grant autonomous spending authority to (${delegationModalTarget.name}) without HQ referral`}
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setDelegationModalTarget(null)}
+                className="text-slate-400 hover:text-slate-700 p-1.5 rounded-xl hover:bg-slate-100 transition cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <form onSubmit={handleSaveDelegation} className="space-y-4">
+              {/* Autonomy Toggle State */}
+              <div className="bg-slate-50 p-3.5 rounded-2xl border border-slate-200/80 space-y-2">
+                <label className="block text-xs font-bold text-slate-700">
+                  {language === 'ku' ? 'دۆخی بڕیاری دەسەڵاتداری سەرۆکایەتی (CEO):' : 'Status of Executive Mandate:'}
+                </label>
+                <div className="grid grid-cols-2 gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setMandateIsActive(true)}
+                    className={`py-2 px-3 rounded-xl text-xs font-bold transition flex items-center justify-center gap-2 border cursor-pointer ${
+                      mandateIsActive
+                        ? 'bg-amber-600 text-white border-amber-700 shadow-xs'
+                        : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-100'
+                    }`}
+                  >
+                    <Zap className="w-4 h-4 fill-current" />
+                    <span>{language === 'ku' ? '⚡ پێدانی دەسەڵاتی سەربەخۆ' : 'Grant Autonomy'}</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setMandateIsActive(false)}
+                    className={`py-2 px-3 rounded-xl text-xs font-bold transition flex items-center justify-center gap-2 border cursor-pointer ${
+                      !mandateIsActive
+                        ? 'bg-rose-600 text-white border-rose-700 shadow-xs'
+                        : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-100'
+                    }`}
+                  >
+                    <X className="w-4 h-4" />
+                    <span>{language === 'ku' ? '🔒 هەڵوەشاندنەوە (گەڕانەوە بۆ HQ)' : 'Revoke (Require HQ)'}</span>
+                  </button>
+                </div>
+              </div>
+
+              {mandateIsActive && (
+                <>
+                  {/* Decree Number */}
+                  <div>
+                    <label className="block text-xs font-bold text-slate-700 mb-1">
+                      {language === 'ku' ? 'ژمارەی فەرمانی سەرۆکایەتی هۆڵدینگ (Executive Decree No.):' : 'Executive Decree Number:'}
+                    </label>
+                    <input
+                      type="text"
+                      value={mandateDecree}
+                      onChange={(e) => setMandateDecree(e.target.value)}
+                      placeholder="HQ-DEC-2026-..."
+                      className="w-full bg-slate-50 border border-slate-200 text-slate-900 rounded-xl px-3 py-2 text-xs font-mono font-bold focus:border-amber-500 focus:bg-white focus:outline-none"
+                      required
+                    />
+                  </div>
+
+                  {/* Spending Ceiling Limit */}
+                  <div>
+                    <div className="flex items-center justify-between mb-1">
+                      <label className="block text-xs font-bold text-slate-700">
+                        {language === 'ku' ? 'سەقفی خەرجکردنی ڕێگەپێدراو (Spending Limit USD):' : 'Autonomous Spending Limit (USD):'}
+                      </label>
+                      <span className="text-[11px] font-mono text-amber-700 font-bold">
+                        {mandateLimit === 0 ? 'بێسنوور (Unlimited)' : `$${Number(mandateLimit).toLocaleString()} USD`}
+                      </span>
+                    </div>
+                    <input
+                      type="number"
+                      value={mandateLimit}
+                      onChange={(e) => setMandateLimit(Number(e.target.value))}
+                      placeholder="0 = Unlimited"
+                      min={0}
+                      className="w-full bg-slate-50 border border-slate-200 text-slate-900 rounded-xl px-3 py-2 text-xs font-mono focus:border-amber-500 focus:bg-white focus:outline-none"
+                    />
+                    {/* Quick Presets */}
+                    <div className="flex items-center gap-1.5 mt-2 flex-wrap">
+                      <span className="text-[10px] text-slate-400 font-bold">هەڵبژاردنی خێرا:</span>
+                      {[
+                        { label: 'بێسنوور', val: 0 },
+                        { label: '$25,000', val: 25000 },
+                        { label: '$50,000', val: 50000 },
+                        { label: '$100,000', val: 100000 },
+                        { label: '$250,000', val: 250000 },
+                      ].map(preset => (
+                        <button
+                          key={preset.val}
+                          type="button"
+                          onClick={() => setMandateLimit(preset.val)}
+                          className={`text-[10px] font-bold px-2 py-0.5 rounded-lg border transition cursor-pointer ${
+                            mandateLimit === preset.val
+                              ? 'bg-amber-100 text-amber-900 border-amber-300'
+                              : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-100'
+                          }`}
+                        >
+                          {preset.label}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Directives & Notes */}
+                  <div>
+                    <label className="block text-xs font-bold text-slate-700 mb-1">
+                      {language === 'ku' ? 'ڕێنمایی و مەرجەکانی سەرۆکایەتی هۆڵدینگ (Directives & Notes):' : 'Directives & Notes:'}
+                    </label>
+                    <textarea
+                      rows={3}
+                      value={mandateNotes}
+                      onChange={(e) => setMandateNotes(e.target.value)}
+                      placeholder="تێبینی دەسەڵاتداری سەرۆکایەتی بنووسە..."
+                      className="w-full bg-slate-50 border border-slate-200 text-slate-900 rounded-xl p-3 text-xs focus:border-amber-500 focus:bg-white focus:outline-none"
+                    />
+                  </div>
+
+                  {/* Informational Guidance Callout */}
+                  <div className="bg-amber-50 border border-amber-200/90 rounded-2xl p-3 text-xs text-amber-900 space-y-1">
+                    <div className="font-extrabold flex items-center gap-1.5 text-amber-950">
+                      <Zap className="w-3.5 h-3.5 fill-amber-600 text-amber-600 shrink-0" />
+                      <span>{language === 'ku' ? 'کاریگەری لەسەر سیستەمی پەسەندکردن و کۆگا:' : 'System Impact:'}</span>
+                    </div>
+                    <p className="text-[11px] leading-relaxed text-amber-800">
+                      {language === 'ku'
+                        ? 'کاتێک دەسەڵاتی خەرجکردن شۆڕدەکرێتەوە، داواکاری کڕین و خەرجییەکانی ئەم یەکەیە ڕاستەوخۆ بە واژۆی بەڕێوەبەری پڕۆژە (PM) یان بەڕێوەبەری کارگێڕی (GM) پەسەند دەبن و پێویستیان بە گەڕانەوە بۆ CEO نابێت. کەرەستە ڕاستەوخۆ دەتوانێت بچێتە ناو پڕۆژە و لە کۆگا وەربگیرێت.'
+                        : 'When authority is delegated, purchase orders and expenses under this entity are finalized directly by PM or GM sign-off without needing CEO approval. Shipments will be cleared at the gate and received at the warehouse automatically.'}
+                    </p>
+                  </div>
+                </>
+              )}
+
+              {/* Action Buttons */}
+              <div className="flex items-center gap-3 pt-3 border-t border-slate-100">
+                <button
+                  type="button"
+                  onClick={() => setDelegationModalTarget(null)}
+                  className="flex-1 py-2.5 rounded-xl border border-slate-200 text-slate-700 hover:bg-slate-50 font-bold text-xs transition cursor-pointer"
+                >
+                  {language === 'ku' ? 'پەشیمانبوونەوە' : 'Cancel'}
+                </button>
+                <button
+                  type="submit"
+                  className="flex-1 py-2.5 rounded-xl bg-amber-600 hover:bg-amber-700 text-white font-extrabold text-xs transition shadow-md cursor-pointer flex items-center justify-center gap-1.5"
+                >
+                  <Zap className="w-4 h-4 fill-white" />
+                  <span>{language === 'ku' ? '💾 جێبەجێکردنی بڕیاری سەرۆکایەتی' : 'Execute Executive Decree'}</span>
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}

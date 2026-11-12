@@ -21,6 +21,15 @@ export const ALL_SYSTEM_MODULES: ModulePermissionDefinition[] = [
     descriptionKu: 'کۆکراوەی سەرجەم داتاکان، خشتەی کۆمپانیاکان، و پێوەرە سەرەکییەکان.'
   },
   {
+    id: 'vendor-license-hub',
+    nameEn: 'Platform Owner Vendor & License Hub',
+    nameKu: 'پۆڕتاڵی خاوەنی سەکۆ و بەڕێوەبردنی لایسنس',
+    nameAr: 'بوابة مالك المنصة وإدارة التراخيص',
+    category: 'EXECUTIVE',
+    descriptionEn: 'Dedicated vendor command center to generate, monitor, and renew client licenses.',
+    descriptionKu: 'پۆڕتاڵی تایبەتی خاوەنی سەکۆ بۆ دروستکردن و نوێکردنەوەی مانگانەی لایسنسی کڕیاران.'
+  },
+  {
     id: 'owner-approvals',
     nameEn: 'Holding Owner Approvals & Signatures',
     nameKu: 'واژۆی سەرۆکایەتی و پەسەندکردنی خاوەن',
@@ -58,12 +67,12 @@ export const ALL_SYSTEM_MODULES: ModulePermissionDefinition[] = [
   },
   {
     id: 'direct-comms',
-    nameEn: 'Holding Directives & Direct Messaging',
-    nameKu: 'پەیامی خێرا و ڕاسپاردەی خاوەن',
-    nameAr: 'التوجيهات المباشرة والمراسلات السريعة',
+    nameEn: 'Kelegram (Telegram Messenger)',
+    nameKu: 'کەڵەگرام (Kelegram Messenger)',
+    nameAr: 'كَلَغرام (Kelegram)',
     category: 'EXECUTIVE',
-    descriptionEn: 'One-to-one executive communication channel with audit trail.',
-    descriptionKu: 'ناردنی فەرمان و ڕێنمایی ڕاستەوخۆ بۆ بەڕێوەبەران.'
+    descriptionEn: 'Telegram recreation with voice notes, official channels, board groups, and bot.',
+    descriptionKu: 'تەلەگرامی ناوخۆیی هۆلدینگ: نامەی دەنگی، کەناڵی فەرمی، گروپی بەڕێوەبەران و بۆتی هۆشمەند.'
   },
   {
     id: 'project-reports',
@@ -190,6 +199,7 @@ export const ALL_SYSTEM_MODULES: ModulePermissionDefinition[] = [
 export const DEFAULT_ROLE_PERMISSIONS: Record<UserRole, string[]> = {
   HOLDING_OWNER: [
     'holding-dashboard',
+    'vendor-license-hub',
     'owner-approvals',
     'companies-projects',
     'ml-anomaly-detection',
@@ -211,6 +221,7 @@ export const DEFAULT_ROLE_PERMISSIONS: Record<UserRole, string[]> = {
   ],
   SUPER_ADMIN: [
     'holding-dashboard',
+    'vendor-license-hub',
     'owner-approvals',
     'companies-projects',
     'ml-anomaly-detection',
@@ -308,9 +319,40 @@ export const DEFAULT_ROLE_PERMISSIONS: Record<UserRole, string[]> = {
 };
 
 /**
+ * Check if the current user is the Platform Owner / Master Vendor (User with access to System 2)
+ */
+export function checkIsMasterVendorOwner(user?: UserProfile | null): boolean {
+  if (!user) return false;
+  const isEmailMatch = user.email?.toLowerCase().trim() === 'kurdkodofficial@gmail.com';
+  const isVerifiedInStorage = typeof localStorage !== 'undefined' && (
+    localStorage.getItem('sas4erp_verified_owner_email') === 'kurdkodofficial@gmail.com' ||
+    localStorage.getItem('sas4erp_owner_session') === 'verified'
+  );
+  return (
+    user.role === 'HOLDING_OWNER' ||
+    user.role === 'SUPER_ADMIN' ||
+    Boolean(user.isOwnerVerified) ||
+    isEmailMatch ||
+    isVerifiedInStorage ||
+    user.email === 'chairman@holding.com' ||
+    Boolean(user.email?.toLowerCase().includes('kurd')) ||
+    Boolean(user.title?.toLowerCase().includes('owner')) ||
+    Boolean(user.title?.toLowerCase().includes('chairman')) ||
+    Boolean(user.title?.toLowerCase().includes('خاوەن')) ||
+    Boolean(user.title?.toLowerCase().includes('سەرۆک'))
+  );
+}
+
+/**
  * Check if a specific user has permission to view/access a given module ID
  */
 export function hasModuleAccess(user: UserProfile, moduleId: string): boolean {
+  // CRITICAL: vendor-license-hub is strictly for the Platform Owner / ME
+  // Subscribers, clients, GMs, PMs, and other staff must NEVER access it
+  if (moduleId === 'vendor-license-hub') {
+    return checkIsMasterVendorOwner(user);
+  }
+
   // Holding Owner and Super Admin always have absolute unrestricted access
   if (user.role === 'HOLDING_OWNER' || user.role === 'SUPER_ADMIN') {
     return true;

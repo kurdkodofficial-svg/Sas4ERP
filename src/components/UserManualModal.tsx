@@ -48,7 +48,8 @@ import {
 import {
   generateWhyChooseSAS4ERPDocx,
   openWhyChooseSAS4ERPPdfView,
-  WHY_CHOOSE_POINTS
+  WHY_CHOOSE_POINTS,
+  COMPARISON_MATRIX
 } from '../utils/whyChooseSAS4ERPGenerator';
 
 interface UserManualModalProps {
@@ -466,6 +467,40 @@ export const UserManualModal: React.FC<UserManualModalProps> = ({
                     </span>
                   </div>
 
+                  {/* Dedicated Differentiators Box */}
+                  <div className="p-4 rounded-2xl bg-gradient-to-r from-amber-50 to-blue-50 border-2 border-amber-300 text-slate-900 shadow-2xs space-y-2">
+                    <h4 className="text-sm font-black text-amber-950 flex items-center gap-2">
+                      <Sparkles className="w-4 h-4 text-amber-600" />
+                      <span>★ خاڵە جیاکارییە سەرەکییەکانی SAS4ERP لەگەڵ سیستەمەکانی تر:</span>
+                    </h4>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-2 text-xs">
+                      <div className="bg-white/80 p-2.5 rounded-xl border border-amber-200">
+                        <span className="font-bold text-blue-900 block">١. ٣ زمانی هاوکات لە یەک سیستەمدا:</span>
+                        <span className="text-slate-600 text-[11px]">خاوەن هۆڵدینگ بە کوردی، ئەندازیار بە ئینگلیزی، بەڵێندەر بە عەرەبی لە هەمان کاتدا.</span>
+                      </div>
+                      <div className="bg-white/80 p-2.5 rounded-xl border border-amber-200">
+                        <span className="font-bold text-blue-900 block">٢. دروستبوونی خۆکارانەی ٩ بەش و کەمپ:</span>
+                        <span className="text-slate-600 text-[11px]">بە دانانی هەر کۆمپانیا یان پڕۆژەیەک، هەموو بەشەکانی دەستبەجێ بە سفر چرکە دروست دەبن.</span>
+                      </div>
+                      <div className="bg-white/80 p-2.5 rounded-xl border border-amber-200">
+                        <span className="font-bold text-blue-900 block">٣. گۆڕەری دوولایەنەی Word ⇄ PDF:</span>
+                        <span className="text-slate-600 text-[11px]">گۆڕینی خێرای وۆرد بۆ پی دی ئێف و بە پێچەوانەش لەناو سیستەم بە فۆنت و دەقی کوردی.</span>
+                      </div>
+                      <div className="bg-white/80 p-2.5 rounded-xl border border-amber-200">
+                        <span className="font-bold text-blue-900 block">٤. هاوردەکردنی Drag & Drop بێ دووبارە نووسینەوە:</span>
+                        <span className="text-slate-600 text-[11px]">فڕێدانی فایلەکانی Excel، PDF، Word ڕاستەوخۆ بۆ ناو بەشەکان بێ ماندووبوونی دووبارە نووسین.</span>
+                      </div>
+                      <div className="bg-white/80 p-2.5 rounded-xl border border-amber-200">
+                        <span className="font-bold text-blue-900 block">٥. دەستکاری تێبینی چەسپاو، پەسەندکردن و بودجەکان:</span>
+                        <span className="text-slate-600 text-[11px]">دەستکاریکردنی ڕاستەوخۆی Sticky Notes، واژۆی داواکارییە هەڵپەسێردراوەکان، و گۆڕینی ژمارەکانی بودجە.</span>
+                      </div>
+                      <div className="bg-white/80 p-2.5 rounded-xl border border-amber-200">
+                        <span className="font-bold text-blue-900 block">٦. ژیری دەستکرد AI Sentinel و دۆخی ئۆفلاین:</span>
+                        <span className="text-slate-600 text-[11px]">دۆزینەوەی فێڵی دارایی و پارچەکردنی کڕین لەگەڵ کارکردنی ١٠٠٪ بەردەوام بەبێ ئینتەرنێت.</span>
+                      </div>
+                    </div>
+                  </div>
+
                   {/* Module 1 */}
                   <div className="p-4 rounded-2xl bg-white border border-slate-200 shadow-2xs space-y-1.5">
                     <h4 className="text-sm font-extrabold text-blue-900 flex items-center gap-2">
@@ -590,6 +625,40 @@ export const UserManualModal: React.FC<UserManualModalProps> = ({
                     </span>
                   </div>
 
+                  {/* Strategic Differentiators Box (English) */}
+                  <div className="p-4 rounded-2xl bg-gradient-to-r from-amber-50 to-blue-50 border-2 border-amber-300 text-slate-900 shadow-2xs space-y-2">
+                    <h4 className="text-sm font-black text-amber-950 flex items-center gap-2">
+                      <Sparkles className="w-4 h-4 text-amber-600" />
+                      <span>★ Core Strategic Differentiators vs SAP, Oracle, and Odoo:</span>
+                    </h4>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-2 text-xs">
+                      <div className="bg-white/80 p-2.5 rounded-xl border border-amber-200">
+                        <span className="font-bold text-blue-900 block">1. Native Trilingual Simultaneous Operation:</span>
+                        <span className="text-slate-600 text-[11px]">Kurdish, English, and Arabic users interact against unified real-time ledgers.</span>
+                      </div>
+                      <div className="bg-white/80 p-2.5 rounded-xl border border-amber-200">
+                        <span className="font-bold text-blue-900 block">2. Automated 0-Second Entity Provisioning:</span>
+                        <span className="text-slate-600 text-[11px]">Creating any subsidiary automatically provisions 9 operational departments and camp dorms.</span>
+                      </div>
+                      <div className="bg-white/80 p-2.5 rounded-xl border border-amber-200">
+                        <span className="font-bold text-blue-900 block">3. Bi-Directional Word ⇄ PDF Converter:</span>
+                        <span className="text-slate-600 text-[11px]">Direct conversion between Word and PDF in-browser with zero formatting corruption.</span>
+                      </div>
+                      <div className="bg-white/80 p-2.5 rounded-xl border border-amber-200">
+                        <span className="font-bold text-blue-900 block">4. Universal Drag & Drop Zero-Retyping:</span>
+                        <span className="text-slate-600 text-[11px]">Drop Excel sheets, PDFs, and invoices straight into department hubs.</span>
+                      </div>
+                      <div className="bg-white/80 p-2.5 rounded-xl border border-amber-200">
+                        <span className="font-bold text-blue-900 block">5. Live Notes, Approvals & Budget Editing:</span>
+                        <span className="text-slate-600 text-[11px]">In-place modification for executive sticky notes, pending approvals, and budget allocations.</span>
+                      </div>
+                      <div className="bg-white/80 p-2.5 rounded-xl border border-amber-200">
+                        <span className="font-bold text-blue-900 block">6. AI Sentinel & True Offline-First PWA:</span>
+                        <span className="text-slate-600 text-[11px]">Active anti-fraud monitoring with 100% functionality on remote project sites.</span>
+                      </div>
+                    </div>
+                  </div>
+
                   <div className="p-4 rounded-2xl bg-white border border-slate-200 shadow-2xs space-y-1">
                     <h4 className="text-sm font-extrabold text-blue-900">1. Licensing Model, 14-Day Free Trial & Hardware Fingerprint Lock</h4>
                     <p className="text-slate-600 text-xs">14-day free trial on initial deployment. Permanent operation binds cryptographically to device hardware identifiers.</p>
@@ -623,6 +692,40 @@ export const UserManualModal: React.FC<UserManualModalProps> = ({
                     <span className="px-2.5 py-1 rounded-full bg-emerald-200 text-emerald-900 font-bold text-xs font-mono">
                       ٢١ قسماً
                     </span>
+                  </div>
+
+                  {/* Strategic Differentiators Box (Arabic) */}
+                  <div className="p-4 rounded-2xl bg-gradient-to-r from-amber-50 to-blue-50 border-2 border-amber-300 text-slate-900 shadow-2xs space-y-2">
+                    <h4 className="text-sm font-black text-amber-950 flex items-center gap-2">
+                      <Sparkles className="w-4 h-4 text-amber-600" />
+                      <span>★ الخصائص الاستراتيجية الحصرية لمنظومة SAS4ERP مقارنة بالأنظمة الأخرى:</span>
+                    </h4>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-2 text-xs">
+                      <div className="bg-white/80 p-2.5 rounded-xl border border-amber-200">
+                        <span className="font-bold text-blue-900 block">١. ٣ لغات متزامنة في نظام واحد:</span>
+                        <span className="text-slate-600 text-[11px]">مالك الهولدينغ بالكردية، المهندسون بالإنجليزية، والشركاء بالعربية لحظياً.</span>
+                      </div>
+                      <div className="bg-white/80 p-2.5 rounded-xl border border-amber-200">
+                        <span className="font-bold text-blue-900 block">٢. التوليد التلقائي لـ ٩ أقسام وسكن العمال:</span>
+                        <span className="text-slate-600 text-[11px]">إنشاء تلقائي فوري لكافة الأقسام والمجمعات السكنية لكل شركة أو مشروع.</span>
+                      </div>
+                      <div className="bg-white/80 p-2.5 rounded-xl border border-amber-200">
+                        <span className="font-bold text-blue-900 block">٣. محوّل المستندات المزدوج (Word ⇄ PDF):</span>
+                        <span className="text-slate-600 text-[11px]">تحويل مباشر بين Word و PDF دون الإخلال بتنسيقات اللغة العربية والكردية.</span>
+                      </div>
+                      <div className="bg-white/80 p-2.5 rounded-xl border border-amber-200">
+                        <span className="font-bold text-blue-900 block">٤. استيراد الملفات بالسحب والإفلات (Drag & Drop):</span>
+                        <span className="text-slate-600 text-[11px]">توفير الوقت عبر سحب وإفلات ملفات Excel و Word و PDF دون إعادة كتابة يدوية.</span>
+                      </div>
+                      <div className="bg-white/80 p-2.5 rounded-xl border border-amber-200">
+                        <span className="font-bold text-blue-900 block">٥. التعديل المباشر للملاحظات والموافقات والميزانيات:</span>
+                        <span className="text-slate-600 text-[11px]">مرونة تحرير Sticky Notes والموافقات المعلقة وتحديث أرقام الميزانيات فورياً.</span>
+                      </div>
+                      <div className="bg-white/80 p-2.5 rounded-xl border border-amber-200">
+                        <span className="font-bold text-blue-900 block">٦. رادار الذكاء الاصطناعي والتشغيل دون إنترنت:</span>
+                        <span className="text-slate-600 text-[11px]">كشف الاحتيال وتجزئة المشتريات مع استمرارية العمل الميداني ١٠٠٪ في الظروف المنقطعة.</span>
+                      </div>
+                    </div>
                   </div>
 
                   <div className="p-4 rounded-2xl bg-white border border-slate-200 shadow-2xs space-y-1">
@@ -767,7 +870,7 @@ export const UserManualModal: React.FC<UserManualModalProps> = ({
             {/* Quick Language Toggle for "Why Choose" */}
             <div className="flex items-center justify-between border-b border-slate-200 pb-3">
               <span className="text-xs font-bold text-slate-700">
-                {language === 'ku' ? '١٢ خاڵی جیاکەرەوە و هۆکاری سەرەکی:' : '12 Core Strategic Differentiators:'}
+                {language === 'ku' ? '١٤ خاڵی جیاکەرەوە و هۆکاری سەرەکی:' : '14 Core Strategic Differentiators:'}
               </span>
               <div className="flex items-center gap-1 bg-slate-100 p-1 rounded-xl">
                 <button
@@ -834,6 +937,72 @@ export const UserManualModal: React.FC<UserManualModalProps> = ({
                   </div>
                 </div>
               ))}
+            </div>
+
+            {/* DIRECT SYSTEM COMPARISON TABLE (SAS4ERP vs SAP / Odoo / Oracle) */}
+            <div className="bg-slate-50 border border-slate-200 rounded-3xl p-5 space-y-4">
+              <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 border-b border-slate-200 pb-3">
+                <div className="flex items-center gap-2">
+                  <span className="p-1.5 rounded-xl bg-blue-100 text-blue-800">
+                    <Sparkles className="w-4 h-4" />
+                  </span>
+                  <div>
+                    <h5 className="font-black text-sm text-slate-900">
+                      {language === 'ku'
+                        ? 'خشتەی بەراوردی فەرمی: SAS4ERP بەرامبەر سیستەمەکانی تر (SAP, Oracle, Odoo)'
+                        : 'Official Comparative Matrix: SAS4ERP vs Other ERPs (SAP, Oracle, Odoo)'}
+                    </h5>
+                    <p className="text-[11px] text-slate-500">
+                      {language === 'ku'
+                        ? 'بۆچی کۆمپانیا و هۆڵدینگەکان SAS4ERP هەڵدەبژێرن لەباتی سیستەمە گرانبەها و ئاڵۆزەکانی دەرەوە؟'
+                        : 'Why enterprise holdings choose SAS4ERP over legacy and expensive Western solutions'}
+                    </p>
+                  </div>
+                </div>
+                <span className="text-[10px] font-black px-2.5 py-1 rounded-full bg-blue-600 text-white font-mono">
+                  100% Tailored for Holdings
+                </span>
+              </div>
+
+              <div className="overflow-x-auto">
+                <table className="w-full text-left text-xs border-collapse">
+                  <thead>
+                    <tr className="border-b border-slate-300 bg-slate-100 text-slate-700">
+                      <th className="p-3 font-extrabold w-1/4">
+                        {language === 'ku' ? 'تایبەتمەندی / بوار' : 'Feature / Dimension'}
+                      </th>
+                      <th className="p-3 font-extrabold bg-blue-600 text-white w-5/12 rounded-t-xl">
+                        ★ SAS4ERP Enterprise
+                      </th>
+                      <th className="p-3 font-extrabold text-slate-500 w-1/3">
+                        {language === 'ku' ? 'سیستەمەکانی تر (SAP / Odoo / Oracle)' : 'Other ERPs (SAP, Odoo, Oracle)'}
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-200 bg-white">
+                    {COMPARISON_MATRIX.map((row, idx) => (
+                      <tr key={idx} className="hover:bg-slate-50 transition">
+                        <td className="p-3 font-bold text-slate-900 bg-slate-50/50">
+                          <div>{activeTabLang === 'en' ? row.featureEn : activeTabLang === 'ar' ? row.featureAr : row.featureKu}</div>
+                          <span className="text-[10px] text-slate-400 font-normal">{row.featureEn}</span>
+                        </td>
+                        <td className="p-3 bg-blue-50/70 border-x border-blue-100 text-blue-950">
+                          <div className="flex items-start gap-1.5 font-bold">
+                            <span className="text-emerald-600 font-black text-sm leading-none shrink-0">✓</span>
+                            <span>{activeTabLang === 'en' ? row.sas4erpEn : row.sas4erpKu}</span>
+                          </div>
+                        </td>
+                        <td className="p-3 text-slate-500">
+                          <div className="flex items-start gap-1.5">
+                            <span className="text-rose-500 font-bold shrink-0">✗</span>
+                            <span>{activeTabLang === 'en' ? row.othersEn : row.othersKu}</span>
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
             </div>
 
             {/* Bottom Action Footer for Why Choose */}

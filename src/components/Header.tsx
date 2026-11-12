@@ -31,17 +31,25 @@ import {
   Lock,
   Unlock,
   Menu,
-  X
+  X,
+  Send,
+  Maximize2,
+  Boxes,
+  Wallet,
+  Download
 } from 'lucide-react';
 import { useERP } from '../context/ERPContext';
 import { useLanguage } from '../context/LanguageContext';
 import { Language, UserProfile } from '../types/erp';
 import { HoldingMeshSyncHubModal } from './dashboard/HoldingMeshSyncHubModal';
-import { UserManualModal } from './UserManualModal';
+import { ManagerFileDropdown } from './ManagerFileDropdown';
 import { LicenseActivationModal } from './LicenseActivationModal';
+import { OwnerVerificationModal } from './OwnerVerificationModal';
 import { PWAInstallButton } from './common/PWAInstallButton';
 import { getStoredSystemLicense, SystemLicenseInfo, getRemainingTrialDays } from '../utils/licenseManager';
 import { getUIText } from '../utils/langHelper';
+import { KelegramApp } from './kelegram/KelegramApp';
+import { checkIsMasterVendorOwner } from '../utils/rbacPermissions';
 
 export const Header: React.FC = () => {
   const {
@@ -64,6 +72,7 @@ export const Header: React.FC = () => {
     setIsHoldingSetupOpen,
     setIsUserRolesModalOpen,
     startCallWithManager,
+    activeTab,
     setActiveTab,
     searchQuery,
     setSearchQuery,
@@ -79,6 +88,14 @@ export const Header: React.FC = () => {
     setIsMobileMenuOpen,
     isUserManualOpen,
     setIsUserManualOpen,
+    isLicenseModalOpen,
+    setIsLicenseModalOpen,
+    licenseModalInitialTab,
+    openLicenseModal,
+    isOwnerVerifyModalOpen,
+    setIsOwnerVerifyModalOpen,
+    systemLicense,
+    setSystemLicense,
   } = useERP();
 
   const { language, setLanguage, userNativeLanguage, setUserNativeLanguage, t, isRtl } = useLanguage();
@@ -87,8 +104,7 @@ export const Header: React.FC = () => {
   const [isLangMenuOpen, setIsLangMenuOpen] = useState(false);
   const [isNotifOpen, setIsNotifOpen] = useState(false);
   const [isMeshHubOpen, setIsMeshHubOpen] = useState(false);
-  const [isLicenseModalOpen, setIsLicenseModalOpen] = useState(false);
-  const [systemLicense, setSystemLicense] = useState<SystemLicenseInfo>(() => getStoredSystemLicense());
+  const [isKelegramQuickOpen, setIsKelegramQuickOpen] = useState(false);
   const [isOnline, setIsOnline] = useState(typeof navigator !== 'undefined' ? navigator.onLine : true);
 
   useEffect(() => {
@@ -105,18 +121,26 @@ export const Header: React.FC = () => {
   const pendingApprovalsCount = purchaseOrders.filter(p => p.status === 'PENDING_OWNER_APPROVAL').length;
   
   // Targeted notification filtering:
-  // The holding owner does NOT receive operational budget threshold alerts; those are strictly for Project Managers and Company GMs
+  // Shows notifications relevant to the active role (Warehouse, Finance, PM/GM, Owner)
   const visibleNotifications = notifications.filter(notif => {
+    if (currentUser.role === 'SUPER_ADMIN') return true;
     if (currentUser.role === 'HOLDING_OWNER') {
-      return notif.type !== 'BUDGET_THRESHOLD_ALERT';
+      if (notif.type === 'BUDGET_THRESHOLD_ALERT' && notif.targetRole !== 'HOLDING_OWNER') return false;
+      return notif.targetRole === 'HOLDING_OWNER' || !notif.targetRole;
+    }
+    if (currentUser.role === 'WAREHOUSE_OFFICER') {
+      return notif.targetRole === 'WAREHOUSE_OFFICER' || notif.type === 'GATE_ALERT' || !notif.targetRole;
+    }
+    if (currentUser.role === 'FINANCE_HEAD') {
+      return notif.targetRole === 'FINANCE_HEAD' || notif.type === 'BUDGET_THRESHOLD_ALERT' || notif.type === 'FINANCE_ENTRY' || !notif.targetRole;
     }
     if (currentUser.role === 'PROJECT_MANAGER') {
-      return notif.targetRole === 'PROJECT_MANAGER' || !notif.targetRole;
+      return notif.targetRole === 'PROJECT_MANAGER' || notif.type === 'PROJECT_ALERT' || notif.type === 'GATE_ALERT' || !notif.targetRole;
     }
     if (currentUser.role === 'COMPANY_GM') {
-      return notif.targetRole === 'COMPANY_GM' || notif.targetRole === 'PROJECT_MANAGER' || !notif.targetRole;
+      return notif.targetRole === 'COMPANY_GM' || notif.targetRole === 'PROJECT_MANAGER' || notif.type === 'PROJECT_ALERT' || notif.type === 'GATE_ALERT' || !notif.targetRole;
     }
-    return true;
+    return notif.targetRole === currentUser.role || !notif.targetRole;
   });
 
   const unreadNotifsCount = visibleNotifications.filter(n => !n.isRead).length;
@@ -131,6 +155,8 @@ export const Header: React.FC = () => {
     : language === 'ar' && holding.nameAr
       ? holding.nameAr
       : holding.name;
+
+  const isMasterVendorOwner = checkIsMasterVendorOwner(currentUser);
 
   return (
     <header className="sticky top-0 z-40 bg-white/95 backdrop-blur-md border-b border-slate-200/90 text-slate-800 shadow-xs">
@@ -294,6 +320,61 @@ export const Header: React.FC = () => {
             <span className="hidden md:inline">{t('navVirtualMeetings')}</span>
           </button>
 
+          {/* Kelegram (کەڵەگرام) Telegram Recreation Header Launcher */}
+          <div className="relative">
+            <button
+              onClick={() => setIsKelegramQuickOpen(prev => !prev)}
+              className="flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 rounded-xl text-xs font-bold bg-[#2AABEE] hover:bg-[#229ED9] text-white shadow-sm transition transform active:scale-95 cursor-pointer relative"
+              id="header-kelegram-quick-btn"
+              title={getUIText(language, {
+                en: 'Kelegram (کەڵەگرام) - Enterprise Telegram Recreation (Voice notes, channels, groups & bots)',
+                ku: 'کەڵەگرام - تەلەگرامی ناوخۆیی هۆلدینگ بە تەواوی تایبەتمەندی دەنگ، کەناڵ، گروپ و بۆت',
+                ar: 'كَلَغرام (Kelegram) - تطبيق التلغرام المؤسسي المتكامل'
+              })}
+            >
+              <div className="w-4 h-4 flex items-center justify-center">
+                <Send className="w-3.5 h-3.5 -rotate-45 -translate-y-0.5 translate-x-0.5 text-white" />
+              </div>
+              <span className="font-extrabold tracking-wide">
+                {language === 'ku' ? 'کەڵەگرام' : language === 'ar' ? 'كَلَغرام' : 'Kelegram'}
+              </span>
+              <span className="w-2 h-2 rounded-full bg-emerald-300 absolute -top-0.5 -right-0.5 border border-white" />
+              <span className="bg-white/25 text-white text-[9px] px-1.5 py-0.2 rounded-full font-black">
+                3
+              </span>
+            </button>
+
+            {/* Quick Telegram Floating Window from Header */}
+            {isKelegramQuickOpen && (
+              <div
+                className="fixed inset-4 sm:inset-auto sm:top-14 sm:right-6 sm:w-[760px] sm:max-w-[calc(100vw-3rem)] z-50 shadow-2xl rounded-3xl animate-in zoom-in-95 duration-200"
+              >
+                <div className="relative">
+                  {/* Maximize to full page button */}
+                  <div className="absolute top-2.5 right-12 z-50 flex items-center gap-1">
+                    <button
+                      onClick={() => {
+                        setIsKelegramQuickOpen(false);
+                        setActiveTab('direct-comms');
+                      }}
+                      className="p-1 rounded-lg bg-white/20 hover:bg-white/40 text-white transition text-xs flex items-center gap-1 font-bold px-2 cursor-pointer"
+                      title="Open Full Screen Workspace"
+                    >
+                      <Maximize2 className="w-3.5 h-3.5" />
+                      <span className="text-[10px] hidden sm:inline">
+                        {language === 'ku' ? 'تەواوی شاشە' : 'Full Screen'}
+                      </span>
+                    </button>
+                  </div>
+                  <KelegramApp
+                    isCompactMode={true}
+                    onClose={() => setIsKelegramQuickOpen(false)}
+                  />
+                </div>
+              </div>
+            )}
+          </div>
+
           {/* Electronic Signature Studio Header Trigger */}
           <button
             onClick={() => setIsSignatureModalOpen(true)}
@@ -414,73 +495,142 @@ export const Header: React.FC = () => {
             )}
           </button>
 
-          {/* Trilingual User Manual (Word .docx) Button */}
-          <button
-            onClick={() => setIsUserManualOpen(true)}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold bg-gradient-to-r from-blue-700 to-indigo-700 hover:from-blue-800 hover:to-indigo-800 text-white border border-blue-600 transition cursor-pointer shadow-sm shadow-blue-700/20"
-            id="user-manual-word-btn"
-            title={
-              language === 'ku'
-                ? 'ڕێبەری فەرمی و گۆڕەری دوولایەنەی دۆکیومێنت (Word ⇄ PDF)'
-                : language === 'ar'
-                ? 'دليل الاستخدام الشامل ومحوّل المستندات (Word ⇄ PDF)'
-                : 'User Manual & Two-Way Document Converter (Word ⇄ PDF)'
-            }
-          >
-            <FileText className="w-3.5 h-3.5 text-blue-200" />
-            <span className="hidden sm:inline">
-              {language === 'ku' ? 'ڕێبەری سیستەم و گۆڕەر' : language === 'ar' ? 'دليل النظام والمحوّل' : 'Manual & Converter'}
-            </span>
-            <span className="text-[9px] px-1.5 py-0.2 rounded-full bg-amber-400 text-slate-950 font-mono font-black">
-              Word ⇄ PDF
-            </span>
-          </button>
+          {/* Executive Manager File (فایلی بەڕێوەبەر) Dropdown - Exclusively for Managers & Holding Owner */}
+          <ManagerFileDropdown
+            isOpen={isUserManualOpen}
+            onToggle={() => setIsUserManualOpen(prev => !prev)}
+            onClose={() => setIsUserManualOpen(false)}
+          />
 
           {/* In-App PWA Install Button */}
           <PWAInstallButton />
 
+          {/* Direct Full Source Code ZIP Download Button */}
+          <a
+            href="/api/export-codebase-zip"
+            download="SAS4ERP-Full-Source-Code.zip"
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-black bg-slate-900 hover:bg-slate-800 text-white border border-slate-700 shadow-sm transition transform active:scale-95 cursor-pointer shrink-0"
+            id="download-source-code-header-btn"
+            title={getUIText(language, {
+              en: 'Download Complete Source Code (ZIP Archive)',
+              ku: 'داگرتنی تەواوی کۆدەکانی سیستم بە فایلی ZIP',
+              ar: 'تحميل كامل الكود المصدري بصيغة ZIP'
+            })}
+          >
+            <Download className="w-3.5 h-3.5 text-emerald-400" />
+            <span className="hidden sm:inline font-bold">
+              {language === 'ku' ? 'داگرتنی کۆدەکان' : language === 'ar' ? 'تحميل الكود' : 'Download Code'}
+            </span>
+            <span className="text-[9px] bg-emerald-500/20 text-emerald-300 px-1.5 py-0.2 rounded font-mono font-black border border-emerald-500/30">
+              ZIP
+            </span>
+          </a>
+
+          {/* Dual-System Switcher (Strictly for Platform Owner - completely hidden from client subscribers) */}
+          {isMasterVendorOwner && (
+            <div className="flex items-center bg-slate-100/90 p-1 rounded-2xl border border-slate-200 gap-1 shadow-2xs">
+              <button
+                onClick={() => setActiveTab('holding-dashboard')}
+                className={`px-2.5 sm:px-3 py-1.5 rounded-xl text-xs font-black transition flex items-center gap-1.5 cursor-pointer ${
+                  activeTab !== 'vendor-license-hub'
+                    ? 'bg-white text-slate-900 shadow-sm border border-slate-200'
+                    : 'text-slate-600 hover:text-slate-900'
+                }`}
+                id="header-switch-to-erp-btn"
+                title={language === 'ku' ? 'سیستەمی هۆڵدینگ و بەشداربووان (ERP)' : 'Client ERP System'}
+              >
+                <Building2 className="w-3.5 h-3.5 text-blue-600 shrink-0" />
+                <span className="hidden sm:inline">{language === 'ku' ? '🏢 هۆڵدینگ (کڕیار)' : '🏢 Client ERP'}</span>
+              </button>
+
+              <button
+                onClick={() => setActiveTab('vendor-license-hub')}
+                className={`px-2.5 sm:px-3 py-1.5 rounded-xl text-xs font-black transition flex items-center gap-1.5 cursor-pointer ${
+                  activeTab === 'vendor-license-hub'
+                    ? 'bg-gradient-to-r from-amber-500 to-amber-600 text-slate-950 shadow-md ring-1 ring-amber-400'
+                    : 'text-amber-900 hover:text-amber-950 font-bold bg-amber-50/80 hover:bg-amber-100'
+                }`}
+                id="header-switch-to-vendor-btn"
+                title={language === 'ku' ? 'پۆڕتاڵی خاوەنی سەکۆ: دروستکردن و نوێکردنەوەی لایسنسی کڕیاران' : 'Owner Vendor License Hub'}
+              >
+                <Crown className="w-3.5 h-3.5 text-amber-700 animate-pulse shrink-0" />
+                <span className="inline">{language === 'ku' ? '👑 لایسنس (خاوەن)' : '👑 Vendor Hub'}</span>
+              </button>
+            </div>
+          )}
+
+          {/* Platform Owner OTP Verification Button */}
+          <button
+            onClick={() => setIsOwnerVerifyModalOpen(true)}
+            id="header-owner-verify-btn"
+            className={`flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 rounded-xl text-xs font-black transition cursor-pointer border shadow-2xs ${
+              currentUser?.isOwnerVerified || (typeof localStorage !== 'undefined' && localStorage.getItem('sas4erp_owner_session') === 'verified')
+                ? 'bg-amber-500/15 text-amber-900 border-amber-300 hover:bg-amber-500/25'
+                : 'bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700 text-slate-950 border-amber-400 shadow-md animate-pulse'
+            }`}
+            title={language === 'ku' ? 'مسۆگەرکردنی خاوەنی سەکۆ بە ئیمەیلی kurdkodofficial@gmail.com' : 'Verify Platform Owner with kurdkodofficial@gmail.com'}
+          >
+            <Crown className="w-3.5 h-3.5 text-amber-700 shrink-0" />
+            <span className="hidden sm:inline">
+              {currentUser?.isOwnerVerified || (typeof localStorage !== 'undefined' && localStorage.getItem('sas4erp_owner_session') === 'verified')
+                ? (language === 'ku' ? 'خاوەنی مسۆگەرکراو ✓' : 'Verified Owner ✓')
+                : (language === 'ku' ? 'مسۆگەرکردنی خاوەن' : 'Owner OTP Verify')}
+            </span>
+            <span className="sm:hidden">
+              {language === 'ku' ? 'خاوەن' : 'Owner'}
+            </span>
+          </button>
+
           {/* System License & Hardware Lock Status Button */}
           <button
-            onClick={() => setIsLicenseModalOpen(true)}
+            onClick={() => openLicenseModal(isMasterVendorOwner ? 'generator' : 'activate')}
             className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl text-xs font-bold border transition cursor-pointer shadow-2xs ${
-              systemLicense.licenseType === 'VIP_OWNER_GIFT'
+              systemLicense?.licenseType === 'VIP_OWNER_GIFT'
                 ? 'bg-amber-50 text-amber-900 border-amber-300 hover:bg-amber-100 ring-1 ring-amber-400/40'
-                : systemLicense.licenseType === 'COMMERCIAL_ACTIVE'
+                : systemLicense?.licenseType === 'COMMERCIAL_ACTIVE'
                 ? 'bg-emerald-50 text-emerald-900 border-emerald-300 hover:bg-emerald-100'
-                : systemLicense.licenseType === 'EXPIRED'
+                : systemLicense?.licenseType === 'EXPIRED'
                 ? 'bg-rose-100 text-rose-900 border-rose-400 hover:bg-rose-200 animate-pulse'
                 : 'bg-indigo-50 text-indigo-900 border-indigo-200 hover:bg-indigo-100'
             }`}
             id="system-license-header-btn"
             title={
               language === 'ku'
-                ? `سیستەمی لایسنس و بەستنەوە بە کلیل - باری ئێستا: ${systemLicense.licenseType}`
-                : `System License & Hardware Lock: ${systemLicense.licenseType}`
+                ? `سیستەمی لایسنس و بەستنەوە بە کلیل - باری ئێستا: ${systemLicense?.licenseType || 'TRIAL_14D'}`
+                : `System License & Hardware Lock: ${systemLicense?.licenseType || 'TRIAL_14D'}`
             }
           >
-            {systemLicense.licenseType === 'VIP_OWNER_GIFT' ? (
-              <Crown className="w-3.5 h-3.5 text-amber-600" />
-            ) : systemLicense.licenseType === 'COMMERCIAL_ACTIVE' ? (
-              <ShieldCheck className="w-3.5 h-3.5 text-emerald-600" />
-            ) : systemLicense.licenseType === 'EXPIRED' ? (
-              <AlertTriangle className="w-3.5 h-3.5 text-rose-600" />
-            ) : (
-              <Key className="w-3.5 h-3.5 text-indigo-600" />
-            )}
+            <div className="flex items-center gap-1.5">
+              <div className="w-6 h-6 rounded-lg bg-amber-400/20 text-amber-600 flex items-center justify-center shrink-0">
+                {systemLicense?.licenseType === 'VIP_OWNER_GIFT' ? (
+                  <Crown className="w-3.5 h-3.5 text-amber-600" />
+                ) : systemLicense?.licenseType === 'COMMERCIAL_ACTIVE' ? (
+                  <ShieldCheck className="w-3.5 h-3.5 text-emerald-600" />
+                ) : systemLicense?.licenseType === 'EXPIRED' ? (
+                  <AlertTriangle className="w-3.5 h-3.5 text-rose-600" />
+                ) : (
+                  <Key className="w-3.5 h-3.5 text-indigo-600" />
+                )}
+              </div>
 
-            <span className="hidden lg:inline">
-              {systemLicense.licenseType === 'VIP_OWNER_GIFT'
-                ? (language === 'ku' ? 'VIP (خاوەن)' : 'VIP Gift')
-                : systemLicense.licenseType === 'COMMERCIAL_ACTIVE'
-                ? (language === 'ku' ? 'مۆڵەتی بازرگانی' : 'Enterprise')
-                : systemLicense.licenseType === 'EXPIRED'
-                ? (language === 'ku' ? 'بەسەرچووە' : 'Expired')
-                : (language === 'ku' ? `تاقیکردنەوە (${getRemainingTrialDays(systemLicense.expiresAt)} ڕۆژ)` : `Trial (${getRemainingTrialDays(systemLicense.expiresAt)}d)`)}
-            </span>
-
-            {systemLicense.isPerpetual && (
-              <span className="w-1.5 h-1.5 rounded-full bg-amber-500 inline-block animate-ping" />
-            )}
+              <div className="flex flex-col items-start text-right leading-none">
+                <span className="font-black text-[11px] text-slate-900 flex items-center gap-1">
+                  <span>{language === 'ku' ? 'کلیلی لایسنس' : language === 'ar' ? 'مفتاح الترخيص' : 'License Key'}</span>
+                  {systemLicense?.isPerpetual && (
+                    <span className="w-1.5 h-1.5 rounded-full bg-amber-500 inline-block animate-ping" />
+                  )}
+                </span>
+                <span className="text-[9px] font-bold text-slate-500 mt-0.5 font-mono">
+                  {systemLicense?.licenseType === 'VIP_OWNER_GIFT'
+                    ? (language === 'ku' ? 'VIP هەمیشەیی' : 'VIP Gift')
+                    : systemLicense?.licenseType === 'COMMERCIAL_ACTIVE'
+                    ? (language === 'ku' ? 'مۆڵەتی بازرگانی' : 'Enterprise')
+                    : systemLicense?.licenseType === 'EXPIRED'
+                    ? (language === 'ku' ? 'بەسەرچووە' : 'Expired')
+                    : (language === 'ku' ? `تاقیکردنەوە (${getRemainingTrialDays(systemLicense?.expiresAt || '')} ڕۆژ)` : `Trial (${getRemainingTrialDays(systemLicense?.expiresAt || '')}d)`)}
+                </span>
+              </div>
+            </div>
           </button>
 
           {/* Language Switcher Dropdown */}
@@ -606,6 +756,8 @@ export const Header: React.FC = () => {
                       >
                       <div className="flex items-start gap-2">
                         {notif.type === 'GATE_ALERT' && <ScanLine className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />}
+                        {notif.type === 'PROJECT_ALERT' && <Building2 className="w-4 h-4 text-purple-600 shrink-0 mt-0.5" />}
+                        {notif.type === 'FINANCE_ENTRY' && <Wallet className="w-4 h-4 text-indigo-600 shrink-0 mt-0.5" />}
                         {notif.type === 'OWNER_APPROVAL_REQUIRED' && <Crown className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />}
                         {notif.type === 'EXPIRY_WARNING' && <AlertTriangle className="w-4 h-4 text-rose-600 shrink-0 mt-0.5" />}
                         {notif.type === 'BUDGET_THRESHOLD_ALERT' && <Sparkles className="w-4 h-4 text-blue-600 shrink-0 mt-0.5 animate-pulse" />}
@@ -678,6 +830,58 @@ export const Header: React.FC = () => {
 
             {isUserMenuOpen && (
               <div className="absolute right-0 mt-2 w-72 bg-white border border-slate-200 rounded-2xl shadow-xl p-3 z-50">
+                {isMasterVendorOwner && (
+                  <button
+                    onClick={() => {
+                      setActiveTab('vendor-license-hub');
+                      setIsUserMenuOpen(false);
+                    }}
+                    className="w-full flex items-center justify-between p-2.5 rounded-xl text-xs font-black bg-gradient-to-r from-amber-500 via-amber-600 to-yellow-500 hover:from-amber-400 hover:to-yellow-400 text-slate-950 shadow-md transition cursor-pointer mb-2.5 border border-amber-300 transform active:scale-95"
+                  >
+                    <span className="flex items-center gap-2">
+                      <Crown className="w-4 h-4 text-slate-950 animate-pulse" />
+                      <span>{language === 'ku' ? '👑 پۆڕتاڵی لایسنس (سیستەمی ٢)' : '👑 Platform Owner Vendor Hub'}</span>
+                    </span>
+                    <span className="text-[10px] px-1.5 py-0.5 rounded bg-slate-950 text-amber-400 font-mono font-bold">OWNER</span>
+                  </button>
+                )}
+
+                {/* Platform Owner Status / Verification Card */}
+                <div className="mb-2 p-2.5 rounded-xl border border-amber-200 bg-amber-50/70 text-xs">
+                  <div className="flex items-center justify-between mb-1">
+                    <span className="font-black text-amber-950 flex items-center gap-1">
+                      <Crown className="w-3.5 h-3.5 text-amber-600" />
+                      <span>{language === 'ku' ? 'خاوەنی سەکۆ' : 'Platform Owner'}</span>
+                    </span>
+                    {currentUser?.isOwnerVerified || (typeof localStorage !== 'undefined' && localStorage.getItem('sas4erp_owner_session') === 'verified') ? (
+                      <span className="text-[10px] bg-emerald-100 text-emerald-800 px-1.5 py-0.2 rounded font-bold">
+                        {language === 'ku' ? 'مسۆگەرکراوە ✓' : 'Verified ✓'}
+                      </span>
+                    ) : (
+                      <span className="text-[10px] bg-amber-200 text-amber-900 px-1.5 py-0.2 rounded font-bold">
+                        {language === 'ku' ? 'نەسەلمێنراوە' : 'Unverified'}
+                      </span>
+                    )}
+                  </div>
+                  <div className="text-[10px] text-slate-600 font-mono mb-2 truncate">
+                    kurdkodofficial@gmail.com
+                  </div>
+                  <button
+                    onClick={() => {
+                      setIsUserMenuOpen(false);
+                      setIsOwnerVerifyModalOpen(true);
+                    }}
+                    className="w-full py-1.5 px-2 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700 text-slate-950 font-black rounded-lg text-[11px] shadow-sm transition flex items-center justify-center gap-1 cursor-pointer"
+                  >
+                    <Key className="w-3 h-3" />
+                    <span>
+                      {currentUser?.isOwnerVerified || (typeof localStorage !== 'undefined' && localStorage.getItem('sas4erp_owner_session') === 'verified')
+                        ? (language === 'ku' ? 'نوێکردنەوەی مسۆگەرکردن' : 'Re-verify / Status')
+                        : (language === 'ku' ? 'مسۆگەرکردن بە کۆدی ژمارەیی' : 'Verify via Numeric OTP')}
+                    </span>
+                  </button>
+                </div>
+
                 <div className="px-2 py-1 text-xs font-bold text-slate-400 uppercase tracking-wider mb-2 border-b border-slate-100">
                   Switch Active Role Persona (Testing)
                 </div>
@@ -742,18 +946,10 @@ export const Header: React.FC = () => {
         onClose={() => setIsMeshHubOpen(false)}
       />
 
-      {/* Trilingual User Manual (Word .docx) Modal */}
-      <UserManualModal
-        isOpen={isUserManualOpen}
-        onClose={() => setIsUserManualOpen(false)}
-      />
-
-      {/* System License & Hardware Lock Activation Modal */}
-      <LicenseActivationModal
-        isOpen={isLicenseModalOpen}
-        onClose={() => setIsLicenseModalOpen(false)}
-        license={systemLicense}
-        onLicenseUpdated={(updated) => setSystemLicense(updated)}
+      {/* Platform Owner OTP Verification Modal */}
+      <OwnerVerificationModal
+        isOpen={isOwnerVerifyModalOpen}
+        onClose={() => setIsOwnerVerifyModalOpen(false)}
       />
     </header>
   );

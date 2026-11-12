@@ -26,59 +26,68 @@ export const defaultHoldingThresholdPolicy: HoldingThresholdPolicy = {
 export const defaultWorkflowRules: ApprovalChainRule[] = [
   {
     id: 'rule-std-procurement',
-    nameEn: 'Standard Procurement & Materials Chain',
-    nameKu: 'زنجیرەی پەسەندکردنی کڕینی گشتی و کەرەستە',
-    nameAr: 'سلسلة اعتمادات المشتريات والمواد العامة',
-    descriptionEn: 'Automated 4-tier procurement gatekeeper. Requisitions above $5,000 escalate to Holding Owner.',
-    descriptionKu: 'دەروازەی ٤ قۆناغی کڕین؛ داواکاری سەرووی ٥,٠٠٠ دۆلار پێویستی بە واژۆی فەرمی خاوەن هۆلدینگ دەبێت.',
-    descriptionAr: 'بوابة مشتريات رباعية المراحل؛ الطلبات فوق 5,000 دولار تتطلب توقيع مالك المجموعة.',
+    nameEn: 'Automated Procurement & Supply Chain Governance',
+    nameKu: 'زنجیرەی خۆکارانەی پەسەندکردنی کڕین و کەرەستەکان',
+    nameAr: 'سلسلة الاعتماد المؤتمتة للمشتريات وسلاسل التوريد',
+    descriptionEn: 'Automated 5-tier procurement pipeline: Site Request -> Warehouse Stock Check -> Finance Budget Review -> GM Endorsement -> Holding Owner Final Approval.',
+    descriptionKu: 'ڕێڕەوی ٥ قۆناغی کڕین: داواکاری مەیدانی -> پشکنینی کۆگا -> وردبینی دارایی -> ڕەزامەندی بەڕێوەبەر -> واژۆی کۆتایی خاوەنی هۆڵدینگ پێش جێبەجێکردن.',
+    descriptionAr: 'مسار المشتريات الخماسي المؤتمت: طلب الموقع -> تدقيق المستودع -> مراجعة المالية -> اعتماد المدير -> موافقة مالك المجموعة النهائية.',
     companyId: 'ALL',
     projectId: 'ALL',
     transactionType: 'PURCHASE_ORDER',
     minAmountUSD: 0,
     isActive: true,
-    ownerThresholdUSD: 5000,
+    ownerThresholdUSD: 0,
     steps: [
       {
         stepNumber: 1,
         role: 'PROJECT_MANAGER',
-        titleEn: 'Project Site Manager Verification',
-        titleKu: 'پشتڕاستکردنەوەی بەڕێوەبەری پڕۆژە لە مەیدان',
-        titleAr: 'تحقق وتأييد مدير موقع المشروع',
+        titleEn: 'Project Site Requisition & Scope Validation',
+        titleKu: 'داواکاری مەیدانی پڕۆژە و دەستنیشانکردنی کەرەستە',
+        titleAr: 'طلب موقع المشروع وتحديد المواد الفنية',
         minAmountUSD: 0,
         slaHours: 24
       },
       {
         stepNumber: 2,
-        role: 'COST_CONTROLLER',
-        titleEn: 'Finance & Cost Controller Review',
-        titleKu: 'وردبینی بەشی دارایی و کۆنتڕۆڵی تێچوو',
-        titleAr: 'تدقيق المالية والرقابة على التكاليف',
-        minAmountUSD: 2500,
+        role: 'WAREHOUSE_OFFICER',
+        titleEn: 'Warehouse Stock & Inventory Availability Clearance',
+        titleKu: 'پشکنینی کۆگا و نەبوونی کەرەستە لە عەمباردا',
+        titleAr: 'تدقيق المستودع وعدم توفر المواد في المخزن',
+        minAmountUSD: 0,
         slaHours: 24
       },
       {
         stepNumber: 3,
-        role: 'GENERAL_MANAGER',
-        titleEn: 'Subsidiary General Manager Approval',
-        titleKu: 'پەسەندکردنی بەڕێوەبەری گشتی کۆمپانیا',
-        titleAr: 'موافقة المدير العام للشركة التابعة',
-        minAmountUSD: 5000,
+        role: 'FINANCE_HEAD',
+        titleEn: 'Finance & Budget Allocation Review',
+        titleKu: 'وردبینی بەشی دارایی و تەرخانکردنی بودجە',
+        titleAr: 'تدقيق الإدارة المالية وتخصيص الميزانية',
+        minAmountUSD: 0,
         slaHours: 24
       },
       {
         stepNumber: 4,
+        role: 'GENERAL_MANAGER',
+        titleEn: 'Project / Subsidiary General Manager Approval',
+        titleKu: 'پەسەندکردنی بەڕێوەبەری گشتی کۆمپانیا / پڕۆژە',
+        titleAr: 'موافقة واعتماد المدير العام للشركة / المشروع',
+        minAmountUSD: 0,
+        slaHours: 24
+      },
+      {
+        stepNumber: 5,
         role: 'HOLDING_OWNER',
-        titleEn: 'Holding Owner / Chairman Final Signature',
-        titleKu: 'واژۆ و مۆری کۆتایی خاوەنی هۆلدینگ',
-        titleAr: 'الموافقة والختم النهائي لمالك ورئيس المجموعة',
-        minAmountUSD: 5000,
+        titleEn: 'Holding Company Owner Final Executive Approval & Seal',
+        titleKu: 'واژۆ و مۆری کۆتایی خاوەنی هۆڵدینگ (سەرۆکایەتی)',
+        titleAr: 'الموافقة والختم النهائي لمالك المجموعة (الرئاسة)',
+        minAmountUSD: 0,
         requiresOwnerSignature: true,
         slaHours: 48
       }
     ],
     createdAt: '2026-01-10',
-    updatedAt: '2026-10-25'
+    updatedAt: '2026-11-11'
   },
   {
     id: 'rule-capex-machinery',

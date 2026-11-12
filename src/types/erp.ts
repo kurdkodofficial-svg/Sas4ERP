@@ -27,6 +27,8 @@ export interface UserProfile {
   nativeLanguage: Language;
   title: string;
   accessibleModules?: string[]; // Specific module IDs this user is authorized to access
+  isOwnerVerified?: boolean;
+  verifiedAt?: string;
 }
 
 export type DepartmentCategory = 
@@ -220,6 +222,17 @@ export interface GeneralManagerProfile {
   lastActive: string;
 }
 
+export interface DelegatedSpendingMandate {
+  isAutonomous: boolean;
+  delegatedBy: string;
+  delegatedAt: string;
+  maxAutonomousLimitUSD?: number; // 0 or undefined = unlimited authority
+  decreeNumber: string;
+  notes?: string;
+  scope: 'COMPANY' | 'PROJECT' | 'PO_SPECIFIC';
+  targetEntityId?: string;
+}
+
 export interface Company {
   id: string;
   name: string;
@@ -243,6 +256,7 @@ export interface Company {
   isHoldingOwnerApproved?: boolean;
   logoUrl?: string;
   departments?: DepartmentOverview[];
+  delegatedSpendingMandate?: DelegatedSpendingMandate;
 }
 
 export type SubProjectPhase = 
@@ -305,6 +319,7 @@ export interface Project {
   departments?: DepartmentOverview[];
   accommodationDetails?: ProjectAccommodationDetails;
   subProjects?: SubProject[];
+  delegatedSpendingMandate?: DelegatedSpendingMandate;
 }
 
 export interface PurchaseItem {
@@ -385,6 +400,24 @@ export interface PurchaseOrder {
     paymentStatus: 'PAID' | 'ACCRUED' | 'PENDING_INVOICE';
     voucherNo: string;
   };
+  ceoPreApproved?: boolean;
+  ceoPreApprovedAt?: string;
+  ceoPreApprovedBy?: string;
+  projectFundDeduction?: {
+    deductedAt: string;
+    amountUSD: number;
+    projectId: string;
+    projectName?: string;
+    transferredToProcurement: boolean;
+    procurementStatus: 'HELD_IN_ESCROW' | 'PM_RELEASE_SIGNED' | 'COLLECTED_BY_PROCUREMENT';
+    authorizedByPm?: string;
+    pmSignatureHash?: string;
+    pmSignedAt?: string;
+    collectedAt?: string;
+    notes?: string;
+  };
+  delegatedToLocal?: boolean;
+  delegatedMandate?: DelegatedSpendingMandate;
 }
 
 export interface GateEntryLog {
@@ -665,7 +698,7 @@ export interface FinanceLedgerEntry {
   debitUSD: number;
   creditUSD: number;
   description: string;
-  sourceModule: 'GATE_SCAN_AUTO' | 'PROCUREMENT' | 'PAYROLL' | 'DIRECT_MANUAL';
+  sourceModule: 'GATE_SCAN_AUTO' | 'PROCUREMENT' | 'PAYROLL' | 'DIRECT_MANUAL' | 'WORKFLOW_ENGINE_AUTO' | 'TREASURY_DISBURSEMENT';
   referencePoId?: string;
   postedBy: string;
 }
@@ -768,7 +801,7 @@ export interface AppNotification {
   messageKu?: string;
   messageAr?: string;
   timestamp: string;
-  type: 'GATE_ALERT' | 'OWNER_APPROVAL_REQUIRED' | 'MEETING_INVITE' | 'EXPIRY_WARNING' | 'FINANCE_ENTRY' | 'ML_ANOMALY_ALERT' | 'BUDGET_THRESHOLD_ALERT' | 'HARDWARE_ALERT';
+  type: 'GATE_ALERT' | 'OWNER_APPROVAL_REQUIRED' | 'MEETING_INVITE' | 'EXPIRY_WARNING' | 'FINANCE_ENTRY' | 'ML_ANOMALY_ALERT' | 'BUDGET_THRESHOLD_ALERT' | 'HARDWARE_ALERT' | 'PROJECT_ALERT';
   isRead: boolean;
   relatedId?: string;
   targetRole?: UserRole;

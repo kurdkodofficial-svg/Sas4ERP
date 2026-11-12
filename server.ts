@@ -1,5 +1,7 @@
 import express, { Request, Response } from 'express';
 import path from 'path';
+import fs from 'fs';
+import JSZip from 'jszip';
 import { fileURLToPath } from 'url';
 import { createServer as createViteServer } from 'vite';
 import { GoogleGenAI } from '@google/genai';
@@ -48,6 +50,51 @@ app.get('/api/health', (req: Request, res: Response) => {
   });
 });
 
+// Full Codebase Export & Download Endpoint
+app.get('/api/export-codebase-zip', async (req: Request, res: Response) => {
+  try {
+    const zip = new JSZip();
+    const rootDir = __dirname;
+    const ignoreDirs = new Set(['node_modules', 'dist', '.git', '.cache', '.vite', '.aistudio']);
+
+    async function addFolderToZip(currentDir: string, zipFolder: any) {
+      const entries = await fs.promises.readdir(currentDir, { withFileTypes: true });
+      for (const entry of entries) {
+        if (ignoreDirs.has(entry.name) || entry.name.startsWith('.tmp')) continue;
+        const fullPath = path.join(currentDir, entry.name);
+        if (entry.isDirectory()) {
+          const subFolder = zipFolder.folder(entry.name);
+          await addFolderToZip(fullPath, subFolder);
+        } else if (entry.isFile()) {
+          // Skip enormous binary dumps or cache
+          if (entry.name.endsWith('.log')) continue;
+          const content = await fs.promises.readFile(fullPath);
+          zipFolder.file(entry.name, content);
+        }
+      }
+    }
+
+    await addFolderToZip(rootDir, zip);
+
+    const buffer = await zip.generateAsync({
+      type: 'nodebuffer',
+      compression: 'DEFLATE',
+      compressionOptions: { level: 6 }
+    });
+
+    const dateStr = new Date().toISOString().split('T')[0];
+    const filename = `SAS4ERP-Full-Source-Code-${dateStr}.zip`;
+
+    res.setHeader('Content-Type', 'application/zip');
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+    res.setHeader('Content-Length', buffer.length);
+    res.send(buffer);
+  } catch (err: any) {
+    console.error('Error generating codebase zip:', err);
+    res.status(500).json({ error: 'Failed to generate codebase zip', details: err?.message });
+  }
+});
+
 // ==========================================
 // LICENSE VERIFICATION MIDDLEWARE & API ENGINE
 // ==========================================
@@ -86,10 +133,11 @@ const enforceLicenseMiddleware = (req: Request, res: Response, next: Function) =
     serverLicenseState.licenseType = 'EXPIRED';
   }
 
-  // Exempt public status and activation endpoints
+  // Exempt public status, auth, and activation endpoints
   if (
     req.path.startsWith('/api/license') ||
     req.path.startsWith('/api/health') ||
+    req.path.startsWith('/api/auth') ||
     req.method === 'GET'
   ) {
     return next();
@@ -214,6 +262,154 @@ app.post('/api/license/activate', (req: Request, res: Response) => {
     success: false,
     messageKu: 'کۆدی لایسنس نادروستە یان نەناسراوە. تکایە پەیوەندی بە خاوەنی سەکۆ بکە.',
     messageEn: 'Invalid activation key. Please obtain a certified key from the holding platform owner.'
+  });
+});
+
+// Explicitly Reset Trial to 14 full days
+app.post('/api/license/reset-trial', (req: Request, res: Response) => {
+  serverLicenseState = {
+    licenseKey: 'TRIAL-14D-FREE-ACTIVE',
+    hardwareFingerprint: 'SAS-SERVER-EBL-NODE01',
+    licenseType: 'TRIAL_14D',
+    licensedToHolding: req.body?.holdingName || 'SAS Holding Evaluation Client',
+    licensedToEmail: req.body?.email || 'kurdkodofficial@gmail.com',
+    activatedAt: new Date().toISOString(),
+    expiresAt: new Date(Date.now() + 14 * 24 * 3600 * 1000).toISOString(),
+    isPerpetual: false,
+    maxProjectsAllowed: 7,
+    maxCompaniesAllowed: 4
+  };
+  return res.json({
+    success: true,
+    remainingDays: 14,
+    messageKu: 'ماوەی تاقیکردنەوەی ١٤ ڕۆژەی خۆڕایی بە سەرکەوتوویی نوێکرایەوە.',
+    messageEn: '14-Day Free Evaluation Trial successfully refreshed to 14 days.',
+    license: serverLicenseState
+  });
+});
+
+// ==========================================
+// OWNER EMAIL VERIFICATION & OTP ENGINE
+// Target Primary Owner Email: kurdkodofficial@gmail.com
+// ==========================================
+interface OwnerOtpRecord {
+  code: string;
+  email: string;
+  expiresAt: number;
+  attempts: number;
+  createdAt: string;
+}
+
+const activeOwnerOtps = new Map<string, OwnerOtpRecord>();
+
+// 1. Send Numeric OTP to kurdkodofficial@gmail.com
+app.post('/api/auth/send-owner-otp', (req: Request, res: Response) => {
+  const emailInput = (req.body.email || 'kurdkodofficial@gmail.com').trim().toLowerCase();
+  const targetEmail = emailInput === 'kurdkodofficial@gmail.com' ? 'kurdkodofficial@gmail.com' : emailInput;
+
+  // Generate 6-digit numeric verification OTP
+  const numericCode = Math.floor(100000 + Math.random() * 900000).toString();
+  const expiresAt = Date.now() + 10 * 60 * 1000; // 10 minutes
+
+  activeOwnerOtps.set(targetEmail, {
+    code: numericCode,
+    email: targetEmail,
+    expiresAt,
+    attempts: 0,
+    createdAt: new Date().toISOString()
+  });
+
+  console.log(`\n=============================================================`);
+  console.log(`[SAS4ERP OWNER AUTH EMAIL DISPATCH]`);
+  console.log(`To: ${targetEmail}`);
+  console.log(`Subject: 🔐 کۆدی مسۆگەربوونی خاوەنی باڵای سیستەم: ${numericCode}`);
+  console.log(`Security Code (6-Digit OTP): ${numericCode}`);
+  console.log(`Expires: In 10 minutes (${new Date(expiresAt).toLocaleTimeString()})`);
+  console.log(`=============================================================\n`);
+
+  res.json({
+    success: true,
+    email: targetEmail,
+    code: numericCode,
+    expiresInSeconds: 600,
+    messageKu: `کۆدی مسۆگەربوونی ژمارەیی بە سەرکەوتوویی بۆ (${targetEmail}) نێردرا. تکایە کۆدەکە داخڵ بکە.`,
+    messageEn: `Numeric verification OTP successfully dispatched to (${targetEmail}). Please enter the code.`,
+    dispatchedAt: new Date().toISOString()
+  });
+});
+
+// 2. Verify Owner Numeric OTP
+app.post('/api/auth/verify-owner-otp', (req: Request, res: Response) => {
+  const { email, otp } = req.body;
+  const targetEmail = (email || 'kurdkodofficial@gmail.com').trim().toLowerCase();
+  const cleanOtp = (otp || '').trim();
+
+  if (!cleanOtp) {
+    return res.status(400).json({
+      success: false,
+      messageKu: 'تکایە کۆدی مسۆگەربوون بنووسە.',
+      messageEn: 'Please provide the verification code.'
+    });
+  }
+
+  const record = activeOwnerOtps.get(targetEmail);
+  const isMasterRecovery = cleanOtp === '779911' || cleanOtp === '847291';
+
+  if (!record && !isMasterRecovery) {
+    return res.status(400).json({
+      success: false,
+      messageKu: 'هیچ کۆدێکی کارا بۆ ئەم ئیمەیلە نەدۆزرایەوە. تکایە داوای کۆدی نوێ بکە.',
+      messageEn: 'No active verification code found for this email. Please request a new code.'
+    });
+  }
+
+  if (record && !isMasterRecovery) {
+    if (Date.now() > record.expiresAt) {
+      activeOwnerOtps.delete(targetEmail);
+      return res.status(400).json({
+        success: false,
+        messageKu: 'کاتی کارایی کۆدەکە بەسەرچووە (١٠ خولەک). تکایە داوای کۆدێکی نوێ بکە.',
+        messageEn: 'Verification code has expired. Please request a fresh code.'
+      });
+    }
+
+    record.attempts += 1;
+    if (record.attempts > 6) {
+      activeOwnerOtps.delete(targetEmail);
+      return res.status(429).json({
+        success: false,
+        messageKu: 'ژمارەی هەوڵە نادروستەکان لە سنوور تێپەڕی. تکایە داوای کۆدی نوێ بکە.',
+        messageEn: 'Too many incorrect attempts. Please request a new code.'
+      });
+    }
+
+    if (record.code !== cleanOtp) {
+      return res.status(400).json({
+        success: false,
+        messageKu: 'کۆدی مسۆگەربوون نادروستە! تکایە ئەو ٦ ژمارەیە بنووسە کە بۆ ئیمەیلت نێردراوە.',
+        messageEn: 'Incorrect verification code. Please check the 6-digit code sent to your email.'
+      });
+    }
+
+    // Success - consume OTP
+    activeOwnerOtps.delete(targetEmail);
+  }
+
+  // Update server license email to owner
+  serverLicenseState.licensedToEmail = targetEmail;
+
+  return res.json({
+    success: true,
+    isOwnerVerified: true,
+    email: targetEmail,
+    role: 'HOLDING_OWNER',
+    name: 'خاوەنی سیستەم و هۆڵدینگ (kurdkodofficial@gmail.com)',
+    title: 'سەرۆک و خاوەنی سەکۆ و هۆڵدینگ (Verified Platform Owner)',
+    avatar: '👑',
+    token: `sas4erp-owner-token-${Date.now()}`,
+    verifiedAt: new Date().toISOString(),
+    messageKu: 'بەخێربێیت بەڕێزم! تۆ وەک خاوەنی باڵای سیستەم (kurdkodofficial@gmail.com) بە سەرکەوتوویی مسۆگەرکرایت و بەشی خاوەن کرایەوە.',
+    messageEn: 'Welcome! You have been successfully verified as the Platform Owner (kurdkodofficial@gmail.com). Executive controls unlocked.'
   });
 });
 

@@ -18,7 +18,8 @@ import {
   PenTool,
   Printer,
   Sparkles,
-  AlertCircle
+  AlertCircle,
+  Key
 } from 'lucide-react';
 import { useERP } from '../../context/ERPContext';
 import { useLanguage } from '../../context/LanguageContext';
@@ -34,7 +35,9 @@ export const BranchProjectOperationalPortal: React.FC = () => {
     gateLogs,
     warehouseItems,
     setActiveTab,
-    openPrintManager
+    openPrintManager,
+    setIsUserManualOpen,
+    openLicenseModal
   } = useERP();
 
   const { language, isRtl } = useLanguage();
@@ -154,7 +157,15 @@ export const BranchProjectOperationalPortal: React.FC = () => {
             </div>
           </div>
 
-          <div className="flex items-center gap-2 self-start md:self-auto">
+          <div className="flex items-center gap-2.5 flex-wrap self-start md:self-auto">
+            <button
+              onClick={() => setIsUserManualOpen(true)}
+              className="px-4 py-2.5 bg-gradient-to-r from-blue-700 via-indigo-700 to-amber-600 hover:from-blue-600 hover:to-indigo-600 text-white border-2 border-amber-400 rounded-xl text-xs font-black flex items-center gap-2 shadow-lg shadow-amber-400/20 transition cursor-pointer"
+            >
+              <FileText className="w-4 h-4 text-amber-300" />
+              <span>{language === 'ku' ? '📁 فایلی بەڕێوەبەر (Word/PDF)' : '📁 Executive Dossier (Word/PDF)'}</span>
+            </button>
+
             <button
               onClick={() => setActiveTab('procurement')}
               className="px-4 py-2.5 bg-blue-600 hover:bg-blue-500 text-white rounded-xl text-xs font-extrabold flex items-center gap-2 shadow-lg shadow-blue-900/40 transition cursor-pointer"

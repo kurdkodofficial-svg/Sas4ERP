@@ -9,6 +9,8 @@ export type TransactionType =
 
 export type ApproverRole =
   | 'PROJECT_MANAGER'
+  | 'WAREHOUSE_OFFICER'
+  | 'FINANCE_HEAD'
   | 'DEPARTMENT_HEAD'
   | 'COST_CONTROLLER'
   | 'GENERAL_MANAGER'
@@ -19,7 +21,8 @@ export type ApprovalStepStatus =
   | 'PENDING'
   | 'APPROVED'
   | 'REJECTED'
-  | 'SKIPPED';
+  | 'SKIPPED'
+  | 'DELEGATED_TO_BRANCH';
 
 export interface WorkflowStepDefinition {
   stepNumber: number;
@@ -58,7 +61,7 @@ export interface ApprovalAuditEntry {
   requestId: string;
   poNumber: string;
   stepNumber: number;
-  action: 'SUBMITTED' | 'APPROVED' | 'REJECTED' | 'REQUEST_MORE_INFO' | 'ESCALATED' | 'DELEGATED_SIGNATURE';
+  action: 'SUBMITTED' | 'APPROVED' | 'REJECTED' | 'REQUEST_MORE_INFO' | 'ESCALATED' | 'DELEGATED_SIGNATURE' | 'DELEGATED_TO_BRANCH';
   performedBy: string;
   performerRole: ApproverRole | string;
   performerEmail?: string;

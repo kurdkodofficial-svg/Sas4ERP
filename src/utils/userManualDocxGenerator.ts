@@ -17,6 +17,7 @@ export interface UserManualOptions {
   includeKurdish?: boolean;
   includeEnglish?: boolean;
   includeArabic?: boolean;
+  includeDifferentiators?: boolean;
 }
 
 export async function generateEnterpriseUserManualDocx(options: UserManualOptions = {}): Promise<Blob> {
@@ -263,8 +264,20 @@ export async function generateEnterpriseUserManualDocx(options: UserManualOption
   if (includeKu) {
     createSectionHeader(
       'بەشی یەکەم: ڕێبەری گشتگیری بەکارهێنانی سیستەم بە زمانی کوردی',
-      'Kurdish Comprehensive Operations Guide — ڕوونکردنەوەی تەواوی ٢١ بەش و پڕۆسەکانی سیستەمی SAS4ERP'
+      'Kurdish Comprehensive Operations Guide — ڕوونکردنەوەی تەواوی ٢١ بەش و خاڵە جیاکارییەکانی سیستەمی SAS4ERP'
     );
+
+    // DEDICATED DIFFERENTIATORS SECTION (KURDISH)
+    createSubHeader('★ بەشی تایبەت: خاڵە جیاکارییەکانی سیستەمی SAS4ERP لەگەڵ سیستەمەکانی تر');
+    createParagraph(
+      'سیستەمی SAS4ERP بە چەندین تایبەتمەندی بێهاوتا لە سەرجەم سیستەمە کلاسیکی و نەریتیەکانی تر جیا دەکرێتەوە:'
+    );
+    createBullet('١. بەکارهێنانی ٣ زمانی هاوکات لەناو یەک سیستەمدا', 'هەر بەکارهێنەرێک دەتوانێت بە زمانی هەڵبژێردراوی خۆی دۆکیومێنتەکان و بەشەکان ببینێت: خاوەن هۆڵدینگ بە کوردی، ئەندازیارانی بیانی بە ئینگلیزی، و لقی کۆمپانیا عەرەبییەکان بە زمانی عەرەبی لەسەر هەمان داتابەیسی یەکگرتوو بەبێ کێشەی وەرگێڕان.');
+    createBullet('٢. دروستبوونی خۆکارانەی بەشەکانی کۆمپانیا و پڕۆژە (Automated Provisioning)', 'لەگەڵ تۆمارکردنی هەر کۆمپانیا یان پڕۆژەیەک، سیستەمەکە خۆکارانە ٩ بەشی سەرەکی (ئەندازیاری، دارایی، کڕین، HSE، سەرچاوە مرۆییەکان و ئیقامە، QC، یاسایی، کۆگا، و ئۆپەراسیۆن) لەگەڵ کەمپی نیشتەجێبوونی بیانیەکان و پڕۆفایلی بەڕێوەبەری گشتی لەسەر خاڵی سفڕ بە پەیوەندی هۆڵدینگەوە دروست دەکات.');
+    createBullet('٣. ستۆدیۆی گۆڕەری دوولایەنەی فۆرماتەکان (Word ⇄ PDF Converter)', 'توانای گۆڕینی خێرای هەر فایلیكی وۆرد (.docx) بۆ پی دی ئێف و بە پێچەوانەشەوە، لەگەڵ هەناردەکردنی بەڵگەنامەکان بە هەردوو فۆرماتەکە بە ٣ زمانی فەرمی.');
+    createBullet('٤. هاوردەکردنی بەڵگەنامە و داتاکان بە Drag & Drop بێ دووبارە نووسینەوە', 'ڕزگاربوون لە سەدان کاتژمێر نووسینەوەی دەستی؛ کارمەندان دەتوانن فایلەکانی Excel، PDF، Word، و وێنەکان ڕاستەوخۆ فڕێبدەنە ناو بەشەکان.');
+    createBullet('٥. ڕاداری ژیری دەستکرد و کارکردنی ئۆفلاین (AI Sentinel & Offline PWA)', 'دۆزینەوەی ئۆتۆماتیکی فێڵی دارایی و پارچەکردنی کڕین، لەگەڵ کارکردنی ١٠٠٪ بەردەوام لە کێڵگە نەوتی و پڕۆژە دوورەدەستەکان بەبێ ئینتەرنێت.');
+    createBullet('٦. دەستکاریکردنی تێبینییە چەسپاوەکان، پەسەندکردنەکان و گۆڕینی ژمارەکانی بودجە بە شێوازی ڕاستەوخۆ', 'بەکارهێنەرانی سیستەم و خاوەن هۆڵدینگ دەتوانن بە شێوازی ڕاستەوخۆ (In-Place) تێبینییە چەسپاوەکانی سەرۆکایەتی (Executive Sticky Notes) دەستکاری بکەن و بنووسن، داواکارییە هەڵپەسێردراوەکان (Pending Approvals) واژۆ یان ڕەت بکەنەوە، و ژمارەکانی بودجەی کۆمپانیا و پڕۆژەکان و هەموو ژمارەیەکی ناو سیستەم بەپێی دەسەڵاتی کارگێڕی بگۆڕن.');
 
     // 1
     createSubHeader('١. سیستەمی لایسنس، ماوەی تاقیکردنەوەی ١٤ ڕۆژ و قفڵی ئامێر (Hardware Lock)');
@@ -417,6 +430,18 @@ export async function generateEnterpriseUserManualDocx(options: UserManualOption
       'Comprehensive Operations Guide for Holding Owners, General Managers, Project Managers & Site Staff'
     );
 
+    // DEDICATED DIFFERENTIATORS SECTION (ENGLISH)
+    createSubHeader('★ Special Section: Strategic Differentiators of SAS4ERP vs Legacy Systems');
+    createParagraph(
+      'SAS4ERP distinguishes itself from legacy ERPs (SAP, Oracle, Odoo) through purpose-built industrial holding innovations:'
+    );
+    createBullet('1. Simultaneous Native Trilingual Operation', 'Every user interacts in their preferred language simultaneously (Kurdish Sorani, English, Arabic) without separate instances or manual translation.');
+    createBullet('2. Instant Automated Entity Provisioning', 'Creating any subsidiary company or field project automatically provisions 9 operational departments, accommodation camp compounds, and executive GM profiles with 0-second setup.');
+    createBullet('3. Integrated Two-Way Word ⇄ PDF Studio', 'Direct in-browser bi-directional conversion between Microsoft Word (.docx) and Adobe PDF files with native typography and RTL formatting.');
+    createBullet('4. Universal Drag & Drop Document & Data Ingestion', 'Staff drag and drop Excel spreadsheets, PDFs, and Word contracts directly into departments, eliminating manual retyping.');
+    createBullet('5. AI Anomaly Sentinel & True Offline-First PWA', 'Algorithmic fraud and split-PO prevention combined with seamless 100% offline field operation on remote project sites.');
+    createBullet('6. Dynamic In-Place Editing for Sticky Notes, Approvals & Live Budgets', 'Holding owners and managers can write and edit executive sticky notes in real time, act immediately on pending purchase orders, and modify subsidiary/project budgets and system figures with complete auditability.');
+
     createSubHeader('1. Executive Architecture, Licensing & 14-Day Free Trial');
     createParagraph(
       'The SAS4ERP suite is an executive enterprise governance platform designed for multi-tier industrial holdings. It centralizes subsidiary oversight, national strategic projects, capital expenditure controls, and field operations.'
@@ -540,6 +565,18 @@ export async function generateEnterpriseUserManualDocx(options: UserManualOption
       'الجزء الثالث: دليل الاستخدام والتشغيل باللغة العربية (Arabic Operations Manual)',
       'الدليل الميداني الشامل لإدارة المجموعة، الشركات التابعة، الميزانيات، وصلاحيات الأدوار'
     );
+
+    // DEDICATED DIFFERENTIATORS SECTION (ARABIC)
+    createSubHeader('★ قسم خاص: الخصائص الاستراتيجية الحصرية لمنظومة SAS4ERP مقارنة بالأنظمة الأخرى');
+    createParagraph(
+      'تتميز منظومة SAS4ERP عن الأنظمة التقليدية (مثل SAP و Oracle و Odoo) بمجموعة من الحلول الميدانية الاستثنائية المصممة خصيصاً للهولدينغ والمجموعات الاستثمارية:'
+    );
+    createBullet('١. تشغيل ثلاث لغات متزامنة في نظام واحد (Native Trilingual)', 'يتيح لكل مستخدم في المنظومة اختيار لغته المفضلة بحرية تامة: مالك الهولدينغ بالكردية، المهندسون الأجانب بالإنجليزية، والشركاء بالعربية على نفس السجلات الموحدة في نفس اللحظة دون الحاجة لبرامج إضافية.');
+    createBullet('٢. التوليد التلقائي لـ ٩ أقسام وسكن العمال لأي شركة أو مشروع جديد', 'بمجرد تسجيل اسم أي شركة أو مشروع، تنشئ المنظومة آلياً وبشكل فوري ٩ أقسام تخصصية كاملة، وسكن عمال مجهز، وملف المدير العام دون أي إعدادات يدوية معقدة.');
+    createBullet('٣. استوديو تحويل المستندات المزدوج (Word ⇄ PDF)', 'تحويل مباشر وثنائي الاتجاه بين ملفات Word (.docx) وملفات PDF مع الحفاظ التام على الخطوط والاتجاه من اليمين إلى اليسار.');
+    createBullet('٤. استيراد المستندات والبيانات بالسحب والإفلات (Drag & Drop)', 'توفير مئات الساعات عبر إمكانية سحب وإفلات ملفات Excel و PDF و Word ومخططات العمل داخل أي قسم دون إعادة كتابة يدوية.');
+    createBullet('٥. رادار الذكاء الاصطناعي لكشف الاحتيال والتشغيل دون إنترنت (AI Sentinel & Offline PWA)', 'كشف تجزئة المشتريات والقيود الليلية، مع ضمان استمرار العمل الميداني بنسبة ١٠٠٪ في المواقع المنقطعة.');
+    createBullet('٦. التعديل المباشر للملاحظات اللاصقة، المعاملات المعلقة، وتحديث أرقام الميزانيات', 'مرونة تشغيلية تامة تمنح المستخدمين ورئيس المجموعة صلاحية تحرير الملاحظات اللاصقة القيادية، البت في المعاملات المعلقة، وتعديل أرقام الميزانيات وأي رقم بالمنظومة بشكل فوري ومباشر.');
 
     createSubHeader('١. الهيكلية العامة للمنظومة، نظام الترخيص، وفترة التجربة المجانية');
     createParagraph(

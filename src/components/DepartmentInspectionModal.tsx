@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import {
   Layers,
   X,
@@ -17,7 +17,15 @@ import {
   BarChart3,
   Calendar,
   Award,
-  Trash2
+  Trash2,
+  Upload,
+  FileText,
+  FileSpreadsheet,
+  FileCode,
+  Image as ImageIcon,
+  Download,
+  Sparkles,
+  Check
 } from 'lucide-react';
 import { useERP } from '../context/ERPContext';
 import { DepartmentOverview } from '../types/erp';
@@ -30,6 +38,15 @@ interface DepartmentInspectionModalProps {
   projectName?: string;
   entityType: 'COMPANY' | 'PROJECT';
   entityId: string;
+}
+
+interface DeptUploadedDoc {
+  id: string;
+  name: string;
+  size: string;
+  type: 'pdf' | 'excel' | 'word' | 'image' | 'generic';
+  uploadedAt: string;
+  tag: string;
 }
 
 export const DepartmentInspectionModal: React.FC<DepartmentInspectionModalProps> = ({
@@ -45,6 +62,30 @@ export const DepartmentInspectionModal: React.FC<DepartmentInspectionModalProps>
   const [directiveText, setDirectiveText] = useState('');
   const [isDirectiveSent, setIsDirectiveSent] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+
+  // Drag and drop documents state
+  const [isDragging, setIsDragging] = useState(false);
+  const [uploadNotice, setUploadNotice] = useState<string | null>(null);
+  const [departmentDocs, setDepartmentDocs] = useState<DeptUploadedDoc[]>([
+    {
+      id: 'doc-sample-1',
+      name: `${department?.nameKu || 'Department'}_Official_Operational_Charter.pdf`,
+      size: '1.4 MB',
+      type: 'pdf',
+      uploadedAt: '2026-11-01',
+      tag: 'بەڵگەنامەی فەرمی'
+    },
+    {
+      id: 'doc-sample-2',
+      name: `Q4_Budget_Allocation_Sheet.xlsx`,
+      size: '620 KB',
+      type: 'excel',
+      uploadedAt: '2026-11-05',
+      tag: 'خشتەی دارایی و تێچوو'
+    }
+  ]);
+
+  const fileDropInputRef = useRef<HTMLInputElement>(null);
 
   if (!isOpen || !department) return null;
 
@@ -75,6 +116,69 @@ export const DepartmentInspectionModal: React.FC<DepartmentInspectionModalProps>
       agendaTopic: `Holding Executive Departmental Review: Performance & KPI audit for ${department.nameKu}`,
     });
     onClose();
+  };
+
+  const determineFileType = (fileName: string): 'pdf' | 'excel' | 'word' | 'image' | 'generic' => {
+    const ext = fileName.split('.').pop()?.toLowerCase();
+    if (ext === 'pdf') return 'pdf';
+    if (ext === 'xlsx' || ext === 'xls' || ext === 'csv') return 'excel';
+    if (ext === 'docx' || ext === 'doc') return 'word';
+    if (ext === 'png' || ext === 'jpg' || ext === 'jpeg' || ext === 'webp') return 'image';
+    return 'generic';
+  };
+
+  const handleFilesIngest = (files: FileList | null) => {
+    if (!files || files.length === 0) return;
+    const newItems: DeptUploadedDoc[] = [];
+
+    for (let i = 0; i < files.length; i++) {
+      const f = files[i];
+      const type = determineFileType(f.name);
+      const sizeStr = f.size > 1024 * 1024
+        ? `${(f.size / (1024 * 1024)).toFixed(1)} MB`
+        : `${Math.round(f.size / 1024)} KB`;
+
+      let defaultTag = 'بەڵگەنامەی گشتی';
+      if (type === 'excel') defaultTag = 'خشتەی داتا (Excel)';
+      else if (type === 'pdf') defaultTag = 'ڕاپۆرتی پەسەندکراو (PDF)';
+      else if (type === 'word') defaultTag = 'گرێبەست و ڕێنمایی (Word)';
+      else if (type === 'image') defaultTag = 'وێنە و بەڵگەی مەیدانی';
+
+      newItems.push({
+        id: `doc-${Date.now()}-${i}`,
+        name: f.name,
+        size: sizeStr,
+        type,
+        uploadedAt: new Date().toISOString().split('T')[0],
+        tag: defaultTag
+      });
+    }
+
+    setDepartmentDocs(prev => [...newItems, ...prev]);
+    setUploadNotice(`سەرکەوتوو بوو: ${newItems.length} پەڕگە بە Drag & Drop بۆ ئەم بەشە هاوردەکران بەبێ پێویستی بە دووبارە نووسینەوە!`);
+    setTimeout(() => setUploadNotice(null), 5000);
+  };
+
+  const handleDragOver = (e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragging(true);
+  };
+
+  const handleDragLeave = (e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragging(false);
+  };
+
+  const handleDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragging(false);
+    if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+      handleFilesIngest(e.dataTransfer.files);
+    }
+  };
+
+  const handleDeleteDoc = (id: string) => {
+    setDepartmentDocs(prev => prev.filter(d => d.id !== id));
   };
 
   const headName = department.headName || 'Eng. Director';
@@ -145,7 +249,7 @@ export const DepartmentInspectionModal: React.FC<DepartmentInspectionModalProps>
           </div>
         </div>
 
-        {/* Operational Overview & How They Manage Work */}
+        {/* Operational Overview */}
         <div className="space-y-2">
           <h4 className="text-xs font-extrabold text-slate-900 flex items-center gap-1.5">
             <BarChart3 className="w-4 h-4 text-blue-600" />
@@ -185,9 +289,121 @@ export const DepartmentInspectionModal: React.FC<DepartmentInspectionModalProps>
           </div>
         </div>
 
+        {/* DRAG & DROP DOCUMENT & DATA IMPORT HUB */}
+        <div className="space-y-3 border-t border-slate-200 pt-4">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <Upload className="w-4 h-4 text-indigo-600" />
+              <h4 className="text-xs font-extrabold text-slate-900">
+                هاوردەکردنی بەڵگەنامە و داتاکان بە Drag & Drop (بێ دووبارە نووسینەوە):
+              </h4>
+            </div>
+            <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-indigo-100 text-indigo-800">
+              Excel • PDF • Word • Images
+            </span>
+          </div>
+
+          {/* Upload notice message */}
+          {uploadNotice && (
+            <div className="p-3 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs font-bold flex items-center gap-2 animate-in fade-in">
+              <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+              <span>{uploadNotice}</span>
+            </div>
+          )}
+
+          {/* Drop Zone Box */}
+          <div
+            onDragOver={handleDragOver}
+            onDragLeave={handleDragLeave}
+            onDrop={handleDrop}
+            className={`border-2 border-dashed rounded-2xl p-5 text-center transition cursor-pointer flex flex-col items-center justify-center gap-2 ${
+              isDragging
+                ? 'border-indigo-600 bg-indigo-50/80 scale-[1.01]'
+                : 'border-slate-300 bg-slate-50/70 hover:bg-slate-100/70'
+            }`}
+            onClick={() => fileDropInputRef.current?.click()}
+          >
+            <input
+              ref={fileDropInputRef}
+              type="file"
+              multiple
+              accept=".pdf,.xlsx,.xls,.csv,.docx,.doc,.png,.jpg,.jpeg"
+              onChange={(e) => handleFilesIngest(e.target.files)}
+              className="hidden"
+            />
+            <div className="w-10 h-10 rounded-xl bg-white shadow-xs border border-slate-200 text-indigo-600 flex items-center justify-center">
+              <Upload className="w-5 h-5" />
+            </div>
+            <div>
+              <p className="text-xs font-bold text-slate-800">
+                فایلەکانی Excel، PDF، یان Word بهێنە لێرە فڕێیان بدە (Drag & Drop)
+              </p>
+              <p className="text-[11px] text-slate-500 mt-0.5">
+                یان کلیک لێرە بکە بۆ هەڵبژاردنی پەڕگە لە کۆمپیوتەرەکەت
+              </p>
+            </div>
+          </div>
+
+          {/* List of Ingested Documents for this Department */}
+          <div className="space-y-2 mt-2">
+            <span className="text-[11px] font-bold text-slate-500 block">
+              پەڕگە و بەڵگەنامە هاوردەکراوەکانی ئەم بەشە ({departmentDocs.length}):
+            </span>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+              {departmentDocs.map((doc) => (
+                <div
+                  key={doc.id}
+                  className="p-2.5 rounded-xl bg-white border border-slate-200 flex items-center justify-between text-xs hover:border-slate-300 transition"
+                >
+                  <div className="flex items-center gap-2.5 min-w-0">
+                    <div className="w-7 h-7 rounded-lg bg-slate-100 flex items-center justify-center shrink-0">
+                      {doc.type === 'excel' ? (
+                        <FileSpreadsheet className="w-4 h-4 text-emerald-600" />
+                      ) : doc.type === 'pdf' ? (
+                        <FileText className="w-4 h-4 text-red-600" />
+                      ) : doc.type === 'word' ? (
+                        <FileCode className="w-4 h-4 text-blue-600" />
+                      ) : (
+                        <ImageIcon className="w-4 h-4 text-purple-600" />
+                      )}
+                    </div>
+                    <div className="min-w-0">
+                      <p className="font-bold text-slate-800 truncate text-[11px]">{doc.name}</p>
+                      <div className="flex items-center gap-2 text-[10px] text-slate-400">
+                        <span>{doc.size}</span>
+                        <span>•</span>
+                        <span className="text-indigo-600 font-medium">{doc.tag}</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-1 shrink-0">
+                    <button
+                      type="button"
+                      onClick={() => alert(`پەڕگەی «${doc.name}» بە سەلامەتی لە ئەرشیفی ئەم بەشەدا پارێزراوە.`)}
+                      className="p-1 rounded-md text-slate-400 hover:text-blue-600 hover:bg-blue-50 cursor-pointer"
+                      title="بینین / داگرتن"
+                    >
+                      <Download className="w-3.5 h-3.5" />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleDeleteDoc(doc.id)}
+                      className="p-1 rounded-md text-slate-400 hover:text-rose-600 hover:bg-rose-50 cursor-pointer"
+                      title="سڕینەوە"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+
         {/* Key Responsibilities */}
         {department.keyResponsibilitiesKu && department.keyResponsibilitiesKu.length > 0 && (
-          <div className="space-y-2">
+          <div className="space-y-2 border-t border-slate-200 pt-4">
             <h4 className="text-xs font-extrabold text-slate-900 flex items-center gap-1.5">
               <Award className="w-4 h-4 text-purple-600" />
               <span>ئەرک و بەرپرسیارێتییە سەرەکییەکان (Core Responsibilities):</span>

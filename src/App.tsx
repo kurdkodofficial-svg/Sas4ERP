@@ -34,11 +34,22 @@ import {
   ItSystemsView
 } from './components/OtherAdminModules';
 import { UserRolesManagementModal } from './components/UserRolesManagementModal';
+import { VendorLicenseHubModule } from './components/VendorLicenseHubModule';
+import { LicenseActivationModal } from './components/LicenseActivationModal';
 import { hasModuleAccess, ALL_SYSTEM_MODULES } from './utils/rbacPermissions';
 import { useLanguage } from './context/LanguageContext';
 
 const MainContent: React.FC = () => {
-  const { activeTab, setActiveTab, currentUser } = useERP();
+  const {
+    activeTab,
+    setActiveTab,
+    currentUser,
+    isLicenseModalOpen,
+    setIsLicenseModalOpen,
+    systemLicense,
+    setSystemLicense,
+    licenseModalInitialTab
+  } = useERP();
   const { language } = useLanguage();
 
   const isAuthorized = hasModuleAccess(currentUser, activeTab);
@@ -84,12 +95,15 @@ const MainContent: React.FC = () => {
     switch (activeTab) {
       case 'holding-dashboard':
         return <HoldingOwnerDashboard />;
+      case 'vendor-license-hub':
+        return <VendorLicenseHubModule />;
       case 'ml-anomaly-detection':
         return <AnomalyDetectionModule />;
       case 'owner-approvals':
         return <ApprovalWorkflowEngineModule />;
       case 'virtual-meetings':
         return <VirtualMeetingHub />;
+      case 'kelegram':
       case 'direct-comms':
         return <DirectCommsModule />;
       case 'companies-projects':
@@ -151,6 +165,15 @@ const MainContent: React.FC = () => {
       <LegacyDataImportModal />
       <SkylineBackgroundModal />
       <UserRolesManagementModal />
+
+      {/* Global System License & Hardware Lock Activation Modal */}
+      <LicenseActivationModal
+        isOpen={isLicenseModalOpen}
+        onClose={() => setIsLicenseModalOpen(false)}
+        license={systemLicense}
+        onLicenseUpdated={(updated) => setSystemLicense(updated)}
+        defaultMode={licenseModalInitialTab}
+      />
 
       {/* PWA Offline Mode Toast & Indicator */}
       <OfflineStatusIndicator />

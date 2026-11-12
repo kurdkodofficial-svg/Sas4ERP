@@ -44,13 +44,25 @@ import {
   Activity,
   CalendarRange,
   Mail,
-  BookOpen
+  BookOpen,
+  Download,
+  ArrowRightLeft,
+  Upload,
+  Eye,
+  Key
 } from 'lucide-react';
 import { useERP } from '../context/ERPContext';
 import { useLanguage } from '../context/LanguageContext';
 import { resolveEntityText, getUIText } from '../utils/langHelper';
-import { hasModuleAccess } from '../utils/rbacPermissions';
+import { hasModuleAccess, checkIsMasterVendorOwner } from '../utils/rbacPermissions';
+import { generateEnterpriseUserManualDocx } from '../utils/userManualDocxGenerator';
+import { openUserManualPrintView } from '../utils/userManualPdfGenerator';
+import {
+  generateWhyChooseSAS4ERPDocx,
+  openWhyChooseSAS4ERPPdfView
+} from '../utils/whyChooseSAS4ERPGenerator';
 import { Company, PurchaseOrder } from '../types/erp';
+import { getRemainingTrialDays } from '../utils/licenseManager';
 import {
   DashboardSettings,
   defaultDashboardSettings,
@@ -94,10 +106,16 @@ export const HoldingOwnerDashboard: React.FC = () => {
     setIsPrinterModalOpen,
     setIsUserRolesModalOpen,
     setIsUserManualOpen,
+    isLicenseModalOpen,
+    setIsLicenseModalOpen,
+    openLicenseModal,
+    setIsOwnerVerifyModalOpen,
     currentUser,
+    systemLicense
   } = useERP();
 
   const { t, language } = useLanguage();
+  const isMasterVendorOwner = checkIsMasterVendorOwner(currentUser);
 
   // Settings State with LocalStorage Persistence
   const [settings, setSettings] = useState<DashboardSettings>(() => {
@@ -133,6 +151,55 @@ export const HoldingOwnerDashboard: React.FC = () => {
 
   const [isConfigModalOpen, setIsConfigModalOpen] = useState<boolean>(false);
   const [isMeshHubOpen, setIsMeshHubOpen] = useState<boolean>(false);
+  const [isDownloadingManualDocx, setIsDownloadingManualDocx] = useState<boolean>(false);
+  const [isDownloadingWhyDocx, setIsDownloadingWhyDocx] = useState<boolean>(false);
+
+  const handleDownloadManualDocx = async () => {
+    try {
+      setIsDownloadingManualDocx(true);
+      const blob = await generateEnterpriseUserManualDocx({
+        includeKurdish: true,
+        includeEnglish: true,
+        includeArabic: true,
+        includeDifferentiators: true
+      });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `SAS4ERP_Enterprise_User_Manual_Trilingual_${new Date().toISOString().split('T')[0]}.docx`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      console.error('Failed to generate Word document', err);
+    } finally {
+      setIsDownloadingManualDocx(false);
+    }
+  };
+
+  const handleDownloadWhyDocx = async () => {
+    try {
+      setIsDownloadingWhyDocx(true);
+      const blob = await generateWhyChooseSAS4ERPDocx({
+        includeKurdish: true,
+        includeEnglish: true,
+        includeArabic: true
+      });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `Why_Choose_SAS4ERP_Comparison_Dossier_${new Date().toISOString().split('T')[0]}.docx`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      console.error('Failed to generate Why Choose Word document', err);
+    } finally {
+      setIsDownloadingWhyDocx(false);
+    }
+  };
 
   useEffect(() => {
     localStorage.setItem('sas4erp_owner_dashboard_config', JSON.stringify(settings));
@@ -218,6 +285,14 @@ export const HoldingOwnerDashboard: React.FC = () => {
   const criticalMlAlerts = anomalyAlerts.filter(a => a.severity === 'CRITICAL' && (a.status === 'TRIGGERED' || a.status === 'INVESTIGATING'));
 
   const systemModuleCards = [
+    ...(isMasterVendorOwner ? [{
+      id: 'vendor-license-hub',
+      icon: Crown,
+      badge: 'SYSTEM 2',
+      title: language === 'ku' ? '👑 پۆڕتاڵی لایسنس (سیستەمی ٢)' : language === 'ar' ? '👑 إدارة التراخيص (النظام ٢)' : '👑 Vendor License Hub',
+      subtitle: language === 'ku' ? 'بەڕێوەبردن و پێدانی لایسنس' : 'Manage & Renew Client Licenses',
+      onClick: () => setActiveTab('vendor-license-hub')
+    }] : []),
     {
       id: 'procurement',
       icon: ShoppingCart,
@@ -806,6 +881,93 @@ export const HoldingOwnerDashboard: React.FC = () => {
   return (
     <div className="space-y-6 animate-in fade-in duration-300">
       
+      {/* Unverified Owner Verification Prompt Banner */}
+      {(!currentUser?.isOwnerVerified && (typeof localStorage === 'undefined' || localStorage.getItem('sas4erp_owner_session') !== 'verified')) && (
+        <div className="bg-gradient-to-r from-amber-500/15 via-yellow-400/20 to-amber-500/15 border-2 border-amber-300 p-4 rounded-3xl shadow-md flex items-center justify-between flex-wrap gap-4 animate-in fade-in">
+          <div className="flex items-center gap-3.5">
+            <div className="w-11 h-11 rounded-2xl bg-amber-500 text-slate-950 flex items-center justify-center font-black shadow-sm shrink-0">
+              <Key className="w-5 h-5" />
+            </div>
+            <div>
+              <div className="flex items-center gap-2">
+                <h4 className="font-black text-sm text-slate-950">
+                  {language === 'ku' ? 'مسۆگەرکردنی فەرمی خاوەنی سەکۆ (kurdkodofficial@gmail.com)' : 'Verify Platform Owner Status (kurdkodofficial@gmail.com)'}
+                </h4>
+                <span className="text-[10px] bg-amber-400 text-slate-950 px-2 py-0.5 rounded-full font-bold">
+                  {language === 'ku' ? 'داواکاری نوێ' : 'Required'}
+                </span>
+              </div>
+              <p className="text-xs text-slate-700 font-semibold mt-0.5">
+                {language === 'ku'
+                  ? 'بە نووسینی ئیمەیلی kurdkodofficial@gmail.com و وەرگرتنی کۆدی ٦ ژمارەیی، ناسنامەی خاوەنت بسەلمێنە و بەشی لایسنس بکەرەوە.'
+                  : 'Dispatch a 6-digit numeric OTP to kurdkodofficial@gmail.com to authenticate sovereign ownership and unlock System 2.'}
+              </p>
+            </div>
+          </div>
+          <button
+            onClick={() => setIsOwnerVerifyModalOpen(true)}
+            className="px-4 py-2.5 rounded-xl bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700 text-slate-950 font-black text-xs transition cursor-pointer shadow-md flex items-center gap-1.5"
+          >
+            <Crown className="w-4 h-4" />
+            <span>{language === 'ku' ? 'ناردنی کۆدی مسۆگەربوون بۆ ئیمەیل' : 'Verify Owner via Numeric OTP'}</span>
+          </button>
+        </div>
+      )}
+
+      {/* Platform Owner Dedicated System 2 License Command Banner */}
+      {isMasterVendorOwner && (
+        <div className="bg-gradient-to-r from-amber-500 via-amber-600 to-yellow-600 text-slate-950 p-4 rounded-3xl shadow-xl border-2 border-amber-300 flex items-center justify-between flex-wrap gap-4 animate-in fade-in">
+          <div className="flex items-center gap-3.5">
+            <div className="w-12 h-12 rounded-2xl bg-slate-950 text-amber-400 flex items-center justify-center font-black shadow-md shrink-0">
+              <Crown className="w-6 h-6 animate-pulse" />
+            </div>
+            <div>
+              <div className="flex items-center gap-2">
+                <h3 className="font-black text-sm sm:text-base text-slate-950">
+                  {language === 'ku' ? '👑 بەشی خاوەن سیستەم: بەڕێوەبردن و پێدانی لایسنس (سیستەمی ٢)' : '👑 Platform Owner Vendor Command Center (System 2)'}
+                </h3>
+                <span className="text-[10px] font-black px-2 py-0.5 rounded-full bg-slate-950 text-amber-400 font-mono">
+                  OWNER HUB
+                </span>
+                {(currentUser?.isOwnerVerified || (typeof localStorage !== 'undefined' && localStorage.getItem('sas4erp_owner_session') === 'verified')) && (
+                  <span className="text-[10px] font-black px-2 py-0.5 rounded-full bg-emerald-950 text-emerald-300 border border-emerald-400/40">
+                    {language === 'ku' ? 'مسۆگەرکراو ✓' : 'VERIFIED ✓'}
+                  </span>
+                )}
+              </div>
+              <p className="text-xs text-slate-900/90 font-semibold mt-0.5">
+                {language === 'ku'
+                  ? 'پۆڕتاڵی تایبەتی خاوەنی سەکۆ بۆ دروستکردنی لایسنسی نوێ، نوێکردنەوەی مانگانەی کۆمپانیاکان، و بەڕێوەبردنی کلیلی هاردوێر.'
+                  : 'Your dedicated portal to generate cryptographic license keys, manage recurring subscriptions, and monitor node locks.'}
+              </p>
+            </div>
+          </div>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => setIsOwnerVerifyModalOpen(true)}
+              className="px-3 py-2.5 rounded-xl bg-white/90 hover:bg-white text-slate-900 font-bold text-xs transition cursor-pointer shadow-sm flex items-center gap-1.5"
+              title={language === 'ku' ? 'باری مسۆگەربوونی خاوەن' : 'Owner Verification Status'}
+            >
+              <Crown className="w-3.5 h-3.5 text-amber-700" />
+              <span>{language === 'ku' ? 'باری خاوەن' : 'Owner Status'}</span>
+            </button>
+            <button
+              onClick={() => openLicenseModal('generator')}
+              className="px-3.5 py-2.5 rounded-xl bg-white/95 hover:bg-white text-slate-900 font-extrabold text-xs transition cursor-pointer shadow-sm flex items-center gap-1.5"
+            >
+              <Key className="w-4 h-4 text-amber-700" />
+              <span>{language === 'ku' ? 'دروستکردنی کلیل' : 'Generate Key'}</span>
+            </button>
+            <button
+              onClick={() => setActiveTab('vendor-license-hub')}
+              className="px-4.5 py-2.5 rounded-xl bg-slate-950 text-amber-400 hover:bg-slate-900 font-black text-xs transition cursor-pointer shadow-md flex items-center gap-2 transform active:scale-95"
+            >
+              <span>{language === 'ku' ? 'چوونە پۆڕتاڵی لایسنس (خاوەن) ➔' : 'Open License Command Hub ➔'}</span>
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* Top Banner: Holding Owner Executive Overview */}
       <div className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-slate-900 via-indigo-950 to-blue-950 border border-indigo-500/20 p-6 sm:p-8 shadow-md">
         <div className="absolute top-0 right-0 w-96 h-96 bg-blue-500/10 rounded-full blur-3xl pointer-events-none" />
@@ -1001,19 +1163,21 @@ export const HoldingOwnerDashboard: React.FC = () => {
             </button>
           )}
 
-          {/* Trilingual User Manual & Word <-> PDF Converter Button */}
+
+
+          {/* Executive Manager File & Word <-> PDF Converter Button */}
           <button
             onClick={() => setIsUserManualOpen(true)}
             className="flex items-center justify-center gap-2 px-3 py-2.5 rounded-xl text-xs font-bold bg-blue-700 hover:bg-blue-600 text-white shadow-md transition transform active:scale-95 cursor-pointer text-center"
             id="dashboard-user-manual-btn"
             title={getUIText(language, {
-              en: 'Comprehensive User Manual & Two-Way Word ⇄ PDF Converter',
-              ku: 'ڕێبەری گشتگیر و گۆڕەری دوولایەنەی وۆرد ⇄ پی دی ئێف',
-              ar: 'دليل الاستخدام الشامل ومحوّل المستندات المزدوج Word ⇄ PDF'
+              en: 'Executive Manager File & Two-Way Word ⇄ PDF Converter',
+              ku: 'فایلی فەرمی بەڕێوەبەر و گۆڕەری دوولایەنەی وۆرد ⇄ پی دی ئێف',
+              ar: 'ملف المدير ومحوّل المستندات المزدوج Word ⇄ PDF'
             })}
           >
             <BookOpen className="w-4 h-4 text-blue-200 shrink-0" />
-            <span className="truncate">{getUIText(language, { en: 'Manual & Converter (Word ⇄ PDF)', ku: 'ڕێبەر و گۆڕەر (Word ⇄ PDF)', ar: 'الدليل والمحوّل (Word ⇄ PDF)' })}</span>
+            <span className="truncate">{getUIText(language, { en: 'Manager File (Word ⇄ PDF)', ku: 'فایلی بەڕێوەبەر (Word ⇄ PDF)', ar: 'ملف المدير (Word ⇄ PDF)' })}</span>
           </button>
         </div>
 
@@ -1029,7 +1193,275 @@ export const HoldingOwnerDashboard: React.FC = () => {
         </div>
       </div>
 
-      {/* Enterprise System Modules Directory (سەرجەم بەشە سەرەکییەکان لەژێر دەستی خاوەن و بە تایبەت بۆ دیتنی مۆبایل) */}
+      {/* =========================================================================
+          ULTRA-PROMINENT OFFICIAL SYSTEM USER MANUAL & DIFFERENTIATORS SHOWCASE
+          (پێویستە بە تەواوی دیار بێت لەسەر شاشەی مۆبایل و کۆمپیوتەر بە هەموو داواکارییەکانەوە)
+      ========================================================================= */}
+      <div className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-indigo-950 via-slate-900 to-blue-950 border-2 border-amber-400 p-5 sm:p-7 shadow-xl shadow-blue-950/50 text-white">
+        <div className="absolute top-0 right-0 w-80 h-80 bg-amber-400/10 rounded-full blur-3xl pointer-events-none" />
+        <div className="absolute bottom-0 left-0 w-80 h-80 bg-blue-500/15 rounded-full blur-3xl pointer-events-none" />
+
+        <div className="relative z-10 flex flex-col lg:flex-row lg:items-center justify-between gap-6 pb-5 border-b border-white/10">
+          <div className="flex items-start gap-4">
+            <div className="w-14 h-14 sm:w-16 sm:h-16 rounded-2xl bg-gradient-to-br from-amber-400 to-amber-600 text-slate-950 flex items-center justify-center font-black shadow-lg shadow-amber-400/30 shrink-0">
+              <BookOpen className="w-8 h-8 text-slate-950" />
+            </div>
+            <div>
+              <div className="flex flex-wrap items-center gap-2 mb-2">
+                <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-amber-400 text-slate-950 text-xs font-black shadow-sm">
+                  <span>★</span>
+                  <span>{language === 'ku' ? 'فایلی فەرمی ڕێبەری بەکارهێنان' : language === 'ar' ? 'الملف الرسمي لدليل الاستخدام' : 'Official User Manual & Dossier'}</span>
+                </span>
+                <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-blue-500/30 text-blue-200 border border-blue-400/30 text-[11px] font-mono font-bold">
+                  Word (.docx) ⇄ PDF
+                </span>
+                <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 text-[11px] font-mono font-bold">
+                  3 Languages: کوردی • English • العربية
+                </span>
+              </div>
+              <h2 className="text-xl sm:text-2xl font-black text-white tracking-tight">
+                {language === 'ku'
+                  ? '📖 ڕێبەری فەرمی کارپێکردنی SAS4ERP و دۆکیومێنتی "بۆچی ئەم سیستەمە بەکاربێنم؟"'
+                  : language === 'ar'
+                  ? '📖 الدليل الرسمي لتشغيل SAS4ERP وملف "لماذا تختار المنظومة؟" وجدول المقارنة'
+                  : '📖 SAS4ERP Official Operations Manual & "Why Choose SAS4ERP?" Dossier'}
+              </h2>
+              <p className="text-xs sm:text-sm text-slate-300 mt-1 max-w-3xl leading-relaxed">
+                {language === 'ku'
+                  ? 'ڕوونکردنەوەی تەواوی ٢١ بەش بە ٣ زمانی هاوکات لەناو یەک سیستەمدا، دروستبوونی خۆکارانەی ٩ بەش و کەمپ، هاوردەکردنی Drag & Drop بێ دووبارە نووسینەوە، دەستکاریکردنی تێبینی چەسپاو و ژمارەکانی بودجە، و خشتەی بەراوردی سیستەم لەگەڵ SAP، Oracle، و Odoo.'
+                  : language === 'ar'
+                  ? 'شرح شامل لكافة الأقسام الـ ٢١ بثلاث لغات متزامنة، التوليد التلقائي لـ ٩ أقسام وسكن العمال، استيراد السحب والإفلات، تعديل الملاحظات القيادية والميزانيات فورياً، ومقارنة المنظومة مع SAP و Oracle و Odoo.'
+                  : 'Full operations manual for 21 modules in Kurdish, English & Arabic, 0-second auto-provisioning of 9 departments, Drag & Drop zero-retyping ingestion, dynamic budget & sticky note editing, and comparison matrix vs SAP, Oracle, and Odoo.'}
+              </p>
+            </div>
+          </div>
+
+          {/* Primary 1-Click Action Buttons */}
+          <div className="flex flex-wrap lg:flex-nowrap items-center gap-2.5 shrink-0">
+            <button
+              onClick={handleDownloadManualDocx}
+              disabled={isDownloadingManualDocx}
+              id="banner-download-manual-docx"
+              className="flex-1 sm:flex-initial flex items-center justify-center gap-2 px-4 py-3 rounded-2xl text-xs font-black bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white shadow-lg shadow-blue-600/30 border border-blue-400/40 transition transform active:scale-95 cursor-pointer disabled:opacity-50"
+            >
+              <Download className="w-4 h-4 text-blue-200" />
+              <span>{isDownloadingManualDocx ? (language === 'ku' ? 'ئامادەکردن...' : 'Generating...') : (language === 'ku' ? 'داگرتنی ڕێبەر (Word .docx)' : language === 'ar' ? 'تحميل الدليل (Word)' : 'Download Manual (Word)')}</span>
+            </button>
+
+            <button
+              onClick={() => openUserManualPrintView({ includeKurdish: true, includeEnglish: true, includeArabic: true })}
+              id="banner-download-manual-pdf"
+              className="flex-1 sm:flex-initial flex items-center justify-center gap-2 px-4 py-3 rounded-2xl text-xs font-black bg-slate-800 hover:bg-slate-700 text-white shadow-md border border-slate-600 transition transform active:scale-95 cursor-pointer"
+            >
+              <Printer className="w-4 h-4 text-emerald-400" />
+              <span>{language === 'ku' ? 'داگرتنی ڕێبەر (PDF)' : language === 'ar' ? 'تحميل الدليل (PDF)' : 'Print / Save PDF'}</span>
+            </button>
+
+            <button
+              onClick={handleDownloadWhyDocx}
+              disabled={isDownloadingWhyDocx}
+              id="banner-download-why-choose-docx"
+              className="flex-1 sm:flex-initial flex items-center justify-center gap-2 px-4 py-3 rounded-2xl text-xs font-black bg-gradient-to-r from-amber-400 to-amber-500 hover:from-amber-300 hover:to-amber-400 text-slate-950 shadow-lg shadow-amber-500/20 transition transform active:scale-95 cursor-pointer disabled:opacity-50"
+            >
+              <FileText className="w-4 h-4 text-slate-950" />
+              <span>{isDownloadingWhyDocx ? (language === 'ku' ? 'ئامادەکردن...' : 'Generating...') : (language === 'ku' ? 'بۆچی ئەم سیستەمە؟ (Word)' : language === 'ar' ? 'لماذا تختارنا؟ (Word)' : 'Why Choose Dossier')}</span>
+            </button>
+
+
+            <button
+              onClick={() => setIsUserManualOpen(true)}
+              id="banner-open-modal-hub"
+              className="flex-1 sm:flex-initial flex items-center justify-center gap-2 px-4 py-3 rounded-2xl text-xs font-black bg-white/15 hover:bg-white/25 text-white border border-white/25 backdrop-blur-md transition transform active:scale-95 cursor-pointer"
+            >
+              <Eye className="w-4 h-4 text-amber-300" />
+              <span>{language === 'ku' ? 'کردنەوە و خوێندنەوە' : language === 'ar' ? 'فتح واستعراض' : 'Read in App'}</span>
+            </button>
+          </div>
+        </div>
+
+        {/* Quick Feature Badges Row */}
+        <div className="relative z-10 pt-4 grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2.5 text-[11px]">
+          <div className="bg-white/5 border border-white/10 rounded-xl p-2.5 flex items-center gap-2">
+            <Globe className="w-4 h-4 text-blue-400 shrink-0" />
+            <div>
+              <span className="font-bold block text-white">{language === 'ku' ? '٣ زمانی هاوکات' : language === 'ar' ? '٣ لغات متزامنة' : 'Trilingual Simultaneous'}</span>
+              <span className="text-[10px] text-slate-400">{language === 'ku' ? 'لە یەک سیستەمدا' : 'Simultaneous'}</span>
+            </div>
+          </div>
+
+          <div className="bg-white/5 border border-white/10 rounded-xl p-2.5 flex items-center gap-2">
+            <Building2 className="w-4 h-4 text-emerald-400 shrink-0" />
+            <div>
+              <span className="font-bold block text-white">{language === 'ku' ? 'خۆکار ٩ بەش و کەمپ' : language === 'ar' ? 'توليد تلقائي ٩ أقسام' : 'Auto 9 Departments'}</span>
+              <span className="text-[10px] text-slate-400">{language === 'ku' ? 'بۆ هەر کۆمپانیا/پڕۆژەیەک' : 'Auto-Provisioning'}</span>
+            </div>
+          </div>
+
+          <div className="bg-white/5 border border-white/10 rounded-xl p-2.5 flex items-center gap-2">
+            <ArrowRightLeft className="w-4 h-4 text-amber-400 shrink-0" />
+            <div>
+              <span className="font-bold block text-white">{language === 'ku' ? 'گۆڕەری Word ⇄ PDF' : language === 'ar' ? 'محوّل Word ⇄ PDF' : 'Word ⇄ PDF Studio'}</span>
+              <span className="text-[10px] text-slate-400">{language === 'ku' ? 'دوولایەنە لە سیستەمدا' : 'Two-Way Converter'}</span>
+            </div>
+          </div>
+
+          <div className="bg-white/5 border border-white/10 rounded-xl p-2.5 flex items-center gap-2">
+            <Upload className="w-4 h-4 text-indigo-400 shrink-0" />
+            <div>
+              <span className="font-bold block text-white">{language === 'ku' ? 'Drag & Drop دۆکیومێنت' : language === 'ar' ? 'استيراد بالسحب والإفلات' : 'Drag & Drop Ingestion'}</span>
+              <span className="text-[10px] text-slate-400">{language === 'ku' ? 'بێ دووبارە نووسینەوە' : 'Zero Retyping'}</span>
+            </div>
+          </div>
+
+          <div className="bg-white/5 border border-white/10 rounded-xl p-2.5 flex items-center gap-2">
+            <Edit3 className="w-4 h-4 text-rose-400 shrink-0" />
+            <div>
+              <span className="font-bold block text-white">{language === 'ku' ? 'دەستکاری تێبینی و بودجە' : language === 'ar' ? 'تعديل الملاحظات والميزانية' : 'Live Notes & Budgets'}</span>
+              <span className="text-[10px] text-slate-400">{language === 'ku' ? 'دەستکاریکردنی ڕاستەوخۆ' : 'In-Place Dynamic'}</span>
+            </div>
+          </div>
+
+          <div className="bg-white/5 border border-white/10 rounded-xl p-2.5 flex items-center gap-2">
+            <ShieldCheck className="w-4 h-4 text-sky-400 shrink-0" />
+            <div>
+              <span className="font-bold block text-white">{language === 'ku' ? 'بەراورد لەگەڵ SAP/Odoo' : language === 'ar' ? 'مقارنة مع SAP و Odoo' : 'vs SAP, Oracle, Odoo'}</span>
+              <span className="text-[10px] text-slate-400">{language === 'ku' ? 'خشتەی بەراورد' : 'Comparison Matrix'}</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* =========================================================================
+          SYSTEM LICENSE KEY & STATUS CARD - WRITINGS CLEARLY VISIBLE UNDER THE KEY
+      ========================================================================= */}
+      <div className="bg-gradient-to-br from-slate-900 via-slate-900 to-indigo-950 border-2 border-amber-400/90 rounded-3xl p-5 sm:p-6 shadow-xl text-white space-y-4">
+        {/* Top Key Header */}
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-white/10 pb-4">
+          <div className="flex items-center gap-3.5">
+            <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-amber-500 to-amber-600 text-slate-950 flex items-center justify-center font-black shadow-lg shadow-amber-500/30 shrink-0">
+              <Key className="w-6 h-6 text-slate-950" />
+            </div>
+            <div>
+              <div className="flex items-center gap-2 flex-wrap">
+                <span className="text-[11px] font-black px-2.5 py-0.5 rounded-full bg-amber-400 text-slate-950 uppercase tracking-wide">
+                  {language === 'ku' ? 'کلیلی لایسنس و مۆڵەت' : 'System License & Node Lock'}
+                </span>
+                <span className="text-xs font-mono font-bold text-amber-300">
+                  {systemLicense?.licenseType === 'VIP_OWNER_GIFT' ? 'VIP Unlimited' : (systemLicense?.licenseType || 'TRIAL_14D')}
+                </span>
+              </div>
+              <h3 className="text-base sm:text-lg font-black text-white mt-1">
+                {language === 'ku'
+                  ? 'نووسین و زانیارییەکانی تایبەت بە کلیلی سیستەم'
+                  : language === 'ar'
+                  ? 'بيانات وتفاصيل مفتاح ترخيص المنظومة'
+                  : 'System License Key Details & Hardware Node Authorization'}
+              </h3>
+            </div>
+          </div>
+
+          <button
+            onClick={() => setIsLicenseModalOpen(true)}
+            className="px-4 py-2.5 rounded-xl bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-slate-950 font-black text-xs flex items-center justify-center gap-2 transition cursor-pointer shadow-md shrink-0 self-start sm:self-auto"
+          >
+            <Key className="w-4 h-4 text-slate-950" />
+            <span>{language === 'ku' ? 'کردنەوەی پەنجەرەی لایسنس' : 'Open License Window'}</span>
+          </button>
+        </div>
+
+        {/* The Key Display */}
+        <div className="p-3.5 rounded-2xl bg-white/5 border border-white/10 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+          <div className="space-y-0.5">
+            <span className="text-[11px] font-bold text-slate-400 block">
+              {language === 'ku' ? 'کۆدی کلیلی چالاککراو (Active Key Code):' : 'Active Key Code:'}
+            </span>
+            <span className="font-mono text-sm sm:text-base font-black text-amber-300 tracking-wider break-all select-all">
+              {systemLicense?.licenseKey || 'TRIAL-14D'}
+            </span>
+          </div>
+
+          <span className={`text-xs font-extrabold px-3 py-1.5 rounded-xl shrink-0 self-start sm:self-auto ${
+            systemLicense?.isPerpetual
+              ? 'bg-amber-400/20 text-amber-300 border border-amber-400/40'
+              : systemLicense?.licenseType === 'EXPIRED'
+              ? 'bg-rose-500/20 text-rose-300 border border-rose-500/40'
+              : 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40'
+          }`}>
+            {systemLicense?.isPerpetual
+              ? (language === 'ku' ? 'هەمیشەیی VIP' : 'Lifetime Perpetual')
+              : systemLicense?.licenseType === 'EXPIRED'
+              ? (language === 'ku' ? 'بەسەرچووە' : 'Expired')
+              : (language === 'ku' ? `${getRemainingTrialDays(systemLicense?.expiresAt || '')} ڕۆژی کارایی ماوە` : `${getRemainingTrialDays(systemLicense?.expiresAt || '')} days remaining`)}
+          </span>
+        </div>
+
+        {/* Writings & Specifications Clearly Visible UNDER the Key */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 pt-1 text-xs">
+          <div className="bg-white/5 border border-white/10 rounded-2xl p-3 space-y-1">
+            <span className="text-[11px] text-slate-400 font-bold block flex items-center gap-1.5">
+              <Building2 className="w-3.5 h-3.5 text-blue-400" />
+              <span>{language === 'ku' ? 'تۆمارکراو بەناوی:' : 'Licensed Holding:'}</span>
+            </span>
+            <span className="font-black text-white text-xs truncate block">
+              {systemLicense?.licensedToHolding || 'Holding Enterprise'}
+            </span>
+            <span className="text-[10px] text-slate-400 block">
+              {systemLicense?.licensedToEmail || 'holding@sas4erp.com'}
+            </span>
+          </div>
+
+          <div className="bg-white/5 border border-white/10 rounded-2xl p-3 space-y-1">
+            <span className="text-[11px] text-slate-400 font-bold block flex items-center gap-1.5">
+              <Clock className="w-3.5 h-3.5 text-amber-400" />
+              <span>{language === 'ku' ? 'نوێکردنەوە و کارایی:' : 'Renewal & Validity:'}</span>
+            </span>
+            <span className="font-black text-amber-300 text-xs block">
+              {systemLicense?.isPerpetual
+                ? (language === 'ku' ? 'مۆڵەتی بەردەوام (VIP)' : 'Perpetual Grant')
+                : (language === 'ku' ? 'نوێکردنەوەی مانگانە / بەردەوام' : 'Monthly Recurring Renewal')}
+            </span>
+            <span className="text-[10px] text-slate-400 block">
+              {systemLicense?.expiresAt ? new Date(systemLicense.expiresAt).toLocaleDateString() : ''}
+            </span>
+          </div>
+
+          <div className="bg-white/5 border border-white/10 rounded-2xl p-3 space-y-1">
+            <span className="text-[11px] text-slate-400 font-bold block flex items-center gap-1.5">
+              <Cpu className="w-3.5 h-3.5 text-indigo-400" />
+              <span>{language === 'ku' ? 'ناسنامەی ئامێر (Node Lock):' : 'Hardware Node Lock:'}</span>
+            </span>
+            <span className="font-mono font-bold text-amber-300 text-[11px] truncate block select-all">
+              {systemLicense?.hardwareFingerprint || 'SAS-NODE-LOCKED'}
+            </span>
+            <span className="text-[10px] text-slate-400 block">
+              {language === 'ku' ? 'پارێزراو لەسەر ئەم ئامێرە' : 'Bound to this workstation'}
+            </span>
+          </div>
+
+          <div className="bg-white/5 border border-white/10 rounded-2xl p-3 space-y-1">
+            <span className="text-[11px] text-slate-400 font-bold block flex items-center gap-1.5">
+              <ShieldCheck className="w-3.5 h-3.5 text-emerald-400" />
+              <span>{language === 'ku' ? 'مۆدیوڵە کاراکراوەکان:' : 'Unlocked Scope:'}</span>
+            </span>
+            <span className="font-black text-emerald-400 text-xs block">
+              {language === 'ku' ? 'تەواوی ٢١ بەش و ئەپەکان' : 'All 21 Enterprise Modules'}
+            </span>
+            <span className="text-[10px] text-slate-400 block">
+              {language === 'ku' ? 'پڕۆژە و بەڵگەنامەی بێسنوور' : 'Unlimited sites & Word/PDF'}
+            </span>
+          </div>
+        </div>
+
+        {/* Clear Policy Explanation Under the Key */}
+        <div className="p-3 rounded-2xl bg-amber-500/10 border border-amber-400/30 text-[11px] text-amber-200/90 leading-relaxed">
+          {language === 'ku'
+            ? '📌 نووسین و مەرجەکانی لایسنس: ئەم کلیلە مۆڵەتی فەرمی کارپێکردنی SAS4ERP دەبەخشێت. بەپێی یاسای سیستم، لایسنسەکان مانگانە نوێ دەکرێنەوە تا دڵنیایی لە کارکردنی بەردەوام و پاراستنی مافی سەروەری بدرێت. بۆ نوێکردنەوەی مانگانە یان گۆڕینی کلیل، ناسنامەی ئامێرەکەت بنێرە بۆ خاوەنی سەکۆ.'
+            : language === 'ar'
+            ? '📌 شروط وتفاصيل المفتاح: يمنح هذا المفتاح الترخيص الرسمي لتشغيل SAS4ERP. يتم تجديد التراخيص شهرياً لضمان استمرارية الخدمة وأمان البيانات. للتجديد الشهري، يرجى إرسال معرف العتاد إلى مالك المنصة.'
+            : '📌 License Key Terms & Policy: This cryptographic key authorizes full operational access. Licenses are renewed on a recurring monthly cycle bound to your workstation node ID to ensure zero-trust compliance.'}
+        </div>
+      </div>
+
       <div className="bg-white border border-slate-200/90 rounded-3xl p-5 shadow-xs space-y-4">
         <div className="flex items-center justify-between border-b border-slate-100 pb-3 flex-wrap gap-2">
           <div className="flex items-center gap-2.5">

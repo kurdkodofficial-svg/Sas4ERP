@@ -98,9 +98,9 @@ export const translations: TranslationDict = {
     ar: 'الاجتماعات الافتراضية للإدارة',
   },
   navContactManagers: {
-    en: 'Direct Manager Communications',
-    ku: 'پەیوەندی ڕاستەوخۆ بە بەڕێوەبەران',
-    ar: 'الاتصال المباشر بالمدراء',
+    en: 'Kelegram (Telegram Messenger)',
+    ku: 'کەڵەگرام (Kelegram)',
+    ar: 'كَلَغرام (Kelegram)',
   },
   navGateScanner: {
     en: 'Main Gate Barcode Scanner',

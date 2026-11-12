@@ -89,7 +89,9 @@ export const ApprovalWorkflowEngineModule: React.FC = () => {
     setPrintPreviewPO,
     setIsPrinterModalOpen,
     openPrintManager,
-    printPurchaseOrder
+    printPurchaseOrder,
+    delegatePoSpendingAuthority,
+    isPoDelegatedOrAutonomous
   } = useERP();
 
   const { t, language } = useLanguage();
@@ -949,6 +951,19 @@ export const ApprovalWorkflowEngineModule: React.FC = () => {
                             <CheckCircle2 className="w-4 h-4" />
                             <span>{getUIText(language, { en: 'Authorize Order', ku: 'پەسەندکردنی کۆتایی', ar: 'اعتماد نهائي' })}</span>
                           </button>
+
+                          {(currentUser.role === 'HOLDING_OWNER' || currentUser.role === 'SUPER_ADMIN') && !isPoDelegatedOrAutonomous(po).isDelegated && (
+                            <button
+                              onClick={() => {
+                                delegatePoSpendingAuthority(po.id, 'بڕیاری سەرۆکایەتی هۆڵدینگ بۆ شۆڕکردنەوەی دەسەڵاتی خەرجکردن بۆ کۆمپانیا/پڕۆژە بەبێ گەڕانەوە بۆ بنکەی سەرەکی');
+                              }}
+                              className="px-4 py-2 rounded-xl text-xs font-black bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 text-white shadow-md transition transform active:scale-95 flex items-center gap-1.5 cursor-pointer"
+                              title={language === 'ku' ? 'شۆڕکردنەوەی دەسەڵاتی خەرجکردن بۆ خوارەوە بەبێ گەڕانەوە بۆ بنکەی سەرەکی' : 'Delegate spending authority downward to branch'}
+                            >
+                              <Zap className="w-4 h-4 fill-white" />
+                              <span>{getUIText(language, { en: 'Delegate Downward', ku: '⚡ شۆڕکردنەوەی دەسەڵات بۆ خوارەوە', ar: '⚡ تفويض الصلاحيات للفرع' })}</span>
+                            </button>
+                          )}
                         </div>
                       )}
                     </div>

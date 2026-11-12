@@ -25,12 +25,18 @@ import {
   CalendarRange,
   PanelLeftClose,
   PanelLeftOpen,
-  X
+  X,
+  FileText,
+  BookOpen,
+  Download,
+  Key,
+  Send
 } from 'lucide-react';
 import { useERP } from '../context/ERPContext';
 import { useLanguage } from '../context/LanguageContext';
 import { getUIText } from '../utils/langHelper';
-import { hasModuleAccess } from '../utils/rbacPermissions';
+import { hasModuleAccess, checkIsMasterVendorOwner } from '../utils/rbacPermissions';
+import { getRemainingTrialDays } from '../utils/licenseManager';
 
 export const Sidebar: React.FC = () => {
   const {
@@ -43,9 +49,15 @@ export const Sidebar: React.FC = () => {
     anomalyAlerts,
     currentUser,
     isMobileMenuOpen,
-    setIsMobileMenuOpen
+    setIsMobileMenuOpen,
+    setIsUserManualOpen,
+    openLicenseModal,
+    setIsOwnerVerifyModalOpen,
+    systemLicense
   } = useERP();
   const { t, language, isRtl } = useLanguage();
+
+  const isMasterVendorOwner = checkIsMasterVendorOwner(currentUser);
 
   const [isCollapsed, setIsCollapsed] = useState<boolean>(() => {
     try {
@@ -89,6 +101,13 @@ export const Sidebar: React.FC = () => {
           badge: isTopManagement ? null : (language === 'ku' ? 'لق' : 'BRANCH'),
           badgeColor: 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40'
         },
+        ...(isMasterVendorOwner ? [{
+          id: 'vendor-license-hub',
+          label: language === 'ku' ? '👑 پۆڕتاڵی لایسنس (سیستەمی ٢)' : language === 'ar' ? '👑 إدارة التراخيص (النظام ٢)' : '👑 Vendor License Hub',
+          icon: Crown,
+          badge: 'OWNER',
+          badgeColor: 'bg-amber-400 text-slate-950 border-amber-300 font-black'
+        }] : []),
         {
           id: 'procurement',
           label: isTopManagement
@@ -123,7 +142,17 @@ export const Sidebar: React.FC = () => {
             : 'bg-slate-700 text-slate-300 border-slate-600'
         },
         { id: 'virtual-meetings', label: t('navVirtualMeetings'), icon: Video, badge: 'LIVE', badgeColor: 'bg-rose-500/20 text-rose-300 border-rose-500/40 animate-pulse' },
-        { id: 'direct-comms', label: t('navContactManagers'), icon: PhoneCall, badge: null },
+        {
+          id: 'direct-comms',
+          label: getUIText(language, {
+            en: 'Kelegram (Telegram Messenger)',
+            ku: 'کەڵەگرام (Kelegram)',
+            ar: 'كَلَغرام (Kelegram)'
+          }),
+          icon: Send,
+          badge: 'TELEGRAM',
+          badgeColor: 'bg-sky-500/20 text-sky-300 border-sky-500/40'
+        },
         { id: 'companies-projects', label: t('navCompaniesProjects'), icon: Building2, badge: null },
         {
           id: 'project-reports',
@@ -244,6 +273,208 @@ export const Sidebar: React.FC = () => {
         </div>
 
         <div className={`${isCollapsed ? 'p-2' : 'p-3.5'} space-y-5 flex-1`}>
+          {/* Executive Manager File (فایلی بەڕێوەبەر) - Only for Managers & Holding Owner */}
+          {(currentUser.role === 'HOLDING_OWNER' || currentUser.role === 'SUPER_ADMIN' || currentUser.role === 'COMPANY_GM' || currentUser.role === 'PROJECT_MANAGER') && (
+            <div className="space-y-2 mb-3">
+              <button
+                onClick={() => {
+                  setIsUserManualOpen(true);
+                  setIsMobileMenuOpen(false);
+                }}
+                id="sidebar-pinned-manual-btn"
+                title={getUIText(language, {
+                  en: 'Executive Manager File, Powers & Documentation (Word ⇄ PDF)',
+                  ku: 'فایلی فەرمی بەڕێوەبەر: ڕێنمایی، دەسەڵاتەکان و دۆکیومێنت (Word ⇄ PDF)',
+                  ar: 'ملف المدير التنفيذي: الصلاحيات والتوثيق (Word ⇄ PDF)'
+                })}
+                className={`w-full flex items-center ${
+                  isCollapsed ? 'justify-center p-2.5' : 'justify-between px-3 py-2.5'
+                } rounded-2xl text-xs font-black transition-all cursor-pointer relative bg-gradient-to-r from-blue-700 via-indigo-700 to-amber-600 hover:from-blue-600 hover:to-indigo-600 text-white shadow-md shadow-indigo-900/30 border-2 border-amber-400/80 ring-2 ring-amber-400/20 transform active:scale-95 group`}
+              >
+                <div className="flex items-center gap-2.5 truncate">
+                  <FileText className="w-4 h-4 shrink-0 text-amber-300 animate-pulse" />
+                  {!isCollapsed && (
+                    <span className="truncate tracking-wide font-extrabold text-amber-100">
+                      {language === 'ku'
+                        ? '📁 فایلی بەڕێوەبەر (Word/PDF)'
+                        : language === 'ar'
+                        ? '📁 ملف المدير (Word/PDF)'
+                        : '📁 Manager File (Word/PDF)'}
+                    </span>
+                  )}
+                </div>
+                {!isCollapsed && (
+                  <span className="text-[10px] px-1.5 py-0.5 rounded-md bg-amber-400 text-slate-950 font-black font-mono shadow-2xs">
+                    {language === 'ku' ? 'بەڕێوەبەر' : language === 'ar' ? 'مدير' : 'MGR'}
+                  </span>
+                )}
+              </button>
+            </div>
+          )}
+
+            {/* License & Key Generator Section:
+                If Owner / ME: Shows the dedicated "Platform Owner Vendor Hub (System 2)" + Modal button
+                If Subscriber / Client: Vendor Hub is completely HIDDEN; only client license status is shown */}
+            {isMasterVendorOwner ? (
+              <div className="space-y-1.5">
+                {/* System 2: Platform Owner Command Center Navigation Item */}
+                <button
+                  onClick={() => {
+                    setActiveTab('vendor-license-hub');
+                    setIsMobileMenuOpen(false);
+                  }}
+                  id="sidebar-vendor-license-hub-btn"
+                  title={getUIText(language, {
+                    en: 'Platform Owner: License Command Hub & Monthly Renewals',
+                    ku: 'خاوەنی سەکۆ: پۆڕتاڵی لایسنس و نوێکردنەوەی مانگانەی کڕیاران',
+                    ar: 'مالك المنصة: بوابة إدارة وتجديد التراخيص الشهرية'
+                  })}
+                  className={`w-full flex items-center ${
+                    isCollapsed ? 'justify-center p-2.5' : 'justify-between px-3 py-2.5'
+                  } rounded-2xl text-xs font-black transition-all cursor-pointer relative ${
+                    activeTab === 'vendor-license-hub'
+                      ? 'bg-gradient-to-r from-amber-500 via-amber-600 to-yellow-600 text-slate-950 shadow-xl border-2 border-amber-300 ring-2 ring-amber-400/40'
+                      : 'bg-gradient-to-r from-amber-950 via-slate-900 to-amber-900 text-white shadow-lg border-2 border-amber-400 hover:border-amber-300'
+                  } transform active:scale-95 group`}
+                >
+                  <div className="flex items-center gap-2.5 truncate">
+                    <div className={`w-7 h-7 rounded-xl flex items-center justify-center shrink-0 shadow-md ${
+                      activeTab === 'vendor-license-hub' ? 'bg-slate-950 text-amber-400' : 'bg-amber-400 text-slate-950'
+                    }`}>
+                      <Crown className="w-4 h-4 animate-pulse" />
+                    </div>
+                    {!isCollapsed && (
+                      <div className="flex flex-col items-start text-right leading-tight truncate">
+                        <span className={`truncate tracking-wide font-black text-xs ${
+                          activeTab === 'vendor-license-hub' ? 'text-slate-950' : 'text-amber-300'
+                        }`}>
+                          {language === 'ku' ? '👑 پۆڕتاڵی لایسنس (خاوەن)' : language === 'ar' ? '👑 بوابة التراخيص (المالك)' : '👑 Vendor License Hub'}
+                        </span>
+                        <span className={`text-[10px] font-mono truncate font-semibold ${
+                          activeTab === 'vendor-license-hub' ? 'text-slate-800' : 'text-amber-200/90'
+                        }`}>
+                          {language === 'ku' ? 'تایبەت بە من (سیستەمی ٢)' : language === 'ar' ? 'خاص بي (النظام ٢)' : 'Owner Only (System 2)'}
+                        </span>
+                      </div>
+                    )}
+                  </div>
+                  {!isCollapsed && (
+                    <span className={`text-[9px] px-1.5 py-0.5 rounded-md font-mono font-black ${
+                      activeTab === 'vendor-license-hub' ? 'bg-slate-950 text-amber-400' : 'bg-amber-400 text-slate-950'
+                    }`}>
+                      OWNER
+                    </span>
+                  )}
+                </button>
+
+                {/* Quick Key Activation / Check Popup */}
+                <button
+                  onClick={() => {
+                    openLicenseModal('generator');
+                    setIsMobileMenuOpen(false);
+                  }}
+                  id="sidebar-pinned-license-btn"
+                  title={getUIText(language, {
+                    en: 'Open License Modal',
+                    ku: 'کردنەوەی پەنجەرەی کلیل',
+                    ar: 'فتح نافذة المفاتيح'
+                  })}
+                  className={`w-full flex items-center ${
+                    isCollapsed ? 'justify-center p-2' : 'justify-between px-3 py-2'
+                  } rounded-xl text-xs font-bold transition-all cursor-pointer relative bg-slate-900 hover:bg-slate-800 text-slate-300 border border-slate-700/80 transform active:scale-95 group`}
+                >
+                  <div className="flex items-center gap-2 truncate">
+                    <Key className="w-3.5 h-3.5 text-amber-400" />
+                    {!isCollapsed && (
+                      <span className="text-[11px] truncate">
+                        {language === 'ku' ? 'پەنجەرەی کاراکردنی کلیل' : 'License Key Modal'}
+                      </span>
+                    )}
+                  </div>
+                  {!isCollapsed && (
+                    <span className="text-[9px] text-amber-400/80 font-mono">
+                      POPUP
+                    </span>
+                  )}
+                </button>
+              </div>
+            ) : (
+              <button
+                onClick={() => {
+                  openLicenseModal('activate');
+                  setIsMobileMenuOpen(false);
+                }}
+                id="sidebar-pinned-license-btn"
+                title={getUIText(language, {
+                  en: 'Node License Status',
+                  ku: 'ڕەوشی لایسنس و مۆڵەتی ئامێر',
+                  ar: 'حالة ترخيص الجهاز'
+                })}
+                className={`w-full flex items-center ${
+                  isCollapsed ? 'justify-center p-2.5' : 'justify-between px-3 py-2.5'
+                } rounded-2xl text-xs font-black transition-all cursor-pointer relative bg-slate-900 text-white shadow-md border border-slate-700/80 hover:bg-slate-800 transform active:scale-95 group`}
+              >
+                <div className="flex items-center gap-2.5 truncate">
+                  <div className="w-7 h-7 rounded-xl bg-blue-500/20 text-blue-400 flex items-center justify-center shrink-0 border border-blue-500/30">
+                    <Key className="w-3.5 h-3.5" />
+                  </div>
+                  {!isCollapsed && (
+                    <div className="flex flex-col items-start text-right leading-tight truncate">
+                      <span className="truncate tracking-wide font-bold text-slate-200 text-xs">
+                        {language === 'ku' ? 'ڕەوشی لایسنس' : language === 'ar' ? 'حالة الترخيص' : 'License Status'}
+                      </span>
+                      <span className="text-[10px] text-slate-400 font-mono truncate font-semibold">
+                        {systemLicense?.licenseType === 'COMMERCIAL_ACTIVE' || systemLicense?.isPerpetual
+                          ? 'چالاک (بازرگانی)'
+                          : systemLicense?.licenseType === 'EXPIRED'
+                          ? 'بەسەرچووە'
+                          : `تاقیکردنەوە (${getRemainingTrialDays(systemLicense?.expiresAt || '')} ڕۆژ)`}
+                      </span>
+                    </div>
+                  )}
+                </div>
+                {!isCollapsed && (
+                  <span className={`text-[10px] px-1.5 py-0.5 rounded-md font-mono font-bold ${
+                    systemLicense?.isPerpetual || systemLicense?.licenseType === 'COMMERCIAL_ACTIVE'
+                      ? 'bg-emerald-500 text-white'
+                      : systemLicense?.licenseType === 'EXPIRED'
+                      ? 'bg-rose-500 text-white'
+                      : 'bg-blue-500 text-white'
+                  }`}>
+                    {systemLicense?.isPerpetual ? 'ACTIVE' : `${getRemainingTrialDays(systemLicense?.expiresAt || '')}d`}
+                  </span>
+                )}
+              </button>
+            )}
+
+            {/* Quick Owner Verification Link if not verified */}
+            {(!currentUser?.isOwnerVerified && (typeof localStorage === 'undefined' || localStorage.getItem('sas4erp_owner_session') !== 'verified')) && (
+              <button
+                onClick={() => {
+                  setIsOwnerVerifyModalOpen(true);
+                  setIsMobileMenuOpen(false);
+                }}
+                className={`w-full flex items-center ${
+                  isCollapsed ? 'justify-center p-2' : 'justify-between px-3 py-2'
+                } rounded-xl text-xs font-bold transition-all cursor-pointer bg-amber-500/10 hover:bg-amber-500/20 text-amber-300 border border-amber-400/30 group`}
+                title="مسۆگەرکردنی خاوەنی سەکۆ (kurdkodofficial@gmail.com)"
+              >
+                <div className="flex items-center gap-2 truncate">
+                  <Crown className="w-3.5 h-3.5 text-amber-400 shrink-0" />
+                  {!isCollapsed && (
+                    <span className="text-[11px] truncate">
+                      {language === 'ku' ? 'مسۆگەرکردنی خاوەن' : 'Owner OTP Verify'}
+                    </span>
+                  )}
+                </div>
+                {!isCollapsed && (
+                  <span className="text-[9px] bg-amber-400 text-slate-950 font-bold px-1.5 py-0.2 rounded font-mono">
+                    OTP
+                  </span>
+                )}
+              </button>
+            )}
+
           {visibleNavGroups.map((group, idx) => (
             <div key={idx} className="space-y-1">
               {!isCollapsed && (

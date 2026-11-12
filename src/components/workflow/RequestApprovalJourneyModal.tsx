@@ -16,11 +16,15 @@ import {
   FileText,
   BadgeCheck,
   Share2,
-  Send
+  Send,
+  Zap,
+  Lock,
+  Boxes
 } from 'lucide-react';
 import { PurchaseOrder } from '../../types/erp';
 import { WorkflowActiveStepState } from '../../types/workflow';
 import { useLanguage } from '../../context/LanguageContext';
+import { useERP } from '../../context/ERPContext';
 import { getUIText } from '../../utils/langHelper';
 
 interface RequestApprovalJourneyModalProps {
@@ -37,6 +41,9 @@ export const RequestApprovalJourneyModal: React.FC<RequestApprovalJourneyModalPr
   onOpenPrint
 }) => {
   const { language, isRtl } = useLanguage();
+  const { currentUser, canUserApproveWorkflowStep, approveWorkflowStep, delegatePoSpendingAuthority } = useERP();
+  const [activeComment, setActiveComment] = React.useState('');
+  const [isSubmitting, setIsSubmitting] = React.useState(false);
 
   if (!isOpen || !purchaseOrder) return null;
 
@@ -45,32 +52,57 @@ export const RequestApprovalJourneyModal: React.FC<RequestApprovalJourneyModalPr
     {
       stepNumber: 1,
       role: 'PROJECT_MANAGER',
-      titleEn: 'Project Manager Verification',
-      titleKu: 'پشتڕاستکردنەوەی بەڕێوەبەری پڕۆژە (داواکار)',
-      titleAr: 'تحقق مدير المشروع (مقدم الطلب)',
+      titleEn: 'Project Site Requisition & Scope Validation',
+      titleKu: 'پشتڕاستکردنەوەی بەڕێوەبەری پڕۆژە (داواکاری مەیدانی)',
+      titleAr: 'تحقق مدير المشروع ومطابقة الحاجة الميدانية',
       approverName: purchaseOrder.requestedBy || 'Project Manager',
       status: 'APPROVED',
       actionDate: purchaseOrder.createdDate,
-      comments: 'Request compiled and submitted with technical justification',
+      comments: 'Technical scope, quantity justification & bill of quantities verified',
       signatureHash: 'SIG-PM-INIT-VERIFIED'
     },
     {
       stepNumber: 2,
-      role: 'GENERAL_MANAGER',
-      titleEn: 'Company General Manager Review',
-      titleKu: 'پێداچوونەوەی بەڕێوەبەری گشتی کۆمپانیا (GM)',
-      titleAr: 'مراجعة المدير العام للشركة',
-      approverName: 'Company General Manager',
+      role: 'WAREHOUSE_OFFICER',
+      titleEn: 'Warehouse Stock & Inventory Availability Clearance',
+      titleKu: 'پشکنینی کۆگا و نەبوونی کەلوپەل لە بەردەست (بەرپرسی کۆگا)',
+      titleAr: 'تدقيق مسؤول المستودع والتأكد من عدم توفر المواد بالمخزون',
+      approverName: 'Warehouse Officer',
       status: purchaseOrder.status === 'APPROVED_BY_OWNER' ? 'APPROVED' : 'PENDING',
       actionDate: purchaseOrder.status === 'APPROVED_BY_OWNER' ? purchaseOrder.createdDate : undefined,
-      comments: purchaseOrder.status === 'APPROVED_BY_OWNER' ? 'Approved within subsidiary operational budget' : undefined
+      comments: purchaseOrder.status === 'APPROVED_BY_OWNER' ? 'Cleared: zero available buffer stock in central warehouse' : undefined,
+      signatureHash: purchaseOrder.status === 'APPROVED_BY_OWNER' ? 'SIG-WH-STOCK-CLEARED' : undefined
     },
     {
       stepNumber: 3,
+      role: 'FINANCE_HEAD',
+      titleEn: 'Finance & Budget Allocation Review',
+      titleKu: 'پێداچوونەوەی دارایی و دیاریکردنی بودجەی شایستە',
+      titleAr: 'مراجعة الإدارة المالية والتحقق من الموازنة',
+      approverName: 'Finance Head / Cost Controller',
+      status: purchaseOrder.status === 'APPROVED_BY_OWNER' ? 'APPROVED' : 'PENDING',
+      actionDate: purchaseOrder.status === 'APPROVED_BY_OWNER' ? purchaseOrder.createdDate : undefined,
+      comments: purchaseOrder.status === 'APPROVED_BY_OWNER' ? 'Audited: project fund code and expenditure line allocated' : undefined,
+      signatureHash: purchaseOrder.status === 'APPROVED_BY_OWNER' ? 'SIG-FIN-BUDGET-CONFIRMED' : undefined
+    },
+    {
+      stepNumber: 4,
+      role: 'GENERAL_MANAGER',
+      titleEn: 'Subsidiary General Manager Endorsement',
+      titleKu: 'پێداچوونەوەی بەڕێوەبەری گشتی کۆمپانیا (GM)',
+      titleAr: 'موافقة وتزكية المدير العام للشركة',
+      approverName: 'Company General Manager',
+      status: purchaseOrder.status === 'APPROVED_BY_OWNER' ? 'APPROVED' : 'PENDING',
+      actionDate: purchaseOrder.status === 'APPROVED_BY_OWNER' ? purchaseOrder.createdDate : undefined,
+      comments: purchaseOrder.status === 'APPROVED_BY_OWNER' ? 'Endorsed for final executive authorization' : undefined,
+      signatureHash: purchaseOrder.status === 'APPROVED_BY_OWNER' ? 'SIG-GM-ENDORSED' : undefined
+    },
+    {
+      stepNumber: 5,
       role: 'HOLDING_OWNER',
-      titleEn: 'Holding Owner Executive Approval & Seal',
-      titleKu: 'واژۆ و مۆری کۆتایی خاوەنی هۆڵدینگ (سەرۆکایەتی)',
-      titleAr: 'موافقة وختم مالك المجموعة النهائي',
+      titleEn: 'Holding Company Owner Final Executive Approval & Seal',
+      titleKu: 'واژۆ و مۆری کۆتایی خاوەنی هۆڵدینگ (مەرجی جێبەجێکردن)',
+      titleAr: 'موافقة وختم مالك المجموعة النهائي (شرط التنفيذ)',
       approverName: purchaseOrder.holdingApproval?.approvedBy || 'Holding Owner',
       status: purchaseOrder.status === 'APPROVED_BY_OWNER' ? 'APPROVED' : 'PENDING',
       actionDate: purchaseOrder.holdingApproval?.approvedAt,
@@ -81,10 +113,10 @@ export const RequestApprovalJourneyModal: React.FC<RequestApprovalJourneyModalPr
 
   // Determine which step it currently is at
   const currentStep = steps.find(s => s.status === 'PENDING') || steps[steps.length - 1];
-  const isFullyApproved = purchaseOrder.status === 'APPROVED_BY_OWNER' || steps.every(s => s.status === 'APPROVED');
+  const isFullyApproved = purchaseOrder.status === 'APPROVED_BY_OWNER' || steps.every(s => s.status === 'APPROVED' || s.status === 'DELEGATED_TO_BRANCH');
   const isRejected = purchaseOrder.status === 'REJECTED_BY_OWNER' || steps.some(s => s.status === 'REJECTED');
 
-  const approvedSteps = steps.filter(s => s.status === 'APPROVED');
+  const approvedSteps = steps.filter(s => s.status === 'APPROVED' || s.status === 'DELEGATED_TO_BRANCH');
   const pendingSteps = steps.filter(s => s.status === 'PENDING');
 
   const progressPercent = isFullyApproved
@@ -164,6 +196,40 @@ export const RequestApprovalJourneyModal: React.FC<RequestApprovalJourneyModalPr
         </div>
 
         <div className="p-6 space-y-6 max-h-[65vh] overflow-y-auto">
+          {/* Strict Execution Authorization Gate */}
+          <div className={`p-4 rounded-2xl border flex items-start gap-3.5 ${
+            isFullyApproved
+              ? 'bg-emerald-500/10 border-emerald-300 text-emerald-950'
+              : 'bg-rose-50 border-rose-300 text-rose-950'
+          }`}>
+            <div className={`p-2 rounded-xl text-white shrink-0 ${isFullyApproved ? 'bg-emerald-600' : 'bg-rose-600'}`}>
+              {isFullyApproved ? <BadgeCheck className="w-5 h-5" /> : <Lock className="w-5 h-5" />}
+            </div>
+            <div>
+              <div className="flex items-center gap-2 flex-wrap">
+                <span className="font-black text-sm">
+                  {isFullyApproved
+                    ? (language === 'ku' ? 'مۆڵەتی جێبەجێکردنی کڕین دراوە (Execution Authorized)' : 'Purchase Execution Authorized')
+                    : (language === 'ku' ? 'ڕاگرتنی فەرمی کڕین (Execution Locked)' : 'Purchase Execution Strictly Locked')}
+                </span>
+                <span className={`text-[10px] font-mono font-bold px-2 py-0.5 rounded-full ${
+                  isFullyApproved ? 'bg-emerald-200 text-emerald-900' : 'bg-rose-200 text-rose-900'
+                }`}>
+                  {isFullyApproved ? 'OWNER SEAL ACTIVE' : 'AWAITING HOLDING OWNER'}
+                </span>
+              </div>
+              <p className="text-xs mt-1 leading-relaxed">
+                {isFullyApproved
+                  ? (language === 'ku'
+                      ? 'ڕەزامەندی و مۆری کۆتایی خاوەنی هۆڵدینگ تەواو بووە. بەشی کڕین و دارایی و کۆگا مۆڵەتی تەواویان هەیە بۆ دەرکردنی فەرمانی کڕین و سەرفکردنی پارە.'
+                      : 'Holding Company Owner final seal has been captured. Procurement, finance and inventory teams are authorized to issue PO to vendor and disburse funds.')
+                  : (language === 'ku'
+                      ? 'بەپێی یاسای سیستەمی SAS4ERP، هیچ کڕین و سەرفکردنی پارەیەک ناکرێت تاوەکو خاوەنی هۆڵدینگ (Holding Owner) ڕەزامەندی و مۆری کۆتایی نەدات.'
+                      : 'Under SAS4ERP governance, no purchase may be executed, vendor PO issued, or payment disbursed until the Holding Company Owner provides final seal.')}
+              </p>
+            </div>
+          </div>
+
           {/* Key Answers Cards: Currently At & Remaining Approvers */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             {/* Card 1: Currently At */}
@@ -253,6 +319,7 @@ export const RequestApprovalJourneyModal: React.FC<RequestApprovalJourneyModalPr
             <div className="relative pl-6 sm:pl-8 space-y-6 before:content-[''] before:absolute before:left-3 before:top-2 before:bottom-2 before:w-0.5 before:bg-slate-200">
               {steps.map((step, idx) => {
                 const isStepApproved = step.status === 'APPROVED';
+                const isStepDelegated = step.status === 'DELEGATED_TO_BRANCH';
                 const isStepCurrent = step.status === 'PENDING' && currentStep.stepNumber === step.stepNumber;
                 const isStepPending = step.status === 'PENDING' && !isStepCurrent;
                 const isStepRejected = step.status === 'REJECTED';
@@ -264,6 +331,8 @@ export const RequestApprovalJourneyModal: React.FC<RequestApprovalJourneyModalPr
                       className={`absolute -left-6 sm:-left-8 top-0.5 w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold shadow-xs ${
                         isStepApproved
                           ? 'bg-emerald-500 text-white ring-4 ring-emerald-50'
+                          : isStepDelegated
+                          ? 'bg-amber-500 text-white ring-4 ring-amber-100 shadow-sm'
                           : isStepCurrent
                           ? 'bg-blue-600 text-white ring-4 ring-blue-100 animate-pulse'
                           : isStepRejected
@@ -273,6 +342,8 @@ export const RequestApprovalJourneyModal: React.FC<RequestApprovalJourneyModalPr
                     >
                       {isStepApproved ? (
                         <CheckCircle2 className="w-4 h-4" />
+                      ) : isStepDelegated ? (
+                        <Zap className="w-3.5 h-3.5 fill-white" />
                       ) : isStepRejected ? (
                         <X className="w-4 h-4" />
                       ) : (
@@ -284,6 +355,8 @@ export const RequestApprovalJourneyModal: React.FC<RequestApprovalJourneyModalPr
                     <div className={`flex-1 p-4 rounded-2xl border transition ${
                       isStepCurrent
                         ? 'bg-blue-50/70 border-blue-300 shadow-sm'
+                        : isStepDelegated
+                        ? 'bg-amber-50/70 border-amber-300 shadow-xs'
                         : isStepApproved
                         ? 'bg-slate-50 border-slate-200'
                         : 'bg-slate-50/40 border-slate-200/60 opacity-80'
@@ -304,12 +377,16 @@ export const RequestApprovalJourneyModal: React.FC<RequestApprovalJourneyModalPr
                         <span className={`text-[11px] font-bold px-2.5 py-0.5 rounded-full self-start sm:self-auto ${
                           isStepApproved
                             ? 'bg-emerald-100 text-emerald-800 border border-emerald-300'
+                            : isStepDelegated
+                            ? 'bg-amber-100 text-amber-900 border border-amber-300 flex items-center gap-1'
                             : isStepCurrent
                             ? 'bg-blue-100 text-blue-800 border border-blue-300 animate-pulse'
                             : 'bg-slate-200 text-slate-600'
                         }`}>
                           {isStepApproved
                             ? (language === 'ku' ? 'واژوو کرا' : 'Signed & Approved')
+                            : isStepDelegated
+                            ? (language === 'ku' ? '⚡ شۆڕکراوەتەوە بۆ لقی مەیدانی (بێ HQ)' : '⚡ Delegated to Branch')
                             : isStepCurrent
                             ? (language === 'ku' ? 'ئێستا لێرەیە (چاوەڕوانە)' : 'Awaiting Action Now')
                             : (language === 'ku' ? 'ماوە' : 'Pending')}
@@ -337,6 +414,92 @@ export const RequestApprovalJourneyModal: React.FC<RequestApprovalJourneyModalPr
                           💬 "{step.comments}"
                         </p>
                       )}
+
+                      {/* Action Bar for Pending Current Step */}
+                      {step.status === 'PENDING' && (() => {
+                        const check = canUserApproveWorkflowStep(currentUser, purchaseOrder, step.stepNumber);
+                        return (
+                          <div className="mt-3 pt-3 border-t border-slate-200/80 space-y-2">
+                            {check.allowed ? (
+                              <div className="bg-white p-3 rounded-2xl border border-blue-200 space-y-2 shadow-2xs">
+                                <div className="text-[11px] font-bold text-blue-900 flex items-center justify-between">
+                                  <span>{language === 'ku' ? `تۆ وەک (${currentUser.title || currentUser.role}) دەسەڵاتی واژۆت هەیە:` : `Authorized to sign as (${currentUser.title || currentUser.role}):`}</span>
+                                </div>
+                                <input
+                                  type="text"
+                                  placeholder={language === 'ku' ? 'تێبینی یان ڕوونکردنەوەی فەرمی (ئارەزوومەندانە)...' : 'Official comments or sign-off notes (optional)...'}
+                                  value={activeComment}
+                                  onChange={(e) => setActiveComment(e.target.value)}
+                                  className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-1.5 text-xs text-slate-800 focus:bg-white focus:outline-none focus:border-blue-500"
+                                />
+                                <div className="flex items-center gap-2 pt-1">
+                                  <button
+                                    disabled={isSubmitting}
+                                    onClick={async () => {
+                                      setIsSubmitting(true);
+                                      approveWorkflowStep(purchaseOrder.id, step.stepNumber, 'APPROVED', activeComment);
+                                      setIsSubmitting(false);
+                                      onClose();
+                                    }}
+                                    className="flex-1 py-2 px-3 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold text-xs flex items-center justify-center gap-1.5 shadow-xs transition cursor-pointer"
+                                  >
+                                    <CheckCircle2 className="w-4 h-4" />
+                                    <span>{language === 'ku' ? 'واژۆ و پەسەندکردنی ئەم قۆناغە' : 'Approve & Sign Step'}</span>
+                                  </button>
+                                    <button
+                                      disabled={isSubmitting}
+                                      onClick={async () => {
+                                        setIsSubmitting(true);
+                                        approveWorkflowStep(purchaseOrder.id, step.stepNumber, 'REJECTED', activeComment || 'Rejected by approver');
+                                        setIsSubmitting(false);
+                                        onClose();
+                                      }}
+                                      className="py-2 px-3 rounded-xl bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 font-bold text-xs flex items-center justify-center gap-1.5 transition cursor-pointer"
+                                    >
+                                      <X className="w-4 h-4" />
+                                      <span>{language === 'ku' ? 'ڕەتکردنەوە' : 'Reject'}</span>
+                                    </button>
+
+                                    {(step.role === 'HOLDING_OWNER' || step.role === 'HOLDING_VP') && (currentUser.role === 'HOLDING_OWNER' || currentUser.role === 'SUPER_ADMIN') && (
+                                      <button
+                                        disabled={isSubmitting}
+                                        type="button"
+                                        onClick={() => {
+                                          delegatePoSpendingAuthority(purchaseOrder.id, activeComment || 'شۆڕکردنەوەی دەسەڵاتی خەرجکردن بۆ کۆمپانیا/پڕۆژە بەبێ گەڕانەوە بۆ بنکەی سەرەکی');
+                                          onClose();
+                                        }}
+                                        className="py-2 px-3 rounded-xl bg-amber-500 hover:bg-amber-600 text-white font-extrabold text-xs flex items-center justify-center gap-1.5 transition cursor-pointer shadow-xs"
+                                        title="شۆڕکردنەوەی دەسەڵاتی خەرجکردن بۆ خوارەوە بەبێ گەڕانەوە بۆ بنکەی سەرەکی"
+                                      >
+                                        <Zap className="w-4 h-4 fill-white" />
+                                        <span>{language === 'ku' ? '⚡ شۆڕکردنەوە بۆ خوارەوە' : '⚡ Delegate Down'}</span>
+                                      </button>
+                                    )}
+                                  </div>
+                                </div>
+                            ) : (
+                              <div className="bg-amber-50/80 border border-amber-200 p-2.5 rounded-xl text-[11px] text-amber-900 flex items-start gap-2">
+                                <AlertCircle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
+                                <div className="space-y-1">
+                                  <p className="font-semibold">{language === 'ku' ? check.reasonKu : check.reasonEn}</p>
+                                  {check.requiresOverride && (
+                                    <button
+                                      onClick={() => {
+                                        approveWorkflowStep(purchaseOrder.id, step.stepNumber, 'APPROVED', activeComment || 'Holding Owner Sovereign Override Decree', undefined, undefined, true);
+                                        onClose();
+                                      }}
+                                      className="mt-1 px-3 py-1 rounded-lg bg-amber-600 hover:bg-amber-700 text-white font-bold text-[10px] flex items-center gap-1 transition cursor-pointer shadow-xs"
+                                    >
+                                      <Crown className="w-3.5 h-3.5" />
+                                      <span>{language === 'ku' ? 'بڕیاری دەسەڵاتداری بەپەلەی خاوەن هۆلدینگ (Executive Override)' : 'Apply Executive Sovereign Override'}</span>
+                                    </button>
+                                  )}
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })()}
 
                       {/* Cryptographic Signature Stamp if Approved */}
                       {isStepApproved && (
