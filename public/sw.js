@@ -9,12 +9,12 @@ const API_CACHE = `${CACHE_VERSION}-api`;
 
 // Critical App Shell & Asset Pre-cache Manifest
 const PRECACHE_ASSETS = [
-  '/',
-  '/index.html',
-  '/manifest.json',
-  '/icon-192.svg',
-  '/icon-512.svg',
-  '/icon-maskable.svg'
+  './',
+  './index.html',
+  './manifest.json',
+  './icon-192.svg',
+  './icon-512.svg',
+  './icon-maskable.svg'
 ];
 
 // Offline Fallback HTML when navigation completely fails and nothing is in cache
@@ -151,7 +151,7 @@ self.addEventListener('fetch', (event) => {
           if (cachedRoute) return cachedRoute;
 
           // 2. Fallback to cached index.html (SPA shell)
-          const cachedShell = await caches.match('/index.html');
+          const cachedShell = (await caches.match('./index.html')) || (await caches.match('/index.html'));
           if (cachedShell) return cachedShell;
 
           // 3. Fallback to embedded Offline HTML

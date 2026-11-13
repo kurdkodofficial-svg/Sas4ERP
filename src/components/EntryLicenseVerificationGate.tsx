@@ -24,6 +24,7 @@ import {
   verifyAndApplyLicenseKey,
   getRemainingTrialDays
 } from '../utils/licenseManager';
+import { getApiUrl } from '../utils/apiConfig';
 
 interface EntryLicenseVerificationGateProps {
   onLicenseChanged?: (license: SystemLicenseInfo) => void;
@@ -50,7 +51,7 @@ export const EntryLicenseVerificationGate: React.FC<EntryLicenseVerificationGate
     let isMounted = true;
     const checkServerStatus = async () => {
       try {
-        const res = await fetch('/api/license/status');
+        const res = await fetch(getApiUrl('/api/license/status'));
         if (res.ok && res.headers.get('content-type')?.includes('application/json')) {
           const data = await res.json();
           if (data && data.license && isMounted) {
@@ -90,7 +91,7 @@ export const EntryLicenseVerificationGate: React.FC<EntryLicenseVerificationGate
       // 1. Sync activation with server
       let serverRes: any = null;
       try {
-        const res = await fetch('/api/license/activate', {
+        const res = await fetch(getApiUrl('/api/license/activate'), {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({

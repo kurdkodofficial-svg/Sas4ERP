@@ -50,6 +50,7 @@ import { getStoredSystemLicense, SystemLicenseInfo, getRemainingTrialDays } from
 import { getUIText } from '../utils/langHelper';
 import { KelegramApp } from './kelegram/KelegramApp';
 import { checkIsMasterVendorOwner } from '../utils/rbacPermissions';
+import { getApiUrl } from '../utils/apiConfig';
 
 export const Header: React.FC = () => {
   const {
@@ -507,7 +508,7 @@ export const Header: React.FC = () => {
 
           {/* Direct Full Source Code ZIP Download Button */}
           <a
-            href="/api/export-codebase-zip"
+            href={getApiUrl('/api/export-codebase-zip')}
             download="SAS4ERP-Full-Source-Code.zip"
             className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-black bg-slate-900 hover:bg-slate-800 text-white border border-slate-700 shadow-sm transition transform active:scale-95 cursor-pointer shrink-0"
             id="download-source-code-header-btn"

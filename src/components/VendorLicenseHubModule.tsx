@@ -42,6 +42,7 @@ import {
   resetTrialTo14Days
 } from '../utils/licenseManager';
 import { getUIText } from '../utils/langHelper';
+import { getApiUrl } from '../utils/apiConfig';
 
 export interface ClientSubscriberRecord {
   id: string;
@@ -177,7 +178,7 @@ export const VendorLicenseHubModule: React.FC = () => {
     try {
       const refreshed = resetTrialTo14Days();
       setSystemLicense(refreshed);
-      await fetch('/api/license/reset-trial', {
+      await fetch(getApiUrl('/api/license/reset-trial'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email: currentUser.email })

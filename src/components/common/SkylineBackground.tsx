@@ -1,5 +1,8 @@
 import React from 'react';
 import { useERP } from '../../context/ERPContext';
+import corporateBuildingsImg from '../../assets/images/corporate_buildings_ambient_1793871402465.jpg';
+import businessDistrictImg from '../../assets/images/business_district_towers_1793871401775.jpg';
+import holdingSkylineImg from '../../assets/images/holding_colored_skyline_1793871401402.jpg';
 
 export interface SkylinePreset {
   id: 'corporate_prism' | 'district_violet' | 'skyline_waterfront';
@@ -17,7 +20,7 @@ export interface SkylinePreset {
 export const SKYLINE_PRESETS: SkylinePreset[] = [
   {
     id: 'corporate_prism',
-    imageSrc: '/src/assets/images/corporate_buildings_ambient_1793871402465.jpg',
+    imageSrc: corporateBuildingsImg,
     nameEn: 'Corporate Prism Towers',
     nameKu: 'تەلارە شووشەییە ڕەنگاوڕەنگەکان',
     nameAr: 'أبراج الكريستال الهندسية الملونة',
@@ -29,7 +32,7 @@ export const SKYLINE_PRESETS: SkylinePreset[] = [
   },
   {
     id: 'district_violet',
-    imageSrc: '/src/assets/images/business_district_towers_1793871401775.jpg',
+    imageSrc: businessDistrictImg,
     nameEn: 'Violet & Emerald District',
     nameKu: 'تاوەرە درەوشاوەکانی هۆڵدینگ',
     nameAr: 'أبراج الأعمال الحديثة البنفسجية',
@@ -41,7 +44,7 @@ export const SKYLINE_PRESETS: SkylinePreset[] = [
   },
   {
     id: 'skyline_waterfront',
-    imageSrc: '/src/assets/images/holding_colored_skyline_1793871401402.jpg',
+    imageSrc: holdingSkylineImg,
     nameEn: 'Metropolitan Waterfront Panorama',
     nameKu: 'کەناراوی ئاسمانی پایتەخت',
     nameAr: 'بانوراما الأبراج الكبرى',

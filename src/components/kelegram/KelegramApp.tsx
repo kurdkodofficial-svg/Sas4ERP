@@ -52,6 +52,7 @@ import {
 } from 'lucide-react';
 import { useERP } from '../../context/ERPContext';
 import { useLanguage } from '../../context/LanguageContext';
+import { getApiUrl } from '../../utils/apiConfig';
 import {
   KelegramChat,
   KelegramMessage,
@@ -860,7 +861,7 @@ export const KelegramApp: React.FC<KelegramAppProps> = ({ isCompactMode = false,
 
           {/* Download Codebase ZIP */}
           <a
-            href="/api/export-codebase-zip"
+            href={getApiUrl('/api/export-codebase-zip')}
             download="SAS4ERP-Full-Source-Code.zip"
             className="flex items-center gap-1 px-2.5 py-1.5 rounded-xl bg-white/15 hover:bg-white/25 text-white text-xs font-bold transition cursor-pointer"
             title={language === 'ku' ? 'داگرتنی تەواوی کۆدەکانی سیستم بە فایلی ZIP' : 'Download Complete Codebase ZIP'}

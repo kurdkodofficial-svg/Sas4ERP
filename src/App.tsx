@@ -181,15 +181,60 @@ const MainContent: React.FC = () => {
   );
 };
 
+class AppErrorBoundary extends React.Component<
+  { children: React.ReactNode },
+  { hasError: boolean; errorMessage: string }
+> {
+  declare state: { hasError: boolean; errorMessage: string };
+  declare props: { children: React.ReactNode };
+
+  constructor(props: { children: React.ReactNode }) {
+    super(props);
+    this.state = { hasError: false, errorMessage: '' };
+  }
+
+  static getDerivedStateFromError(error: Error) {
+    return { hasError: true, errorMessage: error?.message || 'Unexpected application error' };
+  }
+
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div className="min-h-screen bg-slate-950 text-white flex items-center justify-center p-6 text-center">
+          <div className="max-w-md w-full bg-slate-900 border border-slate-800 rounded-3xl p-6 space-y-4 shadow-2xl">
+            <div className="text-3xl">🛡️</div>
+            <h2 className="text-lg font-black">SAS4ERP Recovery Mode</h2>
+            <p className="text-xs text-slate-400 font-mono break-words">{this.state.errorMessage}</p>
+            <button
+              onClick={() => {
+                try {
+                  localStorage.removeItem('sas4erp_owner_dashboard_config');
+                } catch {}
+                window.location.reload();
+              }}
+              className="px-4 py-2.5 rounded-xl bg-amber-500 text-slate-950 font-black text-xs cursor-pointer"
+            >
+              دووبارە بارکردنەوە / Reload App
+            </button>
+          </div>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
+
 export function App() {
   return (
-    <LanguageProvider>
-      <ERPProvider>
-        <EntryLicenseVerificationGate>
-          <MainContent />
-        </EntryLicenseVerificationGate>
-      </ERPProvider>
-    </LanguageProvider>
+    <AppErrorBoundary>
+      <LanguageProvider>
+        <ERPProvider>
+          <EntryLicenseVerificationGate>
+            <MainContent />
+          </EntryLicenseVerificationGate>
+        </ERPProvider>
+      </LanguageProvider>
+    </AppErrorBoundary>
   );
 }
 

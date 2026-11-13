@@ -34,6 +34,7 @@ import {
   GeneratedClientLicenseResult,
   resetTrialTo14Days
 } from '../utils/licenseManager';
+import { getApiUrl } from '../utils/apiConfig';
 
 interface LicenseActivationModalProps {
   isOpen: boolean;
@@ -165,7 +166,7 @@ export const LicenseActivationModal: React.FC<LicenseActivationModalProps> = ({
     const refreshed = resetTrialTo14Days();
     onLicenseUpdated(refreshed);
     try {
-      await fetch('/api/license/reset-trial', {
+      await fetch(getApiUrl('/api/license/reset-trial'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ holdingName: holdingName || 'SAS Holding Evaluation Client' })

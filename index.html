@@ -9,12 +9,12 @@
     <meta property="og:description" content="Enterprise Multi-Company & Multi-Project Holding ERP with Trilingual Support (English, Kurdish, Arabic), Holding Owner Approvals, Live Gate Scanner Automation, and Video Meetings." />
     <meta property="og:type" content="website" />
     <meta name="twitter:card" content="summary_large_image" />
-    <link rel="manifest" href="/manifest.json" />
+    <link rel="manifest" href="./manifest.json" />
     <meta name="theme-color" content="#0f172a" />
     <meta name="mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
-    <link rel="apple-touch-icon" href="/icon-192.svg" />
+    <link rel="apple-touch-icon" href="./icon-192.svg" />
     <script>
       // Suppress Vite HMR WebSocket connection errors as per environment instructions:
       // "HMR: Disabled. Ignore WebSocket errors."
@@ -95,10 +95,10 @@
     <div id="root"></div>
     <script type="module" src="/src/main.tsx"></script>
     <script>
-      // Register SAS4ERP Offline PWA Service Worker
+      // Register SAS4ERP Offline PWA Service Worker relative to current base path
       if ('serviceWorker' in navigator && window.location.protocol.startsWith('http')) {
         window.addEventListener('load', function() {
-          navigator.serviceWorker.register('/sw.js')
+          navigator.serviceWorker.register('./sw.js')
             .then(function(reg) {
               console.log('[SAS4ERP] PWA Offline Service Worker registered:', reg.scope);
             })
