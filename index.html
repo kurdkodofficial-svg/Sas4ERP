@@ -98,7 +98,7 @@
       // Register SAS4ERP Offline PWA Service Worker relative to current base path
       if ('serviceWorker' in navigator && window.location.protocol.startsWith('http')) {
         window.addEventListener('load', function() {
-          navigator.serviceWorker.register('./sw.js')
+          navigator.serviceWorker.register('./sw.js?v=3')
             .then(function(reg) {
               console.log('[SAS4ERP] PWA Offline Service Worker registered:', reg.scope);
             })

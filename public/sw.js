@@ -2,7 +2,7 @@
 // Multi-Tier Caching: Precache App Shell, Cache-First Static Assets,
 // Stale-While-Revalidate HTML, Network-First with Cache Fallback for APIs & Offline Fallbacks
 
-const CACHE_VERSION = 'sas4erp-v2-offline-first';
+const CACHE_VERSION = 'sas4erp-v3-2026';
 const STATIC_CACHE = `${CACHE_VERSION}-static`;
 const RUNTIME_CACHE = `${CACHE_VERSION}-runtime`;
 const API_CACHE = `${CACHE_VERSION}-api`;

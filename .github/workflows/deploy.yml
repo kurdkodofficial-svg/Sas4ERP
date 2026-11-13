@@ -26,20 +26,21 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '20'
-          cache: 'npm'
+          node-version: '22'
 
       - name: Install dependencies
-        run: npm ci || npm install
+        run: npm install --legacy-peer-deps --no-audit --no-fund
 
-      - name: Build frontend & server bundle
+      - name: Build static frontend
         env:
-          VITE_BASE_PATH: /Sas4ERP/
+          VITE_BASE_PATH: ./
           VITE_API_BASE_URL: ${{ vars.VITE_API_BASE_URL || '' }}
-        run: npm run build
+        run: npx vite build
 
-      - name: Copy index.html to 404.html for SPA fallback
-        run: cp dist/index.html dist/404.html
+      - name: Prepare SPA fallback and disable Jekyll
+        run: |
+          cp dist/index.html dist/404.html
+          touch dist/.nojekyll
 
       - name: Configure GitHub Pages
         uses: actions/configure-pages@v5
