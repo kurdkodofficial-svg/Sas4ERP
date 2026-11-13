@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { Language } from '../types/erp';
 import { translations, getTranslation } from '../i18n/translations';
+import { getApiUrl } from '../utils/apiConfig';
 
 interface LanguageContextType {
   language: Language;
@@ -55,7 +56,7 @@ export const LanguageProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     }
 
     try {
-      const response = await fetch('/api/gemini/translate', {
+      const response = await fetch(getApiUrl('/api/gemini/translate'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -65,7 +66,8 @@ export const LanguageProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         }),
       });
 
-      if (response.ok) {
+      const contentType = response.headers.get('content-type') || '';
+      if (response.ok && contentType.includes('application/json')) {
         const data = await response.json();
         if (data.translatedText) {
           setTranslateCache((prev) => ({ ...prev, [cacheKey]: data.translatedText }));

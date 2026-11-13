@@ -116,6 +116,7 @@ import {
   generateInitialWorkflowState,
   advanceWorkflowStep
 } from '../services/workflowEngine';
+import { getApiUrl } from '../utils/apiConfig';
 
 interface ERPContextType {
   holding: HoldingGroup;
@@ -4343,7 +4344,7 @@ export const ERPProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   const syncHardwareThresholdAlertsNow = useCallback(async () => {
     try {
-      const res = await fetch('/api/it-alerts/status');
+      const res = await fetch(getApiUrl('/api/it-alerts/status'));
       if (!res.ok) return;
       const contentType = res.headers.get('content-type') || '';
       if (!contentType.includes('application/json')) return;

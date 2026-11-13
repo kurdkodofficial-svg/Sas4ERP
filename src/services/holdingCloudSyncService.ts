@@ -12,6 +12,8 @@
  * 5. Offline outbox with auto-flush on reconnect
  */
 
+import { getApiUrl } from '../utils/apiConfig';
+
 export interface SyncNodeDevice {
   nodeId: string;
   nodeName: string;
@@ -212,7 +214,7 @@ class HoldingCloudSyncService {
       }
 
       // Handshake with server
-      const res = await fetch('/api/sync/connect', {
+      const res = await fetch(getApiUrl('/api/sync/connect'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -223,6 +225,15 @@ class HoldingCloudSyncService {
           role: this.nodeRole,
         }),
       });
+
+      const contentType = res.headers.get('content-type') || '';
+      if (!contentType.includes('application/json')) {
+        // Static hosting (e.g., GitHub Pages) returns HTML instead of API JSON; run cleanly in offline local mode
+        this.status.connected = false;
+        this.status.connectionMode = 'OFFLINE_RETRY';
+        this.notifyStatus();
+        return false;
+      }
 
       if (!res.ok) {
         throw new Error(`Sync connect HTTP ${res.status}`);
@@ -296,7 +307,7 @@ class HoldingCloudSyncService {
    */
   private startSSE() {
     try {
-      const sseUrl = `/api/sync/events?key=${encodeURIComponent(this.holdingKey)}&nodeId=${encodeURIComponent(this.nodeId)}&nodeName=${encodeURIComponent(this.nodeName)}&location=${encodeURIComponent(this.nodeLocation)}`;
+      const sseUrl = getApiUrl(`/api/sync/events?key=${encodeURIComponent(this.holdingKey)}&nodeId=${encodeURIComponent(this.nodeId)}&nodeName=${encodeURIComponent(this.nodeName)}&location=${encodeURIComponent(this.nodeLocation)}`);
       this.eventSource = new EventSource(sseUrl);
 
       this.eventSource.onopen = () => {
@@ -369,7 +380,7 @@ class HoldingCloudSyncService {
 
   public async triggerInstantPing() {
     try {
-      const res = await fetch('/api/sync/ping', {
+      const res = await fetch(getApiUrl('/api/sync/ping'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -377,7 +388,8 @@ class HoldingCloudSyncService {
           nodeId: this.nodeId,
         }),
       });
-      if (res.ok) {
+      const contentType = res.headers.get('content-type') || '';
+      if (res.ok && contentType.includes('application/json')) {
         const data = await res.json();
         if (data.activeNodes) {
           const thisNode = data.activeNodes.find((n: any) => n.nodeId === this.nodeId);
@@ -405,7 +417,7 @@ class HoldingCloudSyncService {
    */
   public async simulateDynamicIpHop(simulatedIsp?: string): Promise<{ success: boolean; newIp?: string; ispName?: string; message?: string }> {
     try {
-      const res = await fetch('/api/sync/simulate-ip-change', {
+      const res = await fetch(getApiUrl('/api/sync/simulate-ip-change'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -414,6 +426,10 @@ class HoldingCloudSyncService {
           simulatedIsp
         }),
       });
+      const contentType = res.headers.get('content-type') || '';
+      if (!contentType.includes('application/json')) {
+        return { success: false, message: 'Sync backend unavailable in static mode.' };
+      }
       const data = await res.json();
       if (data.success) {
         this.status.currentIp = data.newIp;
@@ -444,8 +460,9 @@ class HoldingCloudSyncService {
       this.status.isSyncing = true;
       this.notifyStatus();
 
-      const res = await fetch(`/api/sync/pull?key=${encodeURIComponent(this.holdingKey)}`);
-      if (res.ok) {
+      const res = await fetch(getApiUrl(`/api/sync/pull?key=${encodeURIComponent(this.holdingKey)}`));
+      const contentType = res.headers.get('content-type') || '';
+      if (res.ok && contentType.includes('application/json')) {
         const data = await res.json();
         if (data.success && data.state) {
           this.status.version = data.version;
@@ -471,7 +488,7 @@ class HoldingCloudSyncService {
         }
       }
     } catch (err) {
-      console.error('Failed to pull holding cloud state:', err);
+      console.warn('Holding cloud state pull skipped (offline/static fallback):', err);
     } finally {
       this.status.isSyncing = false;
       this.notifyStatus();
@@ -512,7 +529,7 @@ class HoldingCloudSyncService {
       this.status.isSyncing = true;
       this.notifyStatus();
 
-      const res = await fetch('/api/sync/push', {
+      const res = await fetch(getApiUrl('/api/sync/push'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -523,7 +540,8 @@ class HoldingCloudSyncService {
         }),
       });
 
-      if (res.ok) {
+      const contentType = res.headers.get('content-type') || '';
+      if (res.ok && contentType.includes('application/json')) {
         const data = await res.json();
         if (data.success) {
           this.pendingUpdates = {};
