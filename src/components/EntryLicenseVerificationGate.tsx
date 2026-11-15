@@ -13,8 +13,7 @@ import {
   Sparkles,
   RefreshCw,
   Copy,
-  Check,
-  Gift
+  Check
 } from 'lucide-react';
 import { useLanguage } from '../context/LanguageContext';
 import {
@@ -146,10 +145,7 @@ export const EntryLicenseVerificationGate: React.FC<EntryLicenseVerificationGate
     }
   };
 
-  // Quick preset shortcuts for Holding Owner
-  const handleOwnerShortcut = (key: string) => {
-    setInputKey(key);
-  };
+
 
   // If initial verification is in flight, render smooth loader
   if (isVerifying) {
@@ -277,43 +273,17 @@ export const EntryLicenseVerificationGate: React.FC<EntryLicenseVerificationGate
               </div>
             </div>
 
-            {/* Holding Owner Direct VIP Grant Options */}
-            <div className="p-3.5 rounded-2xl bg-amber-500/10 border border-amber-500/20 space-y-2">
+            {/* Vendor Support Contact Notice (No self-granting keys on expired gate) */}
+            <div className="p-3.5 rounded-2xl bg-amber-500/10 border border-amber-500/20 space-y-1.5">
               <span className="text-[11px] font-bold text-amber-300 flex items-center gap-1.5">
                 <Crown className="w-3.5 h-3.5 text-amber-400" />
-                <span>{language === 'ku' ? 'دەسەڵاتی ڕاستەوخۆی خاوەن (Owner VIP Grant):' : 'Owner VIP Authorization Options:'}</span>
+                <span>{language === 'ku' ? 'وەرگرتنی کلیلی فەرمی لە خاوەنی سەکۆ:' : 'Obtain Official License Key:'}</span>
               </span>
-              <p className="text-[10px] text-slate-400">
+              <p className="text-[11px] text-slate-300 leading-relaxed">
                 {language === 'ku'
-                  ? 'خاوەنی سەرەکی دەتوانێت دەستبەجێ بە یەک کرتە ئەم هۆڵدینگەی تر کارا بکات بەخۆڕایی:'
-                  : 'Holding owner can grant perpetual free access directly to any sister holding partner:'}
+                  ? 'تکایە ناسنامەی ڕەقەکاڵای سەرەوە (Hardware Node ID) کۆپی بکە و بینێرە بۆ ئیمەیڵی خاوەنی سەکۆ (kurdkodofficial@gmail.com) تا کۆدی چالاککردنی تایبەت بە هۆڵدینگەکەت بۆ بنێرێت.'
+                  : 'Copy your Machine Hardware Fingerprint above and send it to the software vendor (kurdkodofficial@gmail.com) to receive an official activation key for your holding.'}
               </p>
-              <div className="flex items-center gap-2 flex-wrap pt-1">
-                <button
-                  type="button"
-                  onClick={() => handleOwnerShortcut('SAS-OWNER-GIFT-PERPETUAL-VIP')}
-                  className="px-3 py-1.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 text-xs font-bold flex items-center gap-1.5 transition cursor-pointer shadow-sm shadow-amber-500/30"
-                >
-                  <Gift className="w-3.5 h-3.5" />
-                  <span>{language === 'ku' ? 'بەخشینی VIP بێبەرامبەر لەلایەن خاوەنەوە' : 'Grant Perpetual VIP Free'}</span>
-                </button>
-
-                <button
-                  type="button"
-                  onClick={() => handleOwnerShortcut('SAS-PRO-ENTERPRISE-2026')}
-                  className="px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-bold transition cursor-pointer"
-                >
-                  <span>1-Year Commercial Key</span>
-                </button>
-
-                <button
-                  type="button"
-                  onClick={() => handleOwnerShortcut('SAS-TRIAL-RESET-14')}
-                  className="px-3 py-1.5 rounded-xl bg-blue-900/40 hover:bg-blue-900/60 text-blue-300 text-xs font-bold border border-blue-500/30 transition cursor-pointer"
-                >
-                  <span>+14 Days Trial</span>
-                </button>
-              </div>
             </div>
 
             {/* Error or Success Feedback */}

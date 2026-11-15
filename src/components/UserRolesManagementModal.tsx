@@ -26,7 +26,7 @@ import {
 import { useERP } from '../context/ERPContext';
 import { useLanguage } from '../context/LanguageContext';
 import { UserProfile, UserRole } from '../types/erp';
-import { ALL_SYSTEM_MODULES, DEFAULT_ROLE_PERMISSIONS, hasModuleAccess } from '../utils/rbacPermissions';
+import { CLIENT_HOLDING_MODULES, DEFAULT_ROLE_PERMISSIONS } from '../utils/rbacPermissions';
 import { getUIText } from '../utils/langHelper';
 
 export const UserRolesManagementModal: React.FC = () => {
@@ -133,7 +133,7 @@ export const UserRolesManagementModal: React.FC = () => {
   };
 
   const selectAllModules = () => {
-    setFormModules(ALL_SYSTEM_MODULES.map(m => m.id));
+    setFormModules(CLIENT_HOLDING_MODULES.map(m => m.id));
   };
 
   const clearAllModules = () => {
@@ -193,7 +193,9 @@ export const UserRolesManagementModal: React.FC = () => {
     setIsUserRolesModalOpen(false);
   };
 
-  const filteredUsers = userProfiles.filter(u => {
+  const filteredUsers = userProfiles
+    .filter(u => u.role !== 'PLATFORM_OWNER')
+    .filter(u => {
     if (roleFilter !== 'ALL' && u.role !== roleFilter) return false;
     if (searchQuery.trim()) {
       const q = searchQuery.toLowerCase();
@@ -210,6 +212,8 @@ export const UserRolesManagementModal: React.FC = () => {
     switch (role) {
       case 'HOLDING_OWNER':
         return language === 'ku' ? 'خاوەنی هۆلدینگ (Holding Owner)' : language === 'ar' ? 'مالك المجموعة (Holding Owner)' : 'Holding Owner & Chairman';
+      case 'IT_ADMIN':
+        return language === 'ku' ? 'بەڕێوەبەری IT و ڕێکخستن (IT Admin)' : language === 'ar' ? 'مدير تكنولوجيا المعلومات (IT Admin)' : 'Holding IT Administrator';
       case 'SUPER_ADMIN':
         return language === 'ku' ? 'سوپەر ئەدمین (Super Admin)' : language === 'ar' ? 'المسؤول العام' : 'Super Administrator';
       case 'COMPANY_GM':
@@ -241,6 +245,8 @@ export const UserRolesManagementModal: React.FC = () => {
     switch (role) {
       case 'HOLDING_OWNER':
         return 'bg-amber-100 text-amber-900 border-amber-300 font-extrabold';
+      case 'IT_ADMIN':
+        return 'bg-cyan-100 text-cyan-900 border-cyan-300 font-extrabold';
       case 'SUPER_ADMIN':
         return 'bg-purple-100 text-purple-900 border-purple-300 font-bold';
       case 'COMPANY_GM':
@@ -256,12 +262,12 @@ export const UserRolesManagementModal: React.FC = () => {
     }
   };
 
-  // Group modules by category for clean visual organization
+  // Group client Holding modules by category (strictly excludes System 2 Platform Vendor Hub)
   const modulesByCategory = {
-    EXECUTIVE: ALL_SYSTEM_MODULES.filter(m => m.category === 'EXECUTIVE'),
-    CORE_OPERATIONS: ALL_SYSTEM_MODULES.filter(m => m.category === 'CORE_OPERATIONS'),
-    FIELD_INFRA: ALL_SYSTEM_MODULES.filter(m => m.category === 'FIELD_INFRA'),
-    ADMIN_PEOPLE: ALL_SYSTEM_MODULES.filter(m => m.category === 'ADMIN_PEOPLE'),
+    EXECUTIVE: CLIENT_HOLDING_MODULES.filter(m => m.category === 'EXECUTIVE'),
+    CORE_OPERATIONS: CLIENT_HOLDING_MODULES.filter(m => m.category === 'CORE_OPERATIONS'),
+    FIELD_INFRA: CLIENT_HOLDING_MODULES.filter(m => m.category === 'FIELD_INFRA'),
+    ADMIN_PEOPLE: CLIENT_HOLDING_MODULES.filter(m => m.category === 'ADMIN_PEOPLE'),
   };
 
   const categoryTitles = {
@@ -309,7 +315,7 @@ export const UserRolesManagementModal: React.FC = () => {
                   })}
                 </h2>
                 <span className="px-2 py-0.5 rounded-full bg-amber-400/20 text-amber-300 border border-amber-400/30 text-[10px] font-bold">
-                  {language === 'ku' ? 'تایبەت بە خاوەنی هۆلدینگ' : 'Owner Exclusive'}
+                  {language === 'ku' ? 'تایبەت بە خاوەنی هۆڵدینگ و IT' : 'Holding Owner & IT Admin'}
                 </span>
               </div>
               <p className="text-xs text-slate-300 mt-0.5">
@@ -350,6 +356,7 @@ export const UserRolesManagementModal: React.FC = () => {
                 {[
                   { id: 'ALL', labelKu: 'هەموو بەکارهێنەران', labelEn: 'All Users' },
                   { id: 'HOLDING_OWNER', labelKu: 'خاوەنی هۆلدینگ', labelEn: 'Owners' },
+                  { id: 'IT_ADMIN', labelKu: 'بەڕێوەبەری IT', labelEn: 'IT Admin' },
                   { id: 'COMPANY_GM', labelKu: 'بەڕێوەبەری گشتی (GM)', labelEn: 'Company GM' },
                   { id: 'PROJECT_MANAGER', labelKu: 'بەڕێوەبەری پڕۆژە (PM)', labelEn: 'Project PM' },
                   { id: 'EMPLOYEE', labelKu: 'کارمەند (Employee)', labelEn: 'Employees' }
@@ -458,6 +465,7 @@ export const UserRolesManagementModal: React.FC = () => {
                     <option value="PROJECT_MANAGER">📐 بەڕێوەبەری پرۆژە (Project Manager - PM)</option>
                     <option value="EMPLOYEE">👷 کارمەند (Employee - Self Service)</option>
                     <option value="HOLDING_OWNER">👑 خاوەنی هۆلدینگ (Holding Owner)</option>
+                    <option value="IT_ADMIN">🛠️ بەڕێوەبەری IT و ڕێکخستنی سیستەم (IT Admin)</option>
                     <option value="SUPER_ADMIN">⚡ سوپەر ئەدمین (Super Admin)</option>
                     <option value="FINANCE_HEAD">💼 بەڕێوەبەری دارایی (Chief Financial Officer)</option>
                     <option value="WAREHOUSE_OFFICER">📦 بەرپرسی کۆگا (Warehouse Controller)</option>
@@ -591,7 +599,7 @@ export const UserRolesManagementModal: React.FC = () => {
                           : 'Granular Module Access Matrix'}
                       </span>
                       <span className="px-2 py-0.5 rounded-full bg-indigo-100 text-indigo-800 text-[11px] font-bold">
-                        {formModules.length} / {ALL_SYSTEM_MODULES.length} {language === 'ku' ? 'بەش چالاکە' : 'Enabled'}
+                        {formModules.length} / {CLIENT_HOLDING_MODULES.length} {language === 'ku' ? 'بەش چالاکە' : 'Enabled'}
                       </span>
                     </h4>
                     <p className="text-xs text-slate-500 mt-0.5">
@@ -732,10 +740,12 @@ export const UserRolesManagementModal: React.FC = () => {
                       const isOwnerRole = user.role === 'HOLDING_OWNER';
                       const isCurrentActive = currentUser.id === user.id;
                       
-                      // Calculate accessible modules count
+                      const isFullAccessRole = user.role === 'HOLDING_OWNER' || user.role === 'IT_ADMIN' || user.role === 'SUPER_ADMIN';
+
+                      // Calculate accessible modules count (strictly client Holding modules)
                       const allowedCount = user.accessibleModules && Array.isArray(user.accessibleModules)
-                        ? user.accessibleModules.length
-                        : (DEFAULT_ROLE_PERMISSIONS[user.role]?.length || 0);
+                        ? user.accessibleModules.filter(id => CLIENT_HOLDING_MODULES.some(m => m.id === id)).length
+                        : (DEFAULT_ROLE_PERMISSIONS[user.role]?.filter(id => CLIENT_HOLDING_MODULES.some(m => m.id === id)).length || 0);
 
                       const userCompany = companies.find(c => c.id === user.companyId);
                       const userProject = projects.find(p => p.id === user.projectId);
@@ -799,10 +809,10 @@ export const UserRolesManagementModal: React.FC = () => {
                           <td className="py-3.5 px-4 whitespace-nowrap">
                             <div className="flex items-center gap-2">
                               <span className="font-mono font-bold text-xs text-indigo-700 bg-indigo-50 px-2 py-0.5 rounded-lg border border-indigo-200">
-                                {isOwnerRole ? `${ALL_SYSTEM_MODULES.length}/${ALL_SYSTEM_MODULES.length} (تەواو)` : `${allowedCount}/${ALL_SYSTEM_MODULES.length}`}
+                                {isFullAccessRole ? `${CLIENT_HOLDING_MODULES.length}/${CLIENT_HOLDING_MODULES.length} (تەواو)` : `${allowedCount}/${CLIENT_HOLDING_MODULES.length}`}
                               </span>
                               <span className="text-[10px] text-slate-400">
-                                {isOwnerRole ? 'دەسەڵاتی بێسنوور' : 'بەشی چالاک'}
+                                {isFullAccessRole ? 'دەسەڵاتی بێسنوور' : 'بەشی چالاک'}
                               </span>
                             </div>
                           </td>
@@ -862,7 +872,10 @@ export const UserRolesManagementModal: React.FC = () => {
                   </span>
                   <ul className="list-disc list-inside space-y-0.5 text-indigo-900/80">
                     <li>
-                      <strong>خاوەنی هۆلدینگ (Holding Owner):</strong> بەردەوام دەسەڵاتی تەواوی بەسەر هەموو بەش و پەسەندکردنە داراییەکان و ڕێکخستنی سیستەمدا هەیە.
+                      <strong>خاوەنی هۆلدینگ (Holding Owner):</strong> بەردەوام دەسەڵاتی تەواوی بەسەر هەموو بەشەکانی هۆڵدینگ و پەسەندکردنە داراییەکاندا هەیە.
+                    </li>
+                    <li>
+                      <strong>بەڕێوەبەری IT (IT Admin):</strong> دەسەڵاتی سەربەخۆ و تەواو بۆ بەڕێوەبردنی ڕێکخستنەکانی هۆڵدینگ، بەکارهێنەران، ڕۆڵەکان، چاپ و Cloud Sync بەبێ پێویستی گەڕانەوە بۆ خاوەنی سەکۆ.
                     </li>
                     <li>
                       <strong>بەڕێوەبەری گشتی (General Manager):</strong> بەڕێوەبردنی کۆمپانیا و پڕۆژەکانی، و پەسەندکردنی کارە ئیدارییەکان و ڕاپۆرتەکان.

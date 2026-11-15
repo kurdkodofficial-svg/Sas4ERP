@@ -35,6 +35,7 @@ import {
   resetTrialTo14Days
 } from '../utils/licenseManager';
 import { getApiUrl } from '../utils/apiConfig';
+import { checkIsMasterVendorOwner } from '../utils/rbacPermissions';
 
 interface LicenseActivationModalProps {
   isOpen: boolean;
@@ -57,12 +58,8 @@ export const LicenseActivationModal: React.FC<LicenseActivationModalProps> = ({
   const { language } = useLanguage();
   const { currentUser, setActiveTab: setERPActiveTab } = useERP();
 
-  // Strict check: Only ME (Platform Creator / Holding Owner / Super Admin) can access Generator & Monthly Subscription Studio
-  const isMasterVendorOwner = 
-    currentUser.role === 'HOLDING_OWNER' || 
-    currentUser.role === 'SUPER_ADMIN' ||
-    currentUser.email === 'kurdkodofficial@gmail.com' ||
-    currentUser.email === 'chairman@holding.com';
+  // Strict check: ONLY Platform Creator (PLATFORM_OWNER / kurdkodofficial@gmail.com) sees Vendor Key Generator by default
+  const isMasterVendorOwner = checkIsMasterVendorOwner(currentUser);
 
   // Master vendor authorization state (Instantly unlocked for Owner, PIN protected for secondary delegates)
   const [isMasterUnlocked, setIsMasterUnlocked] = useState<boolean>(() => {
@@ -112,17 +109,20 @@ export const LicenseActivationModal: React.FC<LicenseActivationModalProps> = ({
     return [];
   });
 
-  // Ensure clients NEVER see the generator tab; only Owner/ME can access it
+  // Ensure clients NEVER see the generator tab unless explicitly unlocked via secret Vendor PIN
   useEffect(() => {
     if (isOpen) {
-      if (!isMasterVendorOwner) {
-        setActiveTab('activate');
-        setIsMasterUnlocked(false);
-      } else {
+      let unlockedByPin = false;
+      try {
+        unlockedByPin = sessionStorage.getItem('sas4erp_master_owner_auth') === 'true';
+      } catch {}
+
+      if (isMasterVendorOwner || unlockedByPin) {
         setIsMasterUnlocked(true);
-        if (defaultMode === 'generator') {
-          setActiveTab('generator');
-        }
+        setActiveTab(defaultMode === 'generator' ? 'generator' : 'activate');
+      } else {
+        setIsMasterUnlocked(false);
+        setActiveTab('activate');
       }
       setShowPinDialog(false);
       setEnteredPin('');
@@ -367,8 +367,8 @@ export const LicenseActivationModal: React.FC<LicenseActivationModalProps> = ({
           </div>
         )}
 
-        {/* Full-Page System 2 Vendor Hub Banner Shortcut for Owner */}
-        {isMasterVendorOwner && (
+        {/* Full-Page System 2 Vendor Hub Banner Shortcut (Strictly Platform Owner / Master Unlocked) */}
+        {(isMasterVendorOwner || isMasterUnlocked) && (
           <button
             type="button"
             onClick={() => {
@@ -605,98 +605,94 @@ export const LicenseActivationModal: React.FC<LicenseActivationModalProps> = ({
               </div>
             </form>
 
-            {/* Discreet Vendor Access Trigger (Strictly restricted to Platform Owner / ME - Completely hidden from subscribers) */}
-            {isMasterVendorOwner && (
-              <>
-                <div className="pt-3 border-t border-slate-100 flex items-center justify-between text-xs text-slate-400">
-                  <span className="text-[11px] font-mono text-slate-400">SAS4ERP Sovereign OS • Hardware-Bound Node Lock</span>
+            {/* Discreet Vendor PIN Access Trigger in footer (clients only see a muted copyright & PIN gate link) */}
+            <div className="pt-3 border-t border-slate-100 flex items-center justify-between text-xs text-slate-400">
+              <span className="text-[11px] font-mono text-slate-400">SAS4ERP Sovereign OS • Hardware-Bound Node Lock</span>
+              <button
+                type="button"
+                onClick={() => {
+                  if (isMasterUnlocked) {
+                    setActiveTab('generator');
+                  } else {
+                    setShowPinDialog(!showPinDialog);
+                    setPinError(null);
+                  }
+                }}
+                className="flex items-center gap-1.5 text-[11px] text-slate-500 hover:text-amber-700 font-bold transition cursor-pointer px-2 py-1 rounded-lg hover:bg-amber-50"
+                title={language === 'ku' ? 'دەروازەی کلیلدروستکردنی خاوەنی سەکۆ' : 'Platform Vendor PIN Access'}
+              >
+                <Key className="w-3 h-3" />
+                <span>{language === 'ku' ? 'دەروازەی خاوەنی سەکۆ (Vendor PIN)' : 'Vendor PIN'}</span>
+              </button>
+            </div>
+
+            {/* Vendor PIN Verification Dialog (Secures Key Generator from Clients) */}
+            {showPinDialog && !isMasterUnlocked && (
+              <div className="p-4 rounded-2xl bg-slate-900 text-white border-2 border-amber-400/80 space-y-3 animate-in fade-in duration-200 shadow-xl">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <Crown className="w-4 h-4 text-amber-400" />
+                    <span className="text-xs font-black text-amber-300">
+                      {language === 'ku' ? 'دەروازەی نهێنی خاوەنی سەکۆ (Vendor Secret Gate):' : 'Platform Owner Secret PIN Gate:'}
+                    </span>
+                  </div>
                   <button
                     type="button"
-                    onClick={() => {
-                      if (isMasterUnlocked) {
-                        setActiveTab('generator');
-                      } else {
-                        setShowPinDialog(!showPinDialog);
-                        setPinError(null);
-                      }
-                    }}
-                    className="flex items-center gap-1.5 text-[11px] text-amber-700 hover:text-amber-600 font-bold transition cursor-pointer bg-amber-50 px-2.5 py-1 rounded-lg border border-amber-200"
-                    title={language === 'ku' ? 'ستۆدیۆی خاوەنی سەکۆ' : 'Platform Vendor Master Access'}
+                    onClick={() => setShowPinDialog(false)}
+                    className="text-slate-400 hover:text-white"
                   >
-                    <Crown className="w-3.5 h-3.5 text-amber-600" />
-                    <span>{language === 'ku' ? '👑 ستۆدیۆی خاوەن (Owner Studio)' : '👑 Vendor Studio'}</span>
+                    <X className="w-4 h-4" />
                   </button>
                 </div>
 
-                {/* Vendor PIN Verification Dialog (Secures Key Generator from Clients) */}
-                {showPinDialog && !isMasterUnlocked && (
-                  <div className="p-4 rounded-2xl bg-slate-900 text-white border-2 border-amber-400/80 space-y-3 animate-in fade-in duration-200 shadow-xl">
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-2">
-                        <Crown className="w-4 h-4 text-amber-400" />
-                        <span className="text-xs font-black text-amber-300">
-                          {language === 'ku' ? 'دەروازەی نهێنی خاوەنی سەکۆ (Vendor Secret Gate):' : 'Platform Owner Secret PIN Gate:'}
-                        </span>
-                      </div>
-                      <button
-                        type="button"
-                        onClick={() => setShowPinDialog(false)}
-                        className="text-slate-400 hover:text-white"
-                      >
-                        <X className="w-4 h-4" />
-                      </button>
-                    </div>
+                <p className="text-[11px] text-slate-300 leading-relaxed">
+                  {language === 'ku'
+                    ? 'بۆ ئەوەی کڕیاران نەتوانن خۆیان کلیل دروست بکەن و مانگانە پێویستیان بە ڕەزامەندی تۆ بێت، تکایە پینی نهێنی خاوەن (Master PIN) بنووسە:'
+                    : language === 'ar'
+                    ? 'لحماية ترخيصك ومنع العملاء من توليد المفاتيح بأنفسهم وضمان التجديد الشهري، يرجى إدخال الرمز السري للمالك:'
+                    : 'To ensure clients cannot self-generate licenses without your monthly consent, enter the Master Vendor PIN:'}
+                </p>
 
-                    <p className="text-[11px] text-slate-300 leading-relaxed">
-                      {language === 'ku'
-                        ? 'بۆ ئەوەی کڕیاران نەتوانن خۆیان کلیل دروست بکەن و مانگانە پێویستیان بە ڕەزامەندی تۆ بێت، تکایە پینی نهێنی خاوەن (Master PIN) بنووسە:'
-                        : language === 'ar'
-                        ? 'لحماية ترخيصك ومنع العملاء من توليد المفاتيح بأنفسهم وضمان التجديد الشهري، يرجى إدخال الرمز السري للمالك:'
-                        : 'To ensure clients cannot self-generate licenses without your monthly consent, enter the Master Vendor PIN:'}
-                    </p>
+                <div className="flex items-center gap-2">
+                  <div className="relative flex-1">
+                    <input
+                      type={showPassword ? 'text' : 'password'}
+                      value={enteredPin}
+                      onChange={(e) => {
+                        setEnteredPin(e.target.value);
+                        setPinError(null);
+                      }}
+                      placeholder="****"
+                      className="w-full px-3 py-2 rounded-xl bg-slate-950 border border-slate-700 text-white font-mono text-center tracking-widest text-sm focus:outline-none focus:border-amber-400"
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') handleVerifyMasterPin();
+                      }}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowPassword(!showPassword)}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-white cursor-pointer"
+                    >
+                      {showPassword ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+                    </button>
+                  </div>
 
-                    <div className="flex items-center gap-2">
-                      <div className="relative flex-1">
-                        <input
-                          type={showPassword ? 'text' : 'password'}
-                          value={enteredPin}
-                          onChange={(e) => {
-                            setEnteredPin(e.target.value);
-                            setPinError(null);
-                          }}
-                          placeholder="****"
-                          className="w-full px-3 py-2 rounded-xl bg-slate-950 border border-slate-700 text-white font-mono text-center tracking-widest text-sm focus:outline-none focus:border-amber-400"
-                          onKeyDown={(e) => {
-                            if (e.key === 'Enter') handleVerifyMasterPin();
-                          }}
-                        />
-                        <button
-                          type="button"
-                          onClick={() => setShowPassword(!showPassword)}
-                          className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-white cursor-pointer"
-                        >
-                          {showPassword ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
-                        </button>
-                      </div>
+                  <button
+                    type="button"
+                    onClick={handleVerifyMasterPin}
+                    className="px-4 py-2 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-black text-xs transition cursor-pointer shrink-0 shadow-md"
+                  >
+                    {language === 'ku' ? 'کردنەوەی ستۆدیۆ' : 'Unlock Studio'}
+                  </button>
+                </div>
 
-                      <button
-                        type="button"
-                        onClick={handleVerifyMasterPin}
-                        className="px-4 py-2 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-black text-xs transition cursor-pointer shrink-0 shadow-md"
-                      >
-                        {language === 'ku' ? 'کردنەوەی ستۆدیۆ' : 'Unlock Studio'}
-                      </button>
-                    </div>
-
-                    {pinError && (
-                      <div className="p-2 rounded-xl bg-rose-950/80 border border-rose-600 text-rose-300 text-[11px] font-bold flex items-center gap-2">
-                        <AlertTriangle className="w-3.5 h-3.5 shrink-0" />
-                        <span>{pinError}</span>
-                      </div>
-                    )}
+                {pinError && (
+                  <div className="p-2 rounded-xl bg-rose-950/80 border border-rose-600 text-rose-300 text-[11px] font-bold flex items-center gap-2">
+                    <AlertTriangle className="w-3.5 h-3.5 shrink-0" />
+                    <span>{pinError}</span>
                   </div>
                 )}
-              </>
+              </div>
             )}
           </div>
         )}

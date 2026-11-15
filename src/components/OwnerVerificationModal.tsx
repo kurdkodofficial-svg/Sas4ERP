@@ -22,6 +22,7 @@ import confetti from 'canvas-confetti';
 import { useERP } from '../context/ERPContext';
 import { useLanguage } from '../context/LanguageContext';
 import { fetchJsonSafe } from '../utils/apiConfig';
+import { PLATFORM_VENDOR_OWNER_PROFILE } from '../data/initialData';
 
 interface OwnerVerificationModalProps {
   isOpen: boolean;
@@ -34,7 +35,7 @@ export const OwnerVerificationModal: React.FC<OwnerVerificationModalProps> = ({
   onClose,
   onSuccess
 }) => {
-  const { currentUser, setCurrentUser, setActiveTab } = useERP();
+  const { currentUser, setCurrentUser, setActiveTab, userProfiles } = useERP();
   const { language } = useLanguage();
 
   const [emailInput, setEmailInput] = useState('kurdkodofficial@gmail.com');
@@ -55,7 +56,7 @@ export const OwnerVerificationModal: React.FC<OwnerVerificationModalProps> = ({
       setErrorMessage(null);
       setStatusMessage(null);
       setCopiedCode(false);
-      if (currentUser?.isOwnerVerified || localStorage.getItem('sas4erp_owner_session') === 'verified') {
+      if (currentUser?.role === 'PLATFORM_OWNER' || localStorage.getItem('sas4erp_owner_session') === 'verified') {
         setStep('SUCCESS');
       } else {
         setStep('REQUEST');
@@ -266,15 +267,9 @@ export const OwnerVerificationModal: React.FC<OwnerVerificationModalProps> = ({
       localStorage.setItem('sas4erp_owner_session', 'verified');
       localStorage.setItem('sas4erp_owner_verified_at', new Date().toISOString());
 
-      // Update current user
+      // Switch cleanly into the dedicated Platform Owner (System 2 Vendor) account — separate from Holding Owner & IT
       setCurrentUser({
-        ...currentUser,
-        name: 'خاوەنی سیستەم و هۆڵدینگ (kurdkodofficial@gmail.com)',
-        email: 'kurdkodofficial@gmail.com',
-        role: 'HOLDING_OWNER',
-        title: 'سەرۆک و خاوەنی باڵای سەکۆ و هۆڵدینگ',
-        avatar: '👑',
-        isOwnerVerified: true,
+        ...PLATFORM_VENDOR_OWNER_PROFILE,
         verifiedAt: new Date().toISOString()
       });
 
@@ -313,11 +308,19 @@ export const OwnerVerificationModal: React.FC<OwnerVerificationModalProps> = ({
   };
 
   const handleGoToOwnerHub = () => {
+    setCurrentUser({
+      ...PLATFORM_VENDOR_OWNER_PROFILE,
+      verifiedAt: localStorage.getItem('sas4erp_owner_verified_at') || new Date().toISOString()
+    });
     setActiveTab('vendor-license-hub');
     onClose();
   };
 
   const handleGoToHoldingDashboard = () => {
+    const holdingOwner = userProfiles.find(u => u.role === 'HOLDING_OWNER') || userProfiles[0];
+    if (holdingOwner) {
+      setCurrentUser(holdingOwner);
+    }
     setActiveTab('holding-dashboard');
     onClose();
   };

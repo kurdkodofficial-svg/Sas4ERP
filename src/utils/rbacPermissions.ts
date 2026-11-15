@@ -197,9 +197,12 @@ export const ALL_SYSTEM_MODULES: ModulePermissionDefinition[] = [
  * Standard default permissions matrix based on company/project/holding hierarchy
  */
 export const DEFAULT_ROLE_PERMISSIONS: Record<UserRole, string[]> = {
+  PLATFORM_OWNER: [
+    'vendor-license-hub',
+    'it-systems'
+  ],
   HOLDING_OWNER: [
     'holding-dashboard',
-    'vendor-license-hub',
     'owner-approvals',
     'companies-projects',
     'ml-anomaly-detection',
@@ -221,8 +224,27 @@ export const DEFAULT_ROLE_PERMISSIONS: Record<UserRole, string[]> = {
   ],
   SUPER_ADMIN: [
     'holding-dashboard',
-    'vendor-license-hub',
     'owner-approvals',
+    'companies-projects',
+    'ml-anomaly-detection',
+    'virtual-meetings',
+    'direct-comms',
+    'project-reports',
+    'procurement',
+    'finance',
+    'warehouse',
+    'dispatch-logistics',
+    'gate-scanner',
+    'technical-electrical',
+    'camps-accommodation',
+    'hse-fire-security',
+    'foreign-workers',
+    'hr-payroll',
+    'correspondence',
+    'it-systems'
+  ],
+  IT_ADMIN: [
+    'holding-dashboard',
     'companies-projects',
     'ml-anomaly-detection',
     'virtual-meetings',
@@ -310,10 +332,14 @@ export const DEFAULT_ROLE_PERMISSIONS: Record<UserRole, string[]> = {
     'direct-comms'
   ],
   TECHNICAL_HEAD: [
+    'holding-dashboard',
+    'companies-projects',
     'technical-electrical',
     'warehouse',
     'it-systems',
     'procurement',
+    'virtual-meetings',
+    'correspondence',
     'direct-comms'
   ],
   DEPARTMENT_HEAD: [
@@ -327,27 +353,33 @@ export const DEFAULT_ROLE_PERMISSIONS: Record<UserRole, string[]> = {
 };
 
 /**
- * Check if the current user is the Platform Owner / Master Vendor (User with access to System 2)
+ * Modules available inside a Client Holding organization (excludes System 2 Vendor Hub)
+ */
+export const CLIENT_HOLDING_MODULES: ModulePermissionDefinition[] = ALL_SYSTEM_MODULES.filter(
+  m => m.id !== 'vendor-license-hub'
+);
+
+/**
+ * Check if the current user is strictly the Platform Owner / Software Vendor (System 2)
+ * NEVER matches Holding Owner, Holding Super Admin, or Holding IT Admin.
  */
 export function checkIsMasterVendorOwner(user?: UserProfile | null): boolean {
   if (!user) return false;
   const isEmailMatch = user.email?.toLowerCase().trim() === 'kurdkodofficial@gmail.com';
-  const isVerifiedInStorage = typeof localStorage !== 'undefined' && (
-    localStorage.getItem('sas4erp_verified_owner_email') === 'kurdkodofficial@gmail.com' ||
-    localStorage.getItem('sas4erp_owner_session') === 'verified'
-  );
+  return user.role === 'PLATFORM_OWNER' || isEmailMatch;
+}
+
+/**
+ * Check if the current user is Holding Top Management or Holding IT Administration
+ * (Autonomous control over all Holding & System Settings without returning to Vendor)
+ */
+export function checkIsHoldingOrItAdmin(user?: UserProfile | null): boolean {
+  if (!user) return false;
   return (
     user.role === 'HOLDING_OWNER' ||
     user.role === 'SUPER_ADMIN' ||
-    Boolean(user.isOwnerVerified) ||
-    isEmailMatch ||
-    isVerifiedInStorage ||
-    user.email === 'chairman@holding.com' ||
-    Boolean(user.email?.toLowerCase().includes('kurd')) ||
-    Boolean(user.title?.toLowerCase().includes('owner')) ||
-    Boolean(user.title?.toLowerCase().includes('chairman')) ||
-    Boolean(user.title?.toLowerCase().includes('خاوەن')) ||
-    Boolean(user.title?.toLowerCase().includes('سەرۆک'))
+    user.role === 'IT_ADMIN' ||
+    user.role === 'TECHNICAL_HEAD'
   );
 }
 
@@ -355,14 +387,19 @@ export function checkIsMasterVendorOwner(user?: UserProfile | null): boolean {
  * Check if a specific user has permission to view/access a given module ID
  */
 export function hasModuleAccess(user: UserProfile, moduleId: string): boolean {
-  // CRITICAL: vendor-license-hub is strictly for the Platform Owner / ME
-  // Subscribers, clients, GMs, PMs, and other staff must NEVER access it
+  // CRITICAL: vendor-license-hub (System 2) is strictly and exclusively for the Platform Owner / Software Vendor
+  // Holding Owners, Holding Admins, Holding IT, GMs, PMs, and staff must NEVER access it
   if (moduleId === 'vendor-license-hub') {
     return checkIsMasterVendorOwner(user);
   }
 
-  // Holding Owner and Super Admin always have absolute unrestricted access
-  if (user.role === 'HOLDING_OWNER' || user.role === 'SUPER_ADMIN') {
+  // Platform Owner only operates System 2 (Vendor License Hub) + IT diagnostic view
+  if (user.role === 'PLATFORM_OWNER') {
+    return moduleId === 'vendor-license-hub' || moduleId === 'it-systems';
+  }
+
+  // Holding Owner, Super Admin, and Holding IT Admin have full unrestricted access to all Client Holding modules
+  if (user.role === 'HOLDING_OWNER' || user.role === 'SUPER_ADMIN' || user.role === 'IT_ADMIN') {
     return true;
   }
 

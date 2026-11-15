@@ -30,12 +30,13 @@ import {
   BookOpen,
   Download,
   Key,
-  Send
+  Send,
+  Settings
 } from 'lucide-react';
 import { useERP } from '../context/ERPContext';
 import { useLanguage } from '../context/LanguageContext';
 import { getUIText } from '../utils/langHelper';
-import { hasModuleAccess, checkIsMasterVendorOwner } from '../utils/rbacPermissions';
+import { hasModuleAccess, checkIsMasterVendorOwner, checkIsHoldingOrItAdmin } from '../utils/rbacPermissions';
 import { getRemainingTrialDays } from '../utils/licenseManager';
 
 export const Sidebar: React.FC = () => {
@@ -79,7 +80,10 @@ export const Sidebar: React.FC = () => {
     });
   };
 
-  const isTopManagement = currentUser.role === 'HOLDING_OWNER' || currentUser.role === 'SUPER_ADMIN';
+  const isTopManagement =
+    currentUser.role === 'HOLDING_OWNER' ||
+    currentUser.role === 'SUPER_ADMIN' ||
+    currentUser.role === 'IT_ADMIN';
 
   const pendingApprovalsCount = purchaseOrders.filter(p => p.status === 'PENDING_OWNER_APPROVAL').length;
   const expiringIqamasCount = foreignWorkers.filter(w => w.visaStatus === 'EXPIRING_SOON' || w.visaStatus === 'EXPIRED').length;
@@ -273,8 +277,8 @@ export const Sidebar: React.FC = () => {
         </div>
 
         <div className={`${isCollapsed ? 'p-2' : 'p-3.5'} space-y-5 flex-1`}>
-          {/* Executive Manager File (فایلی بەڕێوەبەر) - Only for Managers & Holding Owner */}
-          {(currentUser.role === 'HOLDING_OWNER' || currentUser.role === 'SUPER_ADMIN' || currentUser.role === 'COMPANY_GM' || currentUser.role === 'PROJECT_MANAGER') && (
+          {/* Executive Manager File (فایلی بەڕێوەبەر) - Only for Managers, IT Admin & Holding Owner */}
+          {(currentUser.role === 'HOLDING_OWNER' || currentUser.role === 'SUPER_ADMIN' || currentUser.role === 'IT_ADMIN' || currentUser.role === 'COMPANY_GM' || currentUser.role === 'PROJECT_MANAGER') && (
             <div className="space-y-2 mb-3">
               <button
                 onClick={() => {
@@ -447,29 +451,45 @@ export const Sidebar: React.FC = () => {
               </button>
             )}
 
-            {/* Quick Owner Verification Link if not verified */}
-            {(!currentUser?.isOwnerVerified && (typeof localStorage === 'undefined' || localStorage.getItem('sas4erp_owner_session') !== 'verified')) && (
+            {/* Autonomous Holding & IT Settings Hub Shortcut (Visible to Holding Owner, Super Admin & IT Admin) */}
+            {!isMasterVendorOwner && checkIsHoldingOrItAdmin(currentUser) && (
               <button
                 onClick={() => {
-                  setIsOwnerVerifyModalOpen(true);
+                  setActiveTab('it-systems');
                   setIsMobileMenuOpen(false);
                 }}
+                id="sidebar-it-settings-hub-btn"
+                title={getUIText(language, {
+                  en: 'Holding & IT Autonomous Settings Hub',
+                  ku: 'ناوەندی ڕێکخستنەکانی هۆڵدینگ و IT',
+                  ar: 'مركز إعدادات الهولدينغ و IT'
+                })}
                 className={`w-full flex items-center ${
-                  isCollapsed ? 'justify-center p-2' : 'justify-between px-3 py-2'
-                } rounded-xl text-xs font-bold transition-all cursor-pointer bg-amber-500/10 hover:bg-amber-500/20 text-amber-300 border border-amber-400/30 group`}
-                title="مسۆگەرکردنی خاوەنی سەکۆ (kurdkodofficial@gmail.com)"
+                  isCollapsed ? 'justify-center p-2.5' : 'justify-between px-3 py-2.5'
+                } rounded-2xl text-xs font-black transition-all cursor-pointer relative ${
+                  activeTab === 'it-systems'
+                    ? 'bg-gradient-to-r from-teal-600 to-indigo-600 text-white shadow-md border border-teal-400/50'
+                    : 'bg-slate-900 hover:bg-slate-800 text-teal-300 border border-teal-500/30'
+                } transform active:scale-95 group`}
               >
-                <div className="flex items-center gap-2 truncate">
-                  <Crown className="w-3.5 h-3.5 text-amber-400 shrink-0" />
+                <div className="flex items-center gap-2.5 truncate">
+                  <div className="w-7 h-7 rounded-xl bg-teal-500/20 text-teal-300 flex items-center justify-center shrink-0 border border-teal-500/30">
+                    <Settings className="w-3.5 h-3.5" />
+                  </div>
                   {!isCollapsed && (
-                    <span className="text-[11px] truncate">
-                      {language === 'ku' ? 'مسۆگەرکردنی خاوەن' : 'Owner OTP Verify'}
-                    </span>
+                    <div className="flex flex-col items-start text-right leading-tight truncate">
+                      <span className="truncate tracking-wide font-extrabold text-xs">
+                        {language === 'ku' ? 'ڕێکخستنی هۆڵدینگ و IT' : language === 'ar' ? 'إعدادات الهولدينغ و IT' : 'Holding & IT Settings'}
+                      </span>
+                      <span className="text-[10px] text-slate-400 font-semibold truncate">
+                        {language === 'ku' ? 'بەڕێوەبردنی تەواو و سەربەخۆ' : 'Autonomous Admin Hub'}
+                      </span>
+                    </div>
                   )}
                 </div>
                 {!isCollapsed && (
-                  <span className="text-[9px] bg-amber-400 text-slate-950 font-bold px-1.5 py-0.2 rounded font-mono">
-                    OTP
+                  <span className="text-[9px] px-1.5 py-0.5 rounded-md bg-teal-500/20 text-teal-300 font-mono font-bold">
+                    IT
                   </span>
                 )}
               </button>
@@ -531,6 +551,8 @@ export const Sidebar: React.FC = () => {
           <div className="flex items-center gap-2 mb-1.5">
             {currentUser.role === 'HOLDING_OWNER' ? (
               <Crown className="w-4 h-4 text-amber-400" />
+            ) : currentUser.role === 'IT_ADMIN' ? (
+              <Cpu className="w-4 h-4 text-teal-400" />
             ) : currentUser.role === 'COMPANY_GM' ? (
               <Building2 className="w-4 h-4 text-blue-400" />
             ) : currentUser.role === 'PROJECT_MANAGER' ? (
@@ -539,8 +561,12 @@ export const Sidebar: React.FC = () => {
               <Users className="w-4 h-4 text-slate-300" />
             )}
             <span className="text-xs font-bold text-slate-200 truncate">
-              {currentUser.role === 'HOLDING_OWNER'
+              {currentUser.role === 'PLATFORM_OWNER'
+                ? getUIText(language, { en: 'Platform Vendor (System 2)', ku: 'خاوەنی سەکۆ (سیستەمی ٢)', ar: 'مالك المنصة (النظام ٢)' })
+                : currentUser.role === 'HOLDING_OWNER'
                 ? getUIText(language, { en: 'Owner Gatekeeper Active', ku: 'دەروازەی خاوەنی هۆلدینگ', ar: 'بوابة مالك المجموعة نشطة' })
+                : currentUser.role === 'IT_ADMIN'
+                ? getUIText(language, { en: 'IT & System Admin Active', ku: 'بەڕێوەبەری IT و ڕێکخستن', ar: 'مسؤول تكنولوجيا المعلومات' })
                 : currentUser.role === 'COMPANY_GM'
                 ? getUIText(language, { en: 'General Manager Portal', ku: 'پۆرتاڵی بەڕێوەبەری گشتی (GM)', ar: 'بوابة المدير العام للشركة' })
                 : currentUser.role === 'PROJECT_MANAGER'
@@ -556,6 +582,12 @@ export const Sidebar: React.FC = () => {
                   en: 'Centralized pre-approval gate & triple sync scanner protecting holding assets.',
                   ku: 'دەروازەی پەسەندکردنی پێشوەختە و سکانی سێقۆڵی پارێزەری سەروەت و سامانی هۆلدینگ.',
                   ar: 'بوابة الموافقة المسبقة المركزية والماسح الثلاثي لحماية أصول المجموعة.'
+                })
+              : currentUser.role === 'IT_ADMIN'
+              ? getUIText(language, {
+                  en: 'Full autonomous Holding settings, RBAC users, network sync & hardware administration.',
+                  ku: 'کۆنترۆڵی سەربەخۆی تەواوی ڕێکخستنەکان، بەکارهێنەران، تۆڕ، پرینتەر و داتاکانی هۆڵدینگ.',
+                  ar: 'تحكم مستقل كامل في إعدادات الهولدينغ والمستخدمين والشبكة والأجهزة.'
                 })
               : getUIText(language, {
                   en: 'Role-based access applied. You have visibility only to authorized company and project modules.',

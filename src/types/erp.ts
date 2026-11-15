@@ -3,8 +3,10 @@ export * from './workflow';
 import { TransactionType, WorkflowRequestState } from './workflow';
 
 export type UserRole = 
+  | 'PLATFORM_OWNER'
   | 'HOLDING_OWNER'
   | 'SUPER_ADMIN'
+  | 'IT_ADMIN'
   | 'COMPANY_GM'
   | 'PROJECT_MANAGER'
   | 'EMPLOYEE'

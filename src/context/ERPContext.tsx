@@ -55,6 +55,7 @@ import {
   initialDispatchShipments,
   initialEmployees,
   currentUserProfiles,
+  PLATFORM_VENDOR_OWNER_PROFILE,
   initialPrinterDevices,
   initialSignatureProfiles
 } from '../data/initialData';
@@ -1028,49 +1029,78 @@ export const ERPProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   const [selectedCompanyId, setSelectedCompanyId] = useState<string | 'ALL'>('ALL');
   const [selectedProjectId, setSelectedProjectId] = useState<string | 'ALL'>('ALL');
-  const [currentUser, setCurrentUser] = useState<UserProfile>(() => {
-    const defaultUser = currentUserProfiles[0];
+  const [currentUser, setCurrentUserState] = useState<UserProfile>(() => {
     const isOwnerVerifiedStorage = typeof localStorage !== 'undefined' && (
-      localStorage.getItem('sas4erp_verified_owner_email') === 'kurdkodofficial@gmail.com' ||
+      localStorage.getItem('sas4erp_verified_owner_email') === 'kurdkodofficial@gmail.com' &&
       localStorage.getItem('sas4erp_owner_session') === 'verified'
     );
-    const verifiedAtStorage = typeof localStorage !== 'undefined' ? localStorage.getItem('sas4erp_owner_verified_at') : undefined;
-    const baseUser: UserProfile = isOwnerVerifiedStorage ? {
-      ...defaultUser,
-      email: 'kurdkodofficial@gmail.com',
-      isOwnerVerified: true,
-      verifiedAt: verifiedAtStorage || new Date().toISOString(),
-      name: 'خاوەنی سیستەم و هۆڵدینگ (kurdkodofficial@gmail.com)',
-      title: 'سەرۆک و خاوەنی سەکۆ و هۆڵدینگ',
-      role: 'HOLDING_OWNER',
-      avatar: '👑'
-    } : defaultUser;
+    const activePersonaRole = typeof localStorage !== 'undefined'
+      ? localStorage.getItem('sas4erp_active_persona_role')
+      : null;
 
+    if (isOwnerVerifiedStorage && activePersonaRole === 'PLATFORM_OWNER') {
+      return PLATFORM_VENDOR_OWNER_PROFILE;
+    }
+
+    const defaultUser = currentUserProfiles[0];
     const saved = typeof localStorage !== 'undefined' ? localStorage.getItem('sas4erp_holding') : null;
     if (saved) {
       try {
         const parsed = JSON.parse(saved);
-        if (parsed.chairmanName?.trim() && !isOwnerVerifiedStorage) {
+        if (parsed.chairmanName?.trim()) {
           return {
-            ...baseUser,
+            ...defaultUser,
             name: parsed.chairmanName.trim(),
           };
         }
       } catch (e) {}
     }
-    return baseUser;
+    return defaultUser;
   });
-  const [activeTab, setActiveTab] = useState<string>('holding-dashboard');
+
+  const [activeTab, setActiveTab] = useState<string>(() => {
+    const isOwnerVerifiedStorage = typeof localStorage !== 'undefined' &&
+      localStorage.getItem('sas4erp_owner_session') === 'verified';
+    const activePersonaRole = typeof localStorage !== 'undefined'
+      ? localStorage.getItem('sas4erp_active_persona_role')
+      : null;
+    return isOwnerVerifiedStorage && activePersonaRole === 'PLATFORM_OWNER'
+      ? 'vendor-license-hub'
+      : 'holding-dashboard';
+  });
+
+  const setCurrentUser = useCallback((user: UserProfile) => {
+    setCurrentUserState(user);
+    try {
+      localStorage.setItem('sas4erp_active_persona_role', user.role);
+    } catch {}
+    if (user.role === 'PLATFORM_OWNER') {
+      setActiveTab('vendor-license-hub');
+    } else {
+      setActiveTab(prev => (prev === 'vendor-license-hub' ? 'holding-dashboard' : prev));
+    }
+  }, []);
+
   const [searchQuery, setSearchQuery] = useState<string>('');
 
-  // User Profiles and RBAC Management State
+  // User Profiles and RBAC Management State (Client Holding Staff Only — never includes System 2 Vendor)
   const [userProfiles, setUserProfiles] = useState<UserProfile[]>(() => {
     try {
       const saved = localStorage.getItem('sas4erp_user_profiles');
       if (saved) {
         const parsed = JSON.parse(saved);
         if (Array.isArray(parsed) && parsed.length > 0) {
-          return parsed;
+          const cleaned = parsed.filter((u: UserProfile) => u.role !== 'PLATFORM_OWNER');
+          const hasItAdmin = cleaned.some((u: UserProfile) => u.role === 'IT_ADMIN');
+          if (!hasItAdmin) {
+            const defaultItAdmin = currentUserProfiles.find(u => u.role === 'IT_ADMIN');
+            if (defaultItAdmin) {
+              const ownerIdx = cleaned.findIndex((u: UserProfile) => u.role === 'SUPER_ADMIN');
+              const insertAt = ownerIdx >= 0 ? ownerIdx + 1 : 1;
+              cleaned.splice(insertAt, 0, defaultItAdmin);
+            }
+          }
+          return cleaned;
         }
       }
     } catch {}
@@ -1087,7 +1117,7 @@ export const ERPProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       return updated;
     });
 
-    setCurrentUser(curr => {
+    setCurrentUserState(curr => {
       if (curr.id === id) {
         return { ...curr, ...updates };
       }
@@ -2340,6 +2370,7 @@ export const ERPProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     const isDeptLead = user.role === 'DEPARTMENT_HEAD'
       || user.role === 'PROJECT_MANAGER'
       || user.role === 'TECHNICAL_HEAD'
+      || user.role === 'IT_ADMIN'
       || user.role === 'FINANCE_HEAD'
       || user.role === 'WAREHOUSE_OFFICER'
       || user.role === 'HR_MANAGER'

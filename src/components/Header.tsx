@@ -49,7 +49,8 @@ import { PWAInstallButton } from './common/PWAInstallButton';
 import { getStoredSystemLicense, SystemLicenseInfo, getRemainingTrialDays } from '../utils/licenseManager';
 import { getUIText } from '../utils/langHelper';
 import { KelegramApp } from './kelegram/KelegramApp';
-import { checkIsMasterVendorOwner } from '../utils/rbacPermissions';
+import { checkIsMasterVendorOwner, checkIsHoldingOrItAdmin } from '../utils/rbacPermissions';
+import { PLATFORM_VENDOR_OWNER_PROFILE } from '../data/initialData';
 import { getApiUrl } from '../utils/apiConfig';
 
 export const Header: React.FC = () => {
@@ -527,60 +528,24 @@ export const Header: React.FC = () => {
             </span>
           </a>
 
-          {/* Dual-System Switcher (Strictly for Platform Owner - completely hidden from client subscribers) */}
+          {/* System 2 Badge (Strictly visible ONLY when actively logged in as Platform Vendor Owner) */}
           {isMasterVendorOwner && (
-            <div className="flex items-center bg-slate-100/90 p-1 rounded-2xl border border-slate-200 gap-1 shadow-2xs">
-              <button
-                onClick={() => setActiveTab('holding-dashboard')}
-                className={`px-2.5 sm:px-3 py-1.5 rounded-xl text-xs font-black transition flex items-center gap-1.5 cursor-pointer ${
-                  activeTab !== 'vendor-license-hub'
-                    ? 'bg-white text-slate-900 shadow-sm border border-slate-200'
-                    : 'text-slate-600 hover:text-slate-900'
-                }`}
-                id="header-switch-to-erp-btn"
-                title={language === 'ku' ? 'سیستەمی هۆڵدینگ و بەشداربووان (ERP)' : 'Client ERP System'}
-              >
-                <Building2 className="w-3.5 h-3.5 text-blue-600 shrink-0" />
-                <span className="hidden sm:inline">{language === 'ku' ? '🏢 هۆڵدینگ (کڕیار)' : '🏢 Client ERP'}</span>
-              </button>
-
+            <div className="flex items-center bg-amber-100/90 p-1 rounded-2xl border border-amber-300 gap-1 shadow-2xs">
               <button
                 onClick={() => setActiveTab('vendor-license-hub')}
-                className={`px-2.5 sm:px-3 py-1.5 rounded-xl text-xs font-black transition flex items-center gap-1.5 cursor-pointer ${
+                className={`px-3 py-1.5 rounded-xl text-xs font-black transition flex items-center gap-1.5 cursor-pointer ${
                   activeTab === 'vendor-license-hub'
-                    ? 'bg-gradient-to-r from-amber-500 to-amber-600 text-slate-950 shadow-md ring-1 ring-amber-400'
-                    : 'text-amber-900 hover:text-amber-950 font-bold bg-amber-50/80 hover:bg-amber-100'
+                    ? 'bg-gradient-to-r from-amber-500 to-amber-600 text-slate-950 shadow-sm'
+                    : 'text-amber-900 hover:bg-amber-200/70'
                 }`}
                 id="header-switch-to-vendor-btn"
-                title={language === 'ku' ? 'پۆڕتاڵی خاوەنی سەکۆ: دروستکردن و نوێکردنەوەی لایسنسی کڕیاران' : 'Owner Vendor License Hub'}
+                title={language === 'ku' ? 'پۆڕتاڵی خاوەنی سەکۆ (سیستەمی ٢)' : 'Platform Owner Vendor Hub (System 2)'}
               >
-                <Crown className="w-3.5 h-3.5 text-amber-700 animate-pulse shrink-0" />
-                <span className="inline">{language === 'ku' ? '👑 لایسنس (خاوەن)' : '👑 Vendor Hub'}</span>
+                <Crown className="w-3.5 h-3.5 text-amber-800 shrink-0" />
+                <span className="inline">{language === 'ku' ? '👑 سیستەمی ٢ (خاوەن سەکۆ)' : '👑 System 2 (Vendor)'}</span>
               </button>
             </div>
           )}
-
-          {/* Platform Owner OTP Verification Button */}
-          <button
-            onClick={() => setIsOwnerVerifyModalOpen(true)}
-            id="header-owner-verify-btn"
-            className={`flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 rounded-xl text-xs font-black transition cursor-pointer border shadow-2xs ${
-              currentUser?.isOwnerVerified || (typeof localStorage !== 'undefined' && localStorage.getItem('sas4erp_owner_session') === 'verified')
-                ? 'bg-amber-500/15 text-amber-900 border-amber-300 hover:bg-amber-500/25'
-                : 'bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700 text-slate-950 border-amber-400 shadow-md animate-pulse'
-            }`}
-            title={language === 'ku' ? 'مسۆگەرکردنی خاوەنی سەکۆ بە ئیمەیلی kurdkodofficial@gmail.com' : 'Verify Platform Owner with kurdkodofficial@gmail.com'}
-          >
-            <Crown className="w-3.5 h-3.5 text-amber-700 shrink-0" />
-            <span className="hidden sm:inline">
-              {currentUser?.isOwnerVerified || (typeof localStorage !== 'undefined' && localStorage.getItem('sas4erp_owner_session') === 'verified')
-                ? (language === 'ku' ? 'خاوەنی مسۆگەرکراو ✓' : 'Verified Owner ✓')
-                : (language === 'ku' ? 'مسۆگەرکردنی خاوەن' : 'Owner OTP Verify')}
-            </span>
-            <span className="sm:hidden">
-              {language === 'ku' ? 'خاوەن' : 'Owner'}
-            </span>
-          </button>
 
           {/* System License & Hardware Lock Status Button */}
           <button
@@ -843,48 +808,12 @@ export const Header: React.FC = () => {
                       <Crown className="w-4 h-4 text-slate-950 animate-pulse" />
                       <span>{language === 'ku' ? '👑 پۆڕتاڵی لایسنس (سیستەمی ٢)' : '👑 Platform Owner Vendor Hub'}</span>
                     </span>
-                    <span className="text-[10px] px-1.5 py-0.5 rounded bg-slate-950 text-amber-400 font-mono font-bold">OWNER</span>
+                    <span className="text-[10px] px-1.5 py-0.5 rounded bg-slate-950 text-amber-400 font-mono font-bold">VENDOR</span>
                   </button>
                 )}
 
-                {/* Platform Owner Status / Verification Card */}
-                <div className="mb-2 p-2.5 rounded-xl border border-amber-200 bg-amber-50/70 text-xs">
-                  <div className="flex items-center justify-between mb-1">
-                    <span className="font-black text-amber-950 flex items-center gap-1">
-                      <Crown className="w-3.5 h-3.5 text-amber-600" />
-                      <span>{language === 'ku' ? 'خاوەنی سەکۆ' : 'Platform Owner'}</span>
-                    </span>
-                    {currentUser?.isOwnerVerified || (typeof localStorage !== 'undefined' && localStorage.getItem('sas4erp_owner_session') === 'verified') ? (
-                      <span className="text-[10px] bg-emerald-100 text-emerald-800 px-1.5 py-0.2 rounded font-bold">
-                        {language === 'ku' ? 'مسۆگەرکراوە ✓' : 'Verified ✓'}
-                      </span>
-                    ) : (
-                      <span className="text-[10px] bg-amber-200 text-amber-900 px-1.5 py-0.2 rounded font-bold">
-                        {language === 'ku' ? 'نەسەلمێنراوە' : 'Unverified'}
-                      </span>
-                    )}
-                  </div>
-                  <div className="text-[10px] text-slate-600 font-mono mb-2 truncate">
-                    kurdkodofficial@gmail.com
-                  </div>
-                  <button
-                    onClick={() => {
-                      setIsUserMenuOpen(false);
-                      setIsOwnerVerifyModalOpen(true);
-                    }}
-                    className="w-full py-1.5 px-2 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700 text-slate-950 font-black rounded-lg text-[11px] shadow-sm transition flex items-center justify-center gap-1 cursor-pointer"
-                  >
-                    <Key className="w-3 h-3" />
-                    <span>
-                      {currentUser?.isOwnerVerified || (typeof localStorage !== 'undefined' && localStorage.getItem('sas4erp_owner_session') === 'verified')
-                        ? (language === 'ku' ? 'نوێکردنەوەی مسۆگەرکردن' : 'Re-verify / Status')
-                        : (language === 'ku' ? 'مسۆگەرکردن بە کۆدی ژمارەیی' : 'Verify via Numeric OTP')}
-                    </span>
-                  </button>
-                </div>
-
                 <div className="px-2 py-1 text-xs font-bold text-slate-400 uppercase tracking-wider mb-2 border-b border-slate-100">
-                  Switch Active Role Persona (Testing)
+                  {language === 'ku' ? 'گۆڕینی ڕۆڵی هۆڵدینگ و بەکارهێنەران' : 'Switch Holding Role Persona'}
                 </div>
                 <div className="space-y-1 max-h-72 overflow-y-auto">
                   {userProfiles.map((user) => (
@@ -908,8 +837,8 @@ export const Header: React.FC = () => {
                   ))}
                 </div>
 
-                <div className="pt-2 mt-2 border-t border-slate-100 space-y-1.5">
-                  {(currentUser.role === 'HOLDING_OWNER' || currentUser.role === 'SUPER_ADMIN') && (
+                {checkIsHoldingOrItAdmin(currentUser) && (
+                  <div className="pt-2 mt-2 border-t border-slate-100 space-y-1.5">
                     <button
                       onClick={() => {
                         setIsUserMenuOpen(false);
@@ -920,19 +849,54 @@ export const Header: React.FC = () => {
                       <ShieldCheck className="w-3.5 h-3.5 text-indigo-600" />
                       <span>{getUIText(language, { en: 'Manage Roles & RBAC', ku: 'بەڕێوەبردنی ڕۆڵ و دەسەڵاتەکان', ar: 'إدارة الأدوار وصلاحيات الوصول' })}</span>
                     </button>
-                  )}
 
-                  <button
-                    onClick={() => {
-                      setIsUserMenuOpen(false);
-                      setIsHoldingSetupOpen(true);
-                    }}
-                    className="w-full flex items-center justify-center gap-2 p-2 rounded-xl text-xs font-bold bg-amber-50 hover:bg-amber-100 text-amber-900 border border-amber-200 transition cursor-pointer"
-                  >
-                    <Crown className="w-3.5 h-3.5 text-amber-600" />
-                    <span>{t('setupHoldingTitle')}</span>
-                  </button>
-                </div>
+                    <button
+                      onClick={() => {
+                        setIsUserMenuOpen(false);
+                        setActiveTab('it-systems');
+                      }}
+                      className="w-full flex items-center justify-center gap-2 p-2 rounded-xl text-xs font-bold bg-teal-50 hover:bg-teal-100 text-teal-900 border border-teal-200 transition cursor-pointer"
+                    >
+                      <Settings className="w-3.5 h-3.5 text-teal-600" />
+                      <span>{getUIText(language, { en: 'IT & Holding Settings Hub', ku: 'ناوەندی ڕێکخستنی هۆڵدینگ و IT', ar: 'مركز إعدادات الهولدينغ و IT' })}</span>
+                    </button>
+
+                    <button
+                      onClick={() => {
+                        setIsUserMenuOpen(false);
+                        setIsHoldingSetupOpen(true);
+                      }}
+                      className="w-full flex items-center justify-center gap-2 p-2 rounded-xl text-xs font-bold bg-amber-50 hover:bg-amber-100 text-amber-900 border border-amber-200 transition cursor-pointer"
+                    >
+                      <Crown className="w-3.5 h-3.5 text-amber-600" />
+                      <span>{t('setupHoldingTitle')}</span>
+                    </button>
+                  </div>
+                )}
+
+                {/* Subtle Vendor-Only Portal Access at very bottom (does not block or clutter Holding/IT users) */}
+                {!isMasterVendorOwner && (
+                  <div className="pt-2 mt-2 border-t border-slate-100">
+                    <button
+                      onClick={() => {
+                        setIsUserMenuOpen(false);
+                        if (typeof localStorage !== 'undefined' && localStorage.getItem('sas4erp_owner_session') === 'verified') {
+                          setCurrentUser({
+                            ...PLATFORM_VENDOR_OWNER_PROFILE,
+                            verifiedAt: localStorage.getItem('sas4erp_owner_verified_at') || new Date().toISOString()
+                          });
+                        } else {
+                          setIsOwnerVerifyModalOpen(true);
+                        }
+                      }}
+                      className="w-full flex items-center justify-center gap-1.5 py-1.5 px-2 rounded-lg text-[11px] font-semibold text-slate-400 hover:text-amber-700 hover:bg-amber-50/70 transition cursor-pointer"
+                      title={language === 'ku' ? 'دەروازەی خاوەنی سەکۆ (سیستەمی ٢)' : 'Software Vendor Portal (System 2)'}
+                    >
+                      <Key className="w-3 h-3" />
+                      <span>{language === 'ku' ? 'دەروازەی خاوەنی سەکۆ (سیستەمی ٢)' : 'System Vendor Portal (System 2)'}</span>
+                    </button>
+                  </div>
+                )}
               </div>
             )}
           </div>

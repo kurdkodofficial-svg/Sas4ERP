@@ -142,7 +142,7 @@ const INITIAL_SUBSCRIBERS: ClientSubscriberRecord[] = [
 
 export const VendorLicenseHubModule: React.FC = () => {
   const { language } = useLanguage();
-  const { systemLicense, setSystemLicense, setActiveTab, currentUser } = useERP();
+  const { systemLicense, setSystemLicense, setActiveTab, currentUser, setCurrentUser, userProfiles } = useERP();
 
   // Machine Hardware Fingerprint
   const currentMachineHw = getOrCreateHardwareFingerprint();
@@ -459,12 +459,18 @@ export const VendorLicenseHubModule: React.FC = () => {
             </button>
 
             <button
-              onClick={() => setActiveTab('holding-dashboard')}
+              onClick={() => {
+                const clientHoldingOwner = userProfiles.find(u => u.role === 'HOLDING_OWNER') || userProfiles[0];
+                if (clientHoldingOwner) {
+                  setCurrentUser(clientHoldingOwner);
+                }
+                setActiveTab('holding-dashboard');
+              }}
               className="px-4 py-3 rounded-2xl bg-white/10 hover:bg-white/20 text-white font-black text-xs flex items-center justify-center gap-2 transition cursor-pointer border border-white/20 backdrop-blur-md"
-              title="Return to Standard Client ERP Operations"
+              title={language === 'ku' ? 'تاقیکردنەوەی سیستەمی کڕیار (هۆڵدینگ و IT)' : 'Switch to Client Holding ERP Preview'}
             >
               <Building2 className="w-4 h-4 text-blue-400" />
-              <span>{language === 'ku' ? '🏢 چوون بۆ سیستەمی هۆڵدینگ (ERP)' : '🏢 Open Client ERP System'}</span>
+              <span>{language === 'ku' ? '🏢 چوون بۆ سیستەمی هۆڵدینگ (کڕیار)' : '🏢 Switch to Client ERP'}</span>
             </button>
           </div>
         </div>

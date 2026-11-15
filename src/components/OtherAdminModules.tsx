@@ -30,7 +30,16 @@ import {
   QrCode,
   Wrench,
   BarChart3,
-  ShieldAlert
+  ShieldAlert,
+  Building2,
+  FolderKanban,
+  Shield,
+  Printer,
+  PenTool,
+  Image,
+  FileSpreadsheet,
+  Key,
+  Settings2
 } from 'lucide-react';
 import { useERP } from '../context/ERPContext';
 import { useLanguage } from '../context/LanguageContext';
@@ -269,12 +278,173 @@ export const DocArchiveView: React.FC = () => {
 
 // 5. IT Systems, Cloud Sync & Conflict Resolution Module
 export const ItSystemsView: React.FC = () => {
-  const { itAssets, setIsCloudSyncModalOpen, holdingCloudSyncStatus } = useERP();
-  const { t, language } = useLanguage();
+  const {
+    itAssets,
+    setIsCloudSyncModalOpen,
+    holdingCloudSyncStatus,
+    setIsHoldingSetupOpen,
+    setIsUserRolesModalOpen,
+    setActiveTab,
+    setIsPrinterModalOpen,
+    setIsSignatureModalOpen,
+    setIsSkylineModalOpen,
+    setIsImportModalOpen,
+    openLicenseModal,
+    systemLicense,
+    holding
+  } = useERP();
+  const { language } = useLanguage();
   const [activeItTab, setActiveItTab] = useState<'SYNC_HEALTH' | 'THRESHOLD_ALERTS' | 'ASSET_UTILIZATION' | 'ASSET_TRACKING' | 'HARDWARE_MAINTENANCE' | 'LATENCY_MONITOR' | 'BANDWIDTH_MANAGER' | 'LOCAL_BUFFER' | 'CLOUD_BACKUP' | 'SMART_RELAY' | 'GEO_ZONES' | 'CONFLICTS' | 'AUDIT_REPORT' | 'INFRASTRUCTURE' | 'CLOUD_TOPOLOGY'>('SYNC_HEALTH');
+
+  const quickSettingsCards = [
+    {
+      id: 'holding-identity',
+      titleKu: 'ناسنامە و لۆگۆی هۆڵدینگ',
+      titleEn: 'Holding Identity & Logo',
+      descKu: 'دەستکاریکردنی ناوی هۆڵدینگ، لۆگۆ، ئیمەیڵ و زانیاری خاوەن',
+      descEn: 'Configure holding name, logo, email & chairman profile',
+      icon: Building2,
+      color: 'from-blue-600 to-indigo-700',
+      action: () => setIsHoldingSetupOpen(true)
+    },
+    {
+      id: 'users-rbac',
+      titleKu: 'بەکارهێنەران و دەسەڵات (RBAC)',
+      titleEn: 'Users & Roles (RBAC)',
+      descKu: 'زیادکردنی بەکارهێنەر، دیاریکردنی ڕۆڵ و بەشە ڕێگەپێدراوەکان',
+      descEn: 'Add staff, assign GM/PM/Employee roles & module access',
+      icon: Shield,
+      color: 'from-indigo-600 to-violet-700',
+      action: () => setIsUserRolesModalOpen(true)
+    },
+    {
+      id: 'companies-projects',
+      titleKu: 'کۆمپانیاکان و پڕۆژەکان',
+      titleEn: 'Companies & Projects',
+      descKu: 'دروستکردن و ڕێکخستنی کۆمپانیاکان، بەشەکان و بودجەکان',
+      descEn: 'Create & manage subsidiary companies, departments & projects',
+      icon: FolderKanban,
+      color: 'from-emerald-600 to-teal-700',
+      action: () => setActiveTab('companies-projects')
+    },
+    {
+      id: 'cloud-sync',
+      titleKu: 'ئامێرەکان و Cloud Sync',
+      titleEn: 'Multi-Laptop Cloud Sync',
+      descKu: 'بەستنەوەی لاپتۆپ و لقەکان بە کلیلی هاوبەشی هۆڵدینگ',
+      descEn: 'Link branch laptops & terminals with holding sync gateway',
+      icon: CloudLightning,
+      color: 'from-cyan-600 to-blue-700',
+      action: () => setIsCloudSyncModalOpen(true)
+    },
+    {
+      id: 'printer-station',
+      titleKu: 'وێستگەی چاپ و پرینتەر',
+      titleEn: 'Printer & Print Station',
+      descKu: 'بەڕێوەبردنی پرینتەرەکان، پسوولەکان و قەبارەی کاغەز',
+      descEn: 'Manage holding printers, voucher layouts & default device',
+      icon: Printer,
+      color: 'from-slate-700 to-slate-900',
+      action: () => setIsPrinterModalOpen(true)
+    },
+    {
+      id: 'esignature-studio',
+      titleKu: 'ستۆدیۆی واژۆی ئەلیکترۆنی',
+      titleEn: 'E-Signature Studio',
+      descKu: 'تۆمارکردن و بەڕێوەبردنی واژۆی فەرمی بەڕێوەبەران',
+      descEn: 'Create & assign authorized digital signatures for approvals',
+      icon: PenTool,
+      color: 'from-amber-600 to-orange-700',
+      action: () => setIsSignatureModalOpen(true)
+    },
+    {
+      id: 'skyline-theme',
+      titleKu: 'باکگراوند و ڕووکاری هۆڵدینگ',
+      titleEn: 'Skyline Background Theme',
+      descKu: 'گۆڕینی وێنەی باکگراوند، شەفافییەت و تەڵخی ڕووکار',
+      descEn: 'Customize corporate skyline backdrop, opacity & blur',
+      icon: Image,
+      color: 'from-fuchsia-600 to-purple-700',
+      action: () => setIsSkylineModalOpen(true)
+    },
+    {
+      id: 'bulk-import',
+      titleKu: 'هاوردەکردنی داتای Excel/CSV',
+      titleEn: 'Bulk Excel / CSV Import',
+      descKu: 'هاوردەکردنی خێرای کۆمپانیا، کارمەند، کۆگا و ژمێریاری',
+      descEn: 'Batch import companies, projects, staff, warehouse & ledgers',
+      icon: FileSpreadsheet,
+      color: 'from-teal-600 to-emerald-700',
+      action: () => setIsImportModalOpen(true)
+    },
+    {
+      id: 'client-license',
+      titleKu: 'کاراکردنی کلیلی لایسنس',
+      titleEn: 'Client License Activation',
+      descKu: `باری مۆڵەت: ${systemLicense.licenseType} • داخڵکردنی کلیل بۆ هۆڵدینگ`,
+      descEn: `Status: ${systemLicense.licenseType} • Enter holding activation key`,
+      icon: Key,
+      color: 'from-rose-600 to-amber-600',
+      action: () => openLicenseModal('activate')
+    }
+  ];
 
   return (
     <div className="space-y-6 animate-in fade-in duration-300">
+      {/* Autonomous Holding & IT Control Center */}
+      <div className="bg-gradient-to-br from-slate-900 via-indigo-950 to-slate-900 border border-indigo-500/30 rounded-3xl p-5 sm:p-6 text-white shadow-xl space-y-4">
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 border-b border-white/10 pb-4">
+          <div className="flex items-center gap-3">
+            <div className="w-11 h-11 rounded-2xl bg-gradient-to-br from-cyan-400 to-blue-600 text-slate-950 flex items-center justify-center shadow-lg shrink-0">
+              <Settings2 className="w-6 h-6" />
+            </div>
+            <div>
+              <div className="flex items-center gap-2 flex-wrap">
+                <h2 className="text-base sm:text-lg font-black text-white">
+                  {language === 'ku'
+                    ? 'ناوەندی سەربەخۆی ڕێکخستنەکانی هۆڵدینگ و IT'
+                    : 'Autonomous Holding & IT Settings Hub'}
+                </h2>
+                <span className="px-2.5 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-400/30 text-[10px] font-bold">
+                  {language === 'ku' ? 'کۆنترۆڵی تەواوی هۆڵدینگ' : 'Full Client Autonomy'}
+                </span>
+              </div>
+              <p className="text-xs text-slate-300 mt-0.5">
+                {language === 'ku'
+                  ? `سەرجەم ڕێکخستنەکانی "${holding.nameKu || holding.name}" لێرەوە بە سەربەخۆیی بەڕێوەدەبرێن بەبێ پێویستی گەڕانەوە بۆ خاوەن سەکۆ.`
+                  : `All configurations for "${holding.name}" are autonomously managed here without returning to the platform vendor.`}
+              </p>
+            </div>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+          {quickSettingsCards.map((card) => {
+            const IconComp = card.icon;
+            return (
+              <button
+                key={card.id}
+                type="button"
+                onClick={card.action}
+                className="group p-3.5 rounded-2xl bg-white/5 hover:bg-white/12 border border-white/10 hover:border-cyan-400/50 text-start transition flex items-start gap-3 cursor-pointer"
+              >
+                <div className={`w-10 h-10 rounded-xl bg-gradient-to-br ${card.color} text-white flex items-center justify-center shrink-0 shadow-md group-hover:scale-105 transition`}>
+                  <IconComp className="w-5 h-5" />
+                </div>
+                <div className="min-w-0 flex-1">
+                  <div className="font-extrabold text-xs text-white group-hover:text-cyan-200 transition truncate">
+                    {language === 'ku' ? card.titleKu : card.titleEn}
+                  </div>
+                  <p className="text-[11px] text-slate-300/90 mt-0.5 leading-snug line-clamp-2">
+                    {language === 'ku' ? card.descKu : card.descEn}
+                  </p>
+                </div>
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
       {/* Module Navigation Tabs */}
       <div className="bg-white border border-slate-200/80 rounded-3xl p-3 shadow-xs flex items-center justify-between gap-3 flex-wrap">
         <div className="flex items-center gap-1.5 flex-wrap">

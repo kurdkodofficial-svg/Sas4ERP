@@ -1101,6 +1101,18 @@ export const initialEmployees: Employee[] = [
   { id: 'emp-04', companyId: 'comp-1', fullName: 'بەرپرسی ئاسایش و دەرگا', department: 'Security & Gate Ops', role: 'Chief Gate Controller', salaryUSD: 0, phone: '+964 750 000 0000', email: 'security@holding.com', joinDate: '2026-01-01', status: 'ACTIVE', nationality: 'Local' }
 ];
 
+export const PLATFORM_VENDOR_OWNER_PROFILE: UserProfile = {
+  id: 'user-platform-owner',
+  name: 'خاوەنی سەکۆ و سیستەم (System Owner)',
+  role: 'PLATFORM_OWNER',
+  email: 'kurdkodofficial@gmail.com',
+  avatar: '🛡️',
+  phone: '+964 750 000 0000',
+  nativeLanguage: 'ku',
+  title: 'SAS4ERP Platform Creator & License Authority',
+  isOwnerVerified: true,
+};
+
 export const currentUserProfiles: UserProfile[] = [
   {
     id: 'user-owner',
@@ -1121,6 +1133,16 @@ export const currentUserProfiles: UserProfile[] = [
     phone: '+964 750 000 9999',
     nativeLanguage: 'ku',
     title: 'Holding Super Administrator & Executive Ops',
+  },
+  {
+    id: 'user-it-admin',
+    name: 'بەڕێوەبەری IT و ڕێکخستنی سیستەم (IT Admin)',
+    role: 'IT_ADMIN',
+    email: 'it@holding.com',
+    avatar: '🛠️',
+    phone: '+964 750 000 0008',
+    nativeLanguage: 'ku',
+    title: 'Holding IT Administrator & System Configurator',
   },
   {
     id: 'user-gm-1',

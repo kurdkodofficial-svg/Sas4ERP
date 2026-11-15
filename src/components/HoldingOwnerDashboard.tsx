@@ -54,7 +54,7 @@ import {
 import { useERP } from '../context/ERPContext';
 import { useLanguage } from '../context/LanguageContext';
 import { resolveEntityText, getUIText } from '../utils/langHelper';
-import { hasModuleAccess, checkIsMasterVendorOwner } from '../utils/rbacPermissions';
+import { hasModuleAccess, checkIsMasterVendorOwner, checkIsHoldingOrItAdmin } from '../utils/rbacPermissions';
 import { generateEnterpriseUserManualDocx } from '../utils/userManualDocxGenerator';
 import { openUserManualPrintView } from '../utils/userManualPdfGenerator';
 import {
@@ -285,14 +285,6 @@ export const HoldingOwnerDashboard: React.FC = () => {
   const criticalMlAlerts = anomalyAlerts.filter(a => a.severity === 'CRITICAL' && (a.status === 'TRIGGERED' || a.status === 'INVESTIGATING'));
 
   const systemModuleCards = [
-    ...(isMasterVendorOwner ? [{
-      id: 'vendor-license-hub',
-      icon: Crown,
-      badge: 'SYSTEM 2',
-      title: language === 'ku' ? '👑 پۆڕتاڵی لایسنس (سیستەمی ٢)' : language === 'ar' ? '👑 إدارة التراخيص (النظام ٢)' : '👑 Vendor License Hub',
-      subtitle: language === 'ku' ? 'بەڕێوەبردن و پێدانی لایسنس' : 'Manage & Renew Client Licenses',
-      onClick: () => setActiveTab('vendor-license-hub')
-    }] : []),
     {
       id: 'procurement',
       icon: ShoppingCart,
@@ -871,8 +863,11 @@ export const HoldingOwnerDashboard: React.FC = () => {
     }
   };
 
-  // RBAC Boundary: Top Management (سەرەوە) vs Subordinates (خوارەوە)
-  const isTopManagement = currentUser.role === 'HOLDING_OWNER' || currentUser.role === 'SUPER_ADMIN';
+  // RBAC Boundary: Holding Top Management & IT Admin (سەرەوە و ڕێکخستنی سیستم) vs Branch Subordinates (خوارەوە)
+  const isTopManagement =
+    currentUser.role === 'HOLDING_OWNER' ||
+    currentUser.role === 'SUPER_ADMIN' ||
+    currentUser.role === 'IT_ADMIN';
 
   if (!isTopManagement) {
     return <BranchProjectOperationalPortal />;
@@ -880,89 +875,52 @@ export const HoldingOwnerDashboard: React.FC = () => {
 
   return (
     <div className="space-y-6 animate-in fade-in duration-300">
-      
-      {/* Unverified Owner Verification Prompt Banner */}
-      {(!currentUser?.isOwnerVerified && (typeof localStorage === 'undefined' || localStorage.getItem('sas4erp_owner_session') !== 'verified')) && (
-        <div className="bg-gradient-to-r from-amber-500/15 via-yellow-400/20 to-amber-500/15 border-2 border-amber-300 p-4 rounded-3xl shadow-md flex items-center justify-between flex-wrap gap-4 animate-in fade-in">
+      {/* Autonomous IT Administration Mode Banner (When logged in as Holding IT Admin) */}
+      {currentUser.role === 'IT_ADMIN' && (
+        <div className="bg-gradient-to-r from-indigo-900 via-slate-900 to-blue-900 text-white p-4 sm:p-5 rounded-3xl shadow-lg border border-indigo-400/40 flex items-center justify-between flex-wrap gap-4 animate-in fade-in">
           <div className="flex items-center gap-3.5">
-            <div className="w-11 h-11 rounded-2xl bg-amber-500 text-slate-950 flex items-center justify-center font-black shadow-sm shrink-0">
-              <Key className="w-5 h-5" />
+            <div className="w-12 h-12 rounded-2xl bg-indigo-500/20 text-indigo-300 border border-indigo-400/30 flex items-center justify-center font-black shrink-0">
+              <Cpu className="w-6 h-6" />
             </div>
             <div>
-              <div className="flex items-center gap-2">
-                <h4 className="font-black text-sm text-slate-950">
-                  {language === 'ku' ? 'مسۆگەرکردنی فەرمی خاوەنی سەکۆ (kurdkodofficial@gmail.com)' : 'Verify Platform Owner Status (kurdkodofficial@gmail.com)'}
-                </h4>
-                <span className="text-[10px] bg-amber-400 text-slate-950 px-2 py-0.5 rounded-full font-bold">
-                  {language === 'ku' ? 'داواکاری نوێ' : 'Required'}
-                </span>
-              </div>
-              <p className="text-xs text-slate-700 font-semibold mt-0.5">
-                {language === 'ku'
-                  ? 'بە نووسینی ئیمەیلی kurdkodofficial@gmail.com و وەرگرتنی کۆدی ٦ ژمارەیی، ناسنامەی خاوەنت بسەلمێنە و بەشی لایسنس بکەرەوە.'
-                  : 'Dispatch a 6-digit numeric OTP to kurdkodofficial@gmail.com to authenticate sovereign ownership and unlock System 2.'}
-              </p>
-            </div>
-          </div>
-          <button
-            onClick={() => setIsOwnerVerifyModalOpen(true)}
-            className="px-4 py-2.5 rounded-xl bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700 text-slate-950 font-black text-xs transition cursor-pointer shadow-md flex items-center gap-1.5"
-          >
-            <Crown className="w-4 h-4" />
-            <span>{language === 'ku' ? 'ناردنی کۆدی مسۆگەربوون بۆ ئیمەیل' : 'Verify Owner via Numeric OTP'}</span>
-          </button>
-        </div>
-      )}
-
-      {/* Platform Owner Dedicated System 2 License Command Banner */}
-      {isMasterVendorOwner && (
-        <div className="bg-gradient-to-r from-amber-500 via-amber-600 to-yellow-600 text-slate-950 p-4 rounded-3xl shadow-xl border-2 border-amber-300 flex items-center justify-between flex-wrap gap-4 animate-in fade-in">
-          <div className="flex items-center gap-3.5">
-            <div className="w-12 h-12 rounded-2xl bg-slate-950 text-amber-400 flex items-center justify-center font-black shadow-md shrink-0">
-              <Crown className="w-6 h-6 animate-pulse" />
-            </div>
-            <div>
-              <div className="flex items-center gap-2">
-                <h3 className="font-black text-sm sm:text-base text-slate-950">
-                  {language === 'ku' ? '👑 بەشی خاوەن سیستەم: بەڕێوەبردن و پێدانی لایسنس (سیستەمی ٢)' : '👑 Platform Owner Vendor Command Center (System 2)'}
+              <div className="flex items-center gap-2 flex-wrap">
+                <h3 className="font-black text-sm sm:text-base text-white">
+                  {language === 'ku'
+                    ? '🛠️ ناوەندی سەربەخۆی IT و ڕێکخستنەکانی هۆڵدینگ'
+                    : '🛠️ Autonomous Holding IT & System Configuration Mode'}
                 </h3>
-                <span className="text-[10px] font-black px-2 py-0.5 rounded-full bg-slate-950 text-amber-400 font-mono">
-                  OWNER HUB
+                <span className="text-[10px] font-black px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-400/40">
+                  {language === 'ku' ? 'دەسەڵاتی سەربەخۆ ✓' : 'FULL SETTINGS CONTROL'}
                 </span>
-                {(currentUser?.isOwnerVerified || (typeof localStorage !== 'undefined' && localStorage.getItem('sas4erp_owner_session') === 'verified')) && (
-                  <span className="text-[10px] font-black px-2 py-0.5 rounded-full bg-emerald-950 text-emerald-300 border border-emerald-400/40">
-                    {language === 'ku' ? 'مسۆگەرکراو ✓' : 'VERIFIED ✓'}
-                  </span>
-                )}
               </div>
-              <p className="text-xs text-slate-900/90 font-semibold mt-0.5">
+              <p className="text-xs text-slate-300 mt-0.5">
                 {language === 'ku'
-                  ? 'پۆڕتاڵی تایبەتی خاوەنی سەکۆ بۆ دروستکردنی لایسنسی نوێ، نوێکردنەوەی مانگانەی کۆمپانیاکان، و بەڕێوەبردنی کلیلی هاردوێر.'
-                  : 'Your dedicated portal to generate cryptographic license keys, manage recurring subscriptions, and monitor node locks.'}
+                  ? 'وەک بەڕێوەبەری IT، دەسەڵاتی تەواوت هەیە بۆ ڕێکخستنی ناو و لۆگۆی هۆڵدینگ، بەکارهێنەران و دەسەڵاتەکان، کۆمپانیاکان، پرینتەر و سینک بەبێ گەڕانەوە بۆ خاوەن سەکۆ.'
+                  : 'Full autonomous control over Holding identity, RBAC users & roles, subsidiaries, cloud/mesh sync, printers, and local system license entry.'}
               </p>
             </div>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 flex-wrap">
             <button
-              onClick={() => setIsOwnerVerifyModalOpen(true)}
-              className="px-3 py-2.5 rounded-xl bg-white/90 hover:bg-white text-slate-900 font-bold text-xs transition cursor-pointer shadow-sm flex items-center gap-1.5"
-              title={language === 'ku' ? 'باری مسۆگەربوونی خاوەن' : 'Owner Verification Status'}
+              onClick={() => setIsUserRolesModalOpen(true)}
+              className="px-3.5 py-2.5 rounded-xl bg-purple-600 hover:bg-purple-500 text-white font-black text-xs transition cursor-pointer shadow-sm flex items-center gap-1.5"
             >
-              <Crown className="w-3.5 h-3.5 text-amber-700" />
-              <span>{language === 'ku' ? 'باری خاوەن' : 'Owner Status'}</span>
+              <Users className="w-4 h-4" />
+              <span>{language === 'ku' ? 'بەکارهێنەر و دەسەڵاتەکان (RBAC)' : 'Users & RBAC'}</span>
             </button>
             <button
-              onClick={() => openLicenseModal('generator')}
-              className="px-3.5 py-2.5 rounded-xl bg-white/95 hover:bg-white text-slate-900 font-extrabold text-xs transition cursor-pointer shadow-sm flex items-center gap-1.5"
+              onClick={() => setIsHoldingSetupOpen(true)}
+              className="px-3.5 py-2.5 rounded-xl bg-amber-400 hover:bg-amber-300 text-slate-950 font-black text-xs transition cursor-pointer shadow-sm flex items-center gap-1.5"
             >
-              <Key className="w-4 h-4 text-amber-700" />
-              <span>{language === 'ku' ? 'دروستکردنی کلیل' : 'Generate Key'}</span>
+              <Sliders className="w-4 h-4" />
+              <span>{language === 'ku' ? 'ڕێکخستنی هۆڵدینگ و داتا' : 'Holding Setup'}</span>
             </button>
             <button
-              onClick={() => setActiveTab('vendor-license-hub')}
-              className="px-4.5 py-2.5 rounded-xl bg-slate-950 text-amber-400 hover:bg-slate-900 font-black text-xs transition cursor-pointer shadow-md flex items-center gap-2 transform active:scale-95"
+              onClick={() => setActiveTab('it-systems')}
+              className="px-4 py-2.5 rounded-xl bg-white text-slate-900 hover:bg-slate-100 font-black text-xs transition cursor-pointer shadow-md flex items-center gap-1.5"
             >
-              <span>{language === 'ku' ? 'چوونە پۆڕتاڵی لایسنس (خاوەن) ➔' : 'Open License Command Hub ➔'}</span>
+              <Activity className="w-4 h-4 text-indigo-600" />
+              <span>{language === 'ku' ? 'ناوەندی ڕێکخستنەکانی IT ➔' : 'Open IT Settings Hub ➔'}</span>
             </button>
           </div>
         </div>
@@ -1146,8 +1104,8 @@ export const HoldingOwnerDashboard: React.FC = () => {
             <span className="truncate">{getUIText(language, { en: 'Export PDF', ku: 'داگرتنی PDF', ar: 'تصدير PDF' })}</span>
           </button>
 
-          {/* User Roles & Permissions Button (Exclusive for Holding Owner & Admins) */}
-          {(currentUser.role === 'HOLDING_OWNER' || currentUser.role === 'SUPER_ADMIN') && (
+          {/* User Roles & Permissions Button (Holding Owner, Super Admin & IT Admin) */}
+          {checkIsHoldingOrItAdmin(currentUser) && (
             <button
               onClick={() => setIsUserRolesModalOpen(true)}
               className="flex items-center justify-center gap-2 px-3 py-2.5 rounded-xl text-xs font-bold bg-purple-600 hover:bg-purple-500 text-white shadow-md transition transform active:scale-95 cursor-pointer text-center"
@@ -1160,6 +1118,23 @@ export const HoldingOwnerDashboard: React.FC = () => {
             >
               <Users className="w-4 h-4 text-purple-200 shrink-0" />
               <span className="truncate">{getUIText(language, { en: 'Roles & RBAC', ku: 'ڕۆڵ و دەسەڵاتەکان', ar: 'الأدوار والصلاحيات' })}</span>
+            </button>
+          )}
+
+          {/* Direct IT & Holding Settings Hub Button */}
+          {checkIsHoldingOrItAdmin(currentUser) && (
+            <button
+              onClick={() => setActiveTab('it-systems')}
+              className="flex items-center justify-center gap-2 px-3 py-2.5 rounded-xl text-xs font-bold bg-teal-600 hover:bg-teal-500 text-white shadow-md transition transform active:scale-95 cursor-pointer text-center"
+              id="dashboard-it-settings-hub-btn"
+              title={getUIText(language, {
+                en: 'Autonomous IT & Holding Settings Center',
+                ku: 'ناوەندی ڕێکخستنەکانی هۆڵدینگ و IT',
+                ar: 'مركز إعدادات الهولدينغ و IT'
+              })}
+            >
+              <Cpu className="w-4 h-4 text-teal-100 shrink-0" />
+              <span className="truncate">{getUIText(language, { en: 'IT & Settings', ku: 'ڕێکخستنی IT', ar: 'إعدادات IT' })}</span>
             </button>
           )}
 
