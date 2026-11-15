@@ -230,6 +230,8 @@ export const UserRolesManagementModal: React.FC = () => {
         return language === 'ku' ? 'ئەفسەری سەلامەتی (HSE)' : language === 'ar' ? 'مسؤول السلامة والصحة' : 'HSE Safety Officer';
       case 'TECHNICAL_HEAD':
         return language === 'ku' ? 'بەرپرسی تەکنیکی و کارەبا' : language === 'ar' ? 'المسؤول الفني والكهرباء' : 'Technical & Power Head';
+      case 'DEPARTMENT_HEAD':
+        return language === 'ku' ? 'سەرپەرشتیاری بەش (Company Dept)' : language === 'ar' ? 'رئيس القسم المختص' : 'Company Department Head';
       default:
         return role;
     }
@@ -463,6 +465,7 @@ export const UserRolesManagementModal: React.FC = () => {
                     <option value="HR_MANAGER">👥 بەڕێوەبەری سەرچاوە مرۆییەکان (HR Manager)</option>
                     <option value="HSE_OFFICER">🦺 ئەفسەری سەلامەتی مەیدانی (HSE Officer)</option>
                     <option value="TECHNICAL_HEAD">⚙️ بەرپرسی تەکنیکی و کارەبا (Technical Head)</option>
+                    <option value="DEPARTMENT_HEAD">🏛️ سەرپەرشتیاری بەشی کۆمپانیا (Department Head)</option>
                   </select>
                 </div>
 

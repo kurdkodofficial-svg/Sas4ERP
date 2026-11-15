@@ -315,6 +315,14 @@ export const DEFAULT_ROLE_PERMISSIONS: Record<UserRole, string[]> = {
     'it-systems',
     'procurement',
     'direct-comms'
+  ],
+  DEPARTMENT_HEAD: [
+    'holding-dashboard',
+    'procurement',
+    'warehouse',
+    'project-reports',
+    'direct-comms',
+    'correspondence'
   ]
 };
 

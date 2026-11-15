@@ -162,30 +162,28 @@ export const FinanceModule: React.FC = () => {
       {financeSubTab === 'WORKFLOW_COMMITMENTS' ? (
         <div className="space-y-6">
           {/* Header */}
-          <div className="bg-white border border-slate-200/80 rounded-3xl p-6 shadow-xs flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          <div className="bg-white border border-slate-200/80 rounded-2xl p-6 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
             <div>
-              <div className="flex items-center gap-2">
-                <div className="w-8 h-8 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center font-bold">
-                  <ShieldCheck className="w-4 h-4 text-blue-600" />
+              <div className="flex items-center gap-2.5">
+                <div className="w-8 h-8 rounded-lg bg-blue-50 text-blue-600 flex items-center justify-center">
+                  <ShieldCheck className="w-4 h-4" />
                 </div>
-                <h1 className="text-xl sm:text-2xl font-extrabold text-slate-900">
+                <h1 className="text-xl font-bold text-slate-900">
                   {language === 'ku'
-                    ? 'دەروازەی خەرجکردنی دارایی و کۆنتڕۆڵی تەرخانکراوەکان'
-                    : 'Executive Financial Commitments & Treasury Disbursals'}
+                    ? 'کۆنتڕۆڵی تەرخانکراوی دارایی و دەروازەی سەرفکردن'
+                    : 'Financial Encumbrances & Treasury Disbursal Gate'}
                 </h1>
               </div>
               <p className="text-xs text-slate-500 mt-1 max-w-2xl">
                 {language === 'ku'
-                  ? 'بەپێی یاسای سیستەم، هیچ بڕە پارەیەک خەرج ناکرێت بەبێ پەسەندکردنی یەک لە دوای یەکی بەڕێوەبەری پڕۆژە، بەڕێوەبەری گشتی و واژۆی کۆتایی خاوەنی هۆڵدینگ.'
-                  : 'Zero-disbursal policy: Funds cannot be released from central treasury without sequential sign-off by Project Manager, General Manager, and ultimate Holding Owner signature.'}
+                  ? 'هیچ بڕە پارەیەک لە خەزێنە سەرف ناکرێت هەتا بەش ← بەڕێوەبەری کۆمپانیا ← خاوەنی هۆڵدینگ ڕەزامەندی یەک لە دوای یەک نەدەن.'
+                  : 'Strict zero-disbursal policy: Encumbered procurement funds remain frozen until sequential approval from Department → Company Manager → Holding Owner is complete.'}
               </p>
             </div>
 
-            <div className="flex items-center gap-2">
-              <span className="text-xs bg-emerald-50 text-emerald-800 border border-emerald-200 px-3 py-1.5 rounded-xl font-bold flex items-center gap-1.5">
-                <Lock className="w-3.5 h-3.5 text-emerald-600" />
-                <span>{language === 'ku' ? 'پارێزراوە بە مۆری سەرۆکایەتی' : 'Treasury Gating Active'}</span>
-              </span>
+            <div className="flex items-center gap-2 text-xs text-emerald-800 font-semibold shrink-0">
+              <Lock className="w-3.5 h-3.5 text-emerald-600" />
+              <span>{language === 'ku' ? 'دەروازەی سەرفکردنی سێ-قۆناغی چالاکە' : '3-Tier Treasury Gating Active'}</span>
             </div>
           </div>
 
@@ -196,61 +194,66 @@ export const FinanceModule: React.FC = () => {
               if (selectedProjectId !== 'ALL' && po.projectId !== selectedProjectId) return false;
               return true;
             });
-            const totalVal = activePOs.reduce((acc, p) => acc + p.totalAmountUSD, 0);
-            const frozenVal = activePOs.filter(p => !isPoFullyApproved(p)).reduce((acc, p) => acc + p.totalAmountUSD, 0);
-            const clearedVal = activePOs.filter(p => isPoFullyApproved(p) && p.financeEntry?.paymentStatus !== 'PAID').reduce((acc, p) => acc + p.totalAmountUSD, 0);
-            const settledVal = activePOs.filter(p => p.financeEntry?.paymentStatus === 'PAID').reduce((acc, p) => acc + p.totalAmountUSD, 0);
+            const isPoRejected = (p: PurchaseOrder) =>
+              p.status === 'REJECTED_BY_OWNER' || p.workflowState?.finalDecision === 'REJECTED';
+            const totalVal = activePOs.filter(p => !isPoRejected(p)).reduce((acc, p) => acc + p.totalAmountUSD, 0);
+            const frozenPOs = activePOs.filter(p => !isPoRejected(p) && !isPoFullyApproved(p));
+            const frozenVal = frozenPOs.reduce((acc, p) => acc + p.totalAmountUSD, 0);
+            const clearedPOs = activePOs.filter(p => !isPoRejected(p) && isPoFullyApproved(p) && p.financeEntry?.paymentStatus !== 'PAID');
+            const clearedVal = clearedPOs.reduce((acc, p) => acc + p.totalAmountUSD, 0);
+            const settledPOs = activePOs.filter(p => p.financeEntry?.paymentStatus === 'PAID');
+            const settledVal = settledPOs.reduce((acc, p) => acc + p.totalAmountUSD, 0);
 
             return (
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-                <div className="bg-white border border-slate-200/80 rounded-2xl p-4 shadow-xs">
-                  <span className="text-[11px] font-bold uppercase tracking-wider text-slate-500">
-                    {language === 'ku' ? 'کۆی داواکارییە داراییەکان' : 'Total Requisition Value'}
+                <div className="bg-white border border-slate-200/80 rounded-2xl p-4">
+                  <span className="text-xs font-semibold text-slate-500">
+                    {language === 'ku' ? 'کۆی داواکارییە چالاکەکان' : 'Active Requisition Value'}
                   </span>
-                  <div className="text-xl font-extrabold text-slate-900 mt-1 font-mono">
+                  <div className="text-xl font-bold text-slate-900 mt-1 font-mono tabular-nums">
                     ${totalVal.toLocaleString()} USD
                   </div>
-                  <span className="text-[10px] text-slate-500 mt-1 block">
-                    {activePOs.length} {language === 'ku' ? 'مامەڵەی دارایی' : 'Financial Requisitions'}
+                  <span className="text-[11px] text-slate-500 mt-1 block">
+                    {activePOs.filter(p => !isPoRejected(p)).length} {language === 'ku' ? 'مامەڵەی چالاک' : 'Active Requests'}
                   </span>
                 </div>
 
-                <div className="bg-amber-50/70 border border-amber-200 rounded-2xl p-4 shadow-xs">
-                  <span className="text-[11px] font-bold uppercase tracking-wider text-amber-800 flex items-center justify-between">
-                    <span>{language === 'ku' ? 'بەستراو لە ڕێڕەو (Frozen)' : 'Frozen in Approval Chain'}</span>
+                <div className="bg-white border border-slate-200/80 rounded-2xl p-4">
+                  <span className="text-xs font-semibold text-amber-800 flex items-center justify-between">
+                    <span>{language === 'ku' ? 'بەستراو لە ڕێڕەو (Encumbered)' : 'Encumbered in Chain'}</span>
                     <Clock className="w-3.5 h-3.5 text-amber-600" />
                   </span>
-                  <div className="text-xl font-extrabold text-amber-950 mt-1 font-mono">
+                  <div className="text-xl font-bold text-slate-900 mt-1 font-mono tabular-nums">
                     ${frozenVal.toLocaleString()} USD
                   </div>
-                  <span className="text-[10px] text-amber-700 mt-1 block font-medium">
-                    {activePOs.filter(p => !isPoFullyApproved(p)).length} {language === 'ku' ? 'چاوەڕوانی واژۆیە (خەرجکردن ڕاگیراوە)' : 'Awaiting sign-off (Disbursal Blocked)'}
+                  <span className="text-[11px] text-amber-700 mt-1 block font-medium">
+                    {frozenPOs.length} {language === 'ku' ? 'چاوەڕوانی ڕەزامەندی (سەرفکردن قفڵە)' : 'Awaiting consent (Disbursal Locked)'}
                   </span>
                 </div>
 
-                <div className="bg-emerald-50/70 border border-emerald-200 rounded-2xl p-4 shadow-xs">
-                  <span className="text-[11px] font-bold uppercase tracking-wider text-emerald-800 flex items-center justify-between">
+                <div className="bg-white border border-slate-200/80 rounded-2xl p-4">
+                  <span className="text-xs font-semibold text-emerald-800 flex items-center justify-between">
                     <span>{language === 'ku' ? 'ئامادە بۆ خەرجکردن (Cleared)' : 'Cleared for Disbursal'}</span>
                     <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
                   </span>
-                  <div className="text-xl font-extrabold text-emerald-950 mt-1 font-mono">
+                  <div className="text-xl font-bold text-slate-900 mt-1 font-mono tabular-nums">
                     ${clearedVal.toLocaleString()} USD
                   </div>
-                  <span className="text-[10px] text-emerald-700 mt-1 block font-medium">
-                    {activePOs.filter(p => isPoFullyApproved(p) && p.financeEntry?.paymentStatus !== 'PAID').length} {language === 'ku' ? 'پەسەندکراوی تەواو - چاوەڕوانی پارەدان' : 'Authorized - Ready for Release'}
+                  <span className="text-[11px] text-emerald-700 mt-1 block font-medium">
+                    {clearedPOs.length} {language === 'ku' ? 'خاوەن هۆڵدینگ پەسەندی کردووە' : 'Owner-Authorized · Ready to Pay'}
                   </span>
                 </div>
 
-                <div className="bg-blue-50/70 border border-blue-200 rounded-2xl p-4 shadow-xs">
-                  <span className="text-[11px] font-bold uppercase tracking-wider text-blue-800 flex items-center justify-between">
+                <div className="bg-white border border-slate-200/80 rounded-2xl p-4">
+                  <span className="text-xs font-semibold text-blue-800 flex items-center justify-between">
                     <span>{language === 'ku' ? 'خەرجکراو لە خەزێنە (Settled)' : 'Settled & Disbursed'}</span>
                     <Coins className="w-3.5 h-3.5 text-blue-600" />
                   </span>
-                  <div className="text-xl font-extrabold text-blue-950 mt-1 font-mono">
+                  <div className="text-xl font-bold text-slate-900 mt-1 font-mono tabular-nums">
                     ${settledVal.toLocaleString()} USD
                   </div>
-                  <span className="text-[10px] text-blue-700 mt-1 block font-medium">
-                    {activePOs.filter(p => p.financeEntry?.paymentStatus === 'PAID').length} {language === 'ku' ? 'پسوولەی پارەدراو' : 'Completed Vouchers'}
+                  <span className="text-[11px] text-blue-700 mt-1 block font-medium">
+                    {settledPOs.length} {language === 'ku' ? 'پسوولەی پارەدراو' : 'Completed Vouchers'}
                   </span>
                 </div>
               </div>
@@ -258,152 +261,178 @@ export const FinanceModule: React.FC = () => {
           })()}
 
           {/* Filter Bar */}
-          <div className="bg-white border border-slate-200/80 rounded-2xl p-3 shadow-xs flex items-center gap-2 overflow-x-auto">
+          <div className="flex items-center gap-1.5 p-1 bg-slate-100 rounded-xl w-fit max-w-full overflow-x-auto">
             <button
               onClick={() => setCommitmentFilter('ALL')}
-              className={`px-3 py-1.5 rounded-xl text-xs font-bold transition cursor-pointer ${
-                commitmentFilter === 'ALL' ? 'bg-slate-900 text-white' : 'text-slate-600 hover:bg-slate-100'
+              className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition cursor-pointer whitespace-nowrap ${
+                commitmentFilter === 'ALL' ? 'bg-white text-slate-900 shadow-xs' : 'text-slate-600 hover:text-slate-900'
               }`}
             >
               {language === 'ku' ? 'هەموو پابەندییەکان' : 'All Commitments'}
             </button>
             <button
               onClick={() => setCommitmentFilter('CLEARED')}
-              className={`px-3 py-1.5 rounded-xl text-xs font-bold transition cursor-pointer ${
-                commitmentFilter === 'CLEARED' ? 'bg-emerald-600 text-white' : 'text-emerald-700 hover:bg-emerald-50'
+              className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition cursor-pointer whitespace-nowrap ${
+                commitmentFilter === 'CLEARED' ? 'bg-white text-emerald-700 shadow-xs' : 'text-slate-600 hover:text-slate-900'
               }`}
             >
-              {language === 'ku' ? 'ئامادە بۆ خەرجکردن (Cleared)' : 'Ready for Payment'}
+              {language === 'ku' ? 'ئامادە بۆ سەرفکردن' : 'Cleared for Disbursal'}
             </button>
             <button
               onClick={() => setCommitmentFilter('FROZEN')}
-              className={`px-3 py-1.5 rounded-xl text-xs font-bold transition cursor-pointer ${
-                commitmentFilter === 'FROZEN' ? 'bg-amber-600 text-white' : 'text-amber-800 hover:bg-amber-50'
+              className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition cursor-pointer whitespace-nowrap ${
+                commitmentFilter === 'FROZEN' ? 'bg-white text-amber-800 shadow-xs' : 'text-slate-600 hover:text-slate-900'
               }`}
             >
-              {language === 'ku' ? 'بەستراو لە پەسەندکردن (Frozen)' : 'Frozen in Pipeline'}
+              {language === 'ku' ? 'بەستراو لە پەسەندکردن' : 'Encumbered / Pending'}
             </button>
             <button
               onClick={() => setCommitmentFilter('SETTLED')}
-              className={`px-3 py-1.5 rounded-xl text-xs font-bold transition cursor-pointer ${
-                commitmentFilter === 'SETTLED' ? 'bg-blue-600 text-white' : 'text-blue-700 hover:bg-blue-50'
+              className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition cursor-pointer whitespace-nowrap ${
+                commitmentFilter === 'SETTLED' ? 'bg-white text-blue-700 shadow-xs' : 'text-slate-600 hover:text-slate-900'
               }`}
             >
-              {language === 'ku' ? 'پارەدراو لە خەزێنە (Settled)' : 'Settled Vouchers'}
+              {language === 'ku' ? 'سەرفکراو' : 'Settled Vouchers'}
             </button>
           </div>
 
           {/* Commitments Table */}
-          <div className="bg-white border border-slate-200/80 rounded-3xl p-6 shadow-xs space-y-4">
+          <div className="bg-white border border-slate-200/80 rounded-2xl p-5">
             <div className="overflow-x-auto">
-              <table className="w-full text-xs text-left">
-                <thead className="bg-slate-50 text-slate-500 uppercase font-bold text-[10px] tracking-wider border-b border-slate-200">
+              <table className="w-full text-xs text-start">
+                <thead className="bg-slate-50 text-slate-500 font-semibold text-[11px] border-b border-slate-200">
                   <tr>
-                    <th className="py-3 px-4">PO Ref / Purpose</th>
-                    <th className="py-3 px-4">Subsidiary / Supplier</th>
-                    <th className="py-3 px-4 text-right">Commitment ($)</th>
-                    <th className="py-3 px-4">Sequential Approval Chain</th>
-                    <th className="py-3 px-4">Treasury Clearance</th>
-                    <th className="py-3 px-4 text-right">Disbursal Action</th>
+                    <th className="py-3 px-4">{getUIText(language, { ku: 'فەرمانی کڕین · تەرخانکراو', ar: 'رقم الطلب · الحجز المالي', en: 'PO Ref · Encumbrance' })}</th>
+                    <th className="py-3 px-4">{getUIText(language, { ku: 'کۆمپانیا · بەش · دابینکەر', ar: 'الشركة · القسم · المورد', en: 'Company · Department · Supplier' })}</th>
+                    <th className="py-3 px-4 text-end">{getUIText(language, { ku: 'بڕی پارە (USD)', ar: 'المبلغ (دولار)', en: 'Amount (USD)' })}</th>
+                    <th className="py-3 px-4">{getUIText(language, { ku: 'ڕەزامەندی ٣ قۆناغی', ar: 'سلسلة الموافقات', en: '3-Tier Approval Chain' })}</th>
+                    <th className="py-3 px-4">{getUIText(language, { ku: 'باری خەزێنە و پارەدان', ar: 'حالة الصرف المالي', en: 'Treasury Clearance' })}</th>
+                    <th className="py-3 px-4 text-end">{getUIText(language, { ku: 'کرداری سەرفکردن', ar: 'إجراء الصرف', en: 'Disbursal Action' })}</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-slate-100 font-medium">
+                <tbody className="divide-y divide-slate-100">
                   {purchaseOrders
                     .filter(po => {
                       if (selectedCompanyId !== 'ALL' && po.companyId !== selectedCompanyId) return false;
                       if (selectedProjectId !== 'ALL' && po.projectId !== selectedProjectId) return false;
-                      if (commitmentFilter === 'CLEARED') return isPoFullyApproved(po) && po.financeEntry?.paymentStatus !== 'PAID';
-                      if (commitmentFilter === 'FROZEN') return !isPoFullyApproved(po);
+                      const rejected = po.status === 'REJECTED_BY_OWNER' || po.workflowState?.finalDecision === 'REJECTED';
+                      if (commitmentFilter === 'CLEARED') return !rejected && isPoFullyApproved(po) && po.financeEntry?.paymentStatus !== 'PAID';
+                      if (commitmentFilter === 'FROZEN') return !rejected && !isPoFullyApproved(po);
                       if (commitmentFilter === 'SETTLED') return po.financeEntry?.paymentStatus === 'PAID';
                       return true;
                     })
                     .map(po => {
                       const comp = companies.find(c => c.id === po.companyId);
-                      const isApproved = isPoFullyApproved(po);
-                      const isPaid = po.financeEntry?.paymentStatus === 'PAID';
+                      const isRejected = po.status === 'REJECTED_BY_OWNER' || po.workflowState?.finalDecision === 'REJECTED';
+                      const isApproved = !isRejected && isPoFullyApproved(po);
+                      const isPaid = po.financeEntry?.paymentStatus === 'PAID' || po.financeSync?.encumbranceStatus === 'DISBURSED';
                       const currentPending = po.workflowState?.steps?.find(s => s.status === 'PENDING');
 
                       return (
                         <tr key={po.id} className="hover:bg-slate-50/80 transition">
                           <td className="py-3.5 px-4">
-                            <span className="font-mono font-bold text-blue-600 block">{po.poNumber}</span>
-                            <span className="text-slate-800 font-semibold">{po.purpose}</span>
-                            {po.projectFundDeduction && (
-                              <span className="text-[10px] text-indigo-700 bg-indigo-50 border border-indigo-200 px-2 py-0.5 rounded-md font-mono block mt-1 w-fit">
-                                🏷️ لە پارەی پڕۆژە کەمکرایەوە بۆ کڕین: ${po.projectFundDeduction.amountUSD.toLocaleString()} ({po.projectFundDeduction.procurementStatus})
+                            <div className="flex items-center gap-2">
+                              <span className="font-mono font-bold text-slate-900">{po.poNumber}</span>
+                              {po.financeSync?.encumbranceRef && (
+                                <span className="font-mono text-[10px] text-slate-500">· {po.financeSync.encumbranceRef}</span>
+                              )}
+                            </div>
+                            <span className="text-slate-700 font-medium block mt-0.5">{po.purpose}</span>
+                            {po.financeSync && (
+                              <span className={`text-[10px] font-medium block mt-0.5 ${po.financeSync.withinBudget ? 'text-emerald-700' : 'text-amber-700'}`}>
+                                {po.financeSync.withinBudget
+                                  ? getUIText(language, { ku: 'لە ناو سنووری بودجەی کۆمپانیادایە', ar: 'ضمن ميزانية الشركة', en: 'Within subsidiary budget' })
+                                  : getUIText(language, { ku: 'زیادە لە بودجەی تەرخانکراو', ar: 'يتجاوز الميزانية المخصصة', en: 'Exceeds allocated budget' })}
                               </span>
                             )}
                           </td>
                           <td className="py-3.5 px-4">
-                            <span className="font-bold text-slate-900 block">{comp?.nameKu || comp?.name || 'Subsidiary'}</span>
-                            <span className="text-slate-500 text-[11px]">{po.supplierName}</span>
+                            <span className="font-semibold text-slate-900 block">{comp?.nameKu || comp?.name || getUIText(language, { ku: 'کۆمپانیا', ar: 'شركة', en: 'Subsidiary' })}</span>
+                            <span className="text-slate-500 text-[11px]">
+                              {language === 'ku' ? (po.departmentNameKu || 'بەشی کۆمپانیا') : language === 'ar' ? (po.departmentNameAr || 'القسم') : (po.departmentName || 'Company Dept')} · {po.supplierName}
+                            </span>
                           </td>
-                          <td className="py-3.5 px-4 text-right font-mono font-extrabold text-slate-900 text-sm">
+                          <td className="py-3.5 px-4 text-end font-mono tabular-nums font-bold text-slate-900 text-sm">
                             ${po.totalAmountUSD.toLocaleString()}
                           </td>
                           <td className="py-3.5 px-4">
-                            <div className="flex items-center gap-1.5 flex-wrap">
-                              {po.workflowState?.steps.map((st) => {
+                            <div className="flex items-center gap-2 flex-wrap text-[11px]">
+                              {po.workflowState?.steps.map((st, idx) => {
                                 const done = st.status === 'APPROVED';
-                                const cur = st.status === 'PENDING' && st.stepNumber === po.workflowState?.currentStepNumber;
+                                const rej = st.status === 'REJECTED';
+                                const cur = !isRejected && st.status === 'PENDING' && st.stepNumber === currentPending?.stepNumber;
                                 return (
-                                  <span
-                                    key={st.stepNumber}
-                                    className={`px-2 py-0.5 rounded-md text-[10px] font-bold flex items-center gap-1 border ${
-                                      done
-                                        ? 'bg-emerald-50 text-emerald-800 border-emerald-300'
-                                        : cur
-                                        ? 'bg-blue-50 text-blue-800 border-blue-300 animate-pulse'
-                                        : 'bg-slate-100 text-slate-500 border-slate-200'
-                                    }`}
-                                    title={st.titleEn}
-                                  >
-                                    {done ? <Check className="w-3 h-3 text-emerald-600" /> : <Clock className="w-3 h-3 text-blue-600" />}
-                                    <span>{st.role.replace('_', ' ')}</span>
-                                  </span>
+                                  <React.Fragment key={st.stepNumber}>
+                                    {idx > 0 && <span className="text-slate-300">←</span>}
+                                    <span
+                                      className={`inline-flex items-center gap-1 font-medium ${
+                                        done
+                                          ? 'text-emerald-700'
+                                          : rej
+                                          ? 'text-rose-700'
+                                          : cur
+                                          ? 'text-blue-700 font-semibold'
+                                          : 'text-slate-400'
+                                      }`}
+                                      title={language === 'ku' ? st.titleKu : st.titleEn}
+                                    >
+                                      {done ? <Check className="w-3 h-3" /> : rej ? <AlertTriangle className="w-3 h-3" /> : <Clock className="w-3 h-3" />}
+                                      <span>{getUIText(language, { ku: `ق${st.stepNumber}`, ar: `م${st.stepNumber}`, en: `L${st.stepNumber}` })}</span>
+                                    </span>
+                                  </React.Fragment>
                                 );
                               })}
                             </div>
                           </td>
                           <td className="py-3.5 px-4">
                             {isPaid ? (
-                              <span className="px-2.5 py-1 rounded-lg bg-blue-50 text-blue-800 border border-blue-200 font-bold text-[10px] flex items-center gap-1 w-fit">
-                                <CheckCircle2 className="w-3.5 h-3.5 text-blue-600" />
-                                <span>{language === 'ku' ? 'پارە دراوە (Disbursed)' : 'Disbursed & Settled'}</span>
+                              <span className="text-blue-700 font-semibold inline-flex items-center gap-1">
+                                <CheckCircle2 className="w-3.5 h-3.5" />
+                                <span>{getUIText(language, { ku: 'سەرفکراوە', ar: 'تم الصرف', en: 'Disbursed & Settled' })}</span>
+                              </span>
+                            ) : isRejected ? (
+                              <span className="text-rose-700 font-semibold inline-flex items-center gap-1">
+                                <ShieldAlert className="w-3.5 h-3.5" />
+                                <span>{getUIText(language, { ku: 'ڕەتکراوەتەوە (تەرخانکراو هەڵوەشاوە)', ar: 'مرفوض (تحرر الحجز)', en: 'Rejected (Encumbrance Released)' })}</span>
                               </span>
                             ) : isApproved ? (
-                              <span className="px-2.5 py-1 rounded-lg bg-emerald-50 text-emerald-800 border border-emerald-200 font-bold text-[10px] flex items-center gap-1 w-fit">
-                                <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
-                                <span>{language === 'ku' ? 'ڕێگەپێدراوە بۆ خەرجکردن' : 'Cleared by Owner'}</span>
+                              <span className="text-emerald-700 font-semibold inline-flex items-center gap-1">
+                                <CheckCircle2 className="w-3.5 h-3.5" />
+                                <span>{getUIText(language, { ku: 'پەسەندکراوی تەواو — ئامادە بۆ پارەدان', ar: 'معتمد نهائياً — جاهز للصرف', en: 'Cleared by Holding Owner' })}</span>
                               </span>
                             ) : (
-                              <span className="px-2.5 py-1 rounded-lg bg-amber-50 text-amber-800 border border-amber-200 font-bold text-[10px] flex items-center gap-1 w-fit">
-                                <Lock className="w-3.5 h-3.5 text-amber-600" />
-                                <span>{language === 'ku' ? `بەستراوە (چاوەڕوانی ${currentPending?.titleKu || 'واژۆ'}یە)` : `Frozen (Awaiting ${currentPending?.role || 'Approval'})`}</span>
+                              <span className="text-amber-700 font-semibold inline-flex items-center gap-1">
+                                <Lock className="w-3.5 h-3.5" />
+                                <span>{getUIText(language, {
+                                  ku: `بەستراوە (قۆناغی ${currentPending?.stepNumber || 1})`,
+                                  ar: `محجوز (المستوى ${currentPending?.stepNumber || 1})`,
+                                  en: `Encumbered (Awaiting Tier ${currentPending?.stepNumber || 1})`
+                                })}</span>
                               </span>
                             )}
                           </td>
-                          <td className="py-3.5 px-4 text-right">
+                          <td className="py-3.5 px-4 text-end">
                             {isPaid ? (
-                              <span className="text-[10px] font-mono text-slate-400">
+                              <span className="text-[11px] font-mono text-slate-500">
                                 {po.financeEntry?.voucherNo || 'VOUCH-PAID'}
                               </span>
                             ) : isApproved ? (
                               <button
                                 onClick={() => disbursePoPayment(po.id)}
-                                className="px-3.5 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold text-xs shadow-xs transition cursor-pointer flex items-center gap-1.5 ml-auto"
+                                className="px-3.5 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white font-semibold text-xs transition cursor-pointer inline-flex items-center gap-1.5 whitespace-nowrap"
                               >
                                 <Coins className="w-3.5 h-3.5" />
-                                <span>{language === 'ku' ? 'خەرجکردن لە خەزێنە' : 'Disburse Funds'}</span>
+                                <span>{getUIText(language, { ku: 'سەرفکردن لە خەزێنە', ar: 'صرف من الخزينة', en: 'Disburse Funds' })}</span>
                               </button>
                             ) : (
                               <button
                                 disabled
-                                className="px-3 py-1.5 rounded-xl bg-slate-100 text-slate-400 font-bold text-[11px] border border-slate-200 flex items-center gap-1 ml-auto cursor-not-allowed opacity-75"
-                                title="خەرجکردن ڕاگیراوە هەتا سەرجەم قۆناغەکانی پەسەندکردن تەواو دەبن"
+                                className="px-3 py-1.5 rounded-lg bg-slate-100 text-slate-400 font-semibold text-xs border border-slate-200 inline-flex items-center gap-1 cursor-not-allowed whitespace-nowrap"
                               >
-                                <Lock className="w-3 h-3 text-slate-400" />
-                                <span>{language === 'ku' ? 'پارەدان قفڵە' : 'Disbursal Locked'}</span>
+                                <Lock className="w-3 h-3" />
+                                <span>{isRejected
+                                  ? getUIText(language, { ku: 'ڕاگیراوە', ar: 'متوقف', en: 'Blocked' })
+                                  : getUIText(language, { ku: 'قفڵە', ar: 'مقفل', en: 'Locked' })}</span>
                               </button>
                             )}
                           </td>

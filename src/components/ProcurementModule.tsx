@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import {
   ShoppingCart,
   Plus,
@@ -7,45 +7,47 @@ import {
   XCircle,
   Clock,
   ScanLine,
-  Filter,
-  Search,
-  Sparkles,
   ShieldCheck,
-  Building2,
-  FileText,
-  AlertTriangle,
   Trash2,
   PenTool,
   ChevronRight,
   Wallet,
   Lock,
-  Check,
-  Zap
+  Boxes,
+  ArrowDownToLine,
+  Coins,
+  UserCheck
 } from 'lucide-react';
 import { useERP } from '../context/ERPContext';
 import { useLanguage } from '../context/LanguageContext';
-import { PurchaseOrder, PurchaseItem } from '../types/erp';
+import { DepartmentCategory, PurchaseOrder, PurchaseItem } from '../types/erp';
+import { generateDefaultDepartments } from '../data/departmentsData';
+import { getUIText } from '../utils/langHelper';
 import { RequestApprovalJourneyModal } from './workflow/RequestApprovalJourneyModal';
+
+const COMPANY_DEPARTMENTS = generateDefaultDepartments('COMPANY', 'Subsidiary', 'Company Manager').map((d) => ({
+  category: d.category,
+  name: d.name,
+  nameKu: d.nameKu,
+  nameAr: d.nameAr,
+}));
 
 export const ProcurementModule: React.FC = () => {
   const {
     purchaseOrders,
     companies,
     projects,
+    warehouseItems,
     addPurchaseOrder,
     deletePurchaseOrder,
-    approvePurchaseByOwner,
-    rejectPurchaseByOwner,
     approveWorkflowStep,
     canUserApproveWorkflowStep,
     isPoFullyApproved,
-    canPoEnterProject,
-    grantCeoPreApproval,
-    delegatePoSpendingAuthority,
-    isPoDelegatedOrAutonomous,
-    signPmReleaseForProcurement,
-    collectFundsByProcurement,
+    disbursePoPayment,
+    receiveApprovedPoToWarehouse,
     currentUser,
+    setCurrentUser,
+    userProfiles,
     selectedCompanyId,
     setIsGateScannerOpen,
   } = useERP();
@@ -58,56 +60,59 @@ export const ProcurementModule: React.FC = () => {
   const [purpose, setPurpose] = useState('');
   const [targetCompanyId, setTargetCompanyId] = useState(companies[0]?.id || 'comp-1');
   const [targetProjectId, setTargetProjectId] = useState(projects[0]?.id || 'proj-101');
+  const [targetDeptCategory, setTargetDeptCategory] = useState<DepartmentCategory>('ENGINEERING');
   const [items, setItems] = useState<{ name: string; quantity: number; unit: string; unitPriceUSD: number }[]>([
-    { name: 'Reinforced Steel Bars 16mm', quantity: 20, unit: 'Tons', unitPriceUSD: 720 },
+    { name: 'شیشی تەسلیح 16mm', quantity: 20, unit: 'تۆن', unitPriceUSD: 720 },
   ]);
-
-  const [aiAuditResult, setAiAuditResult] = useState<string | null>(null);
-  const [isAuditing, setIsAuditing] = useState(false);
   const [trackingPo, setTrackingPo] = useState<PurchaseOrder | null>(null);
-  const [delegatingPo, setDelegatingPo] = useState<PurchaseOrder | null>(null);
-  const [poDecreeNo, setPoDecreeNo] = useState('');
-  const [poDelegationNotes, setPoDelegationNotes] = useState('');
 
-  const isHoldingApprover = currentUser.role === 'HOLDING_OWNER' || currentUser.role === 'SUPER_ADMIN';
+  const isHoldingAdmin = currentUser.role === 'HOLDING_OWNER' || currentUser.role === 'SUPER_ADMIN';
 
-  const filteredPOs = purchaseOrders.filter((po) => {
-    // If subordinate has designated project or company
-    if (currentUser.role === 'PROJECT_MANAGER' && currentUser.projectId && po.projectId !== currentUser.projectId) {
-      return false;
-    }
-    if (currentUser.role === 'COMPANY_GM' && currentUser.companyId && po.companyId !== currentUser.companyId) {
-      return false;
-    }
-    if (selectedCompanyId !== 'ALL' && po.companyId !== selectedCompanyId) return false;
+  const quickTierProfiles = useMemo(() => {
+    const deptProfile = userProfiles.find(u => u.role === 'DEPARTMENT_HEAD' || u.role === 'PROJECT_MANAGER');
+    const gmProfile = userProfiles.find(u => u.role === 'COMPANY_GM');
+    const ownerProfile = userProfiles.find(u => u.role === 'HOLDING_OWNER');
+    return [deptProfile, gmProfile, ownerProfile].filter((u): u is NonNullable<typeof u> => Boolean(u));
+  }, [userProfiles]);
 
-    if (filterStatus !== 'ALL') {
-      const activePending = po.workflowState?.steps?.find(s => s.status === 'PENDING');
-      if (filterStatus === 'STAGE_PM') {
-        if (activePending?.stepNumber !== 1 && activePending?.role !== 'PROJECT_MANAGER') return false;
-      } else if (filterStatus === 'STAGE_WAREHOUSE') {
-        if (activePending?.stepNumber !== 2 && activePending?.role !== 'WAREHOUSE_OFFICER') return false;
-      } else if (filterStatus === 'STAGE_FINANCE') {
-        if (activePending?.stepNumber !== 3 && activePending?.role !== 'FINANCE_HEAD' && activePending?.role !== 'COST_CONTROLLER') return false;
-      } else if (filterStatus === 'STAGE_GM') {
-        if (activePending?.stepNumber !== 4 && activePending?.role !== 'GENERAL_MANAGER') return false;
-      } else if (filterStatus === 'STAGE_OWNER') {
-        if (activePending?.stepNumber !== 5 && activePending?.role !== 'HOLDING_OWNER') return false;
-      } else if (filterStatus === 'STAGE_APPROVED') {
-        if (!isPoFullyApproved(po)) return false;
-      } else if (po.status !== filterStatus) {
+  const filteredPOs = useMemo(() => {
+    return purchaseOrders.filter((po) => {
+      if (currentUser.role === 'PROJECT_MANAGER' && currentUser.projectId && po.projectId !== currentUser.projectId) {
         return false;
       }
-    }
+      if ((currentUser.role === 'COMPANY_GM' || currentUser.role === 'DEPARTMENT_HEAD') && currentUser.companyId && po.companyId !== currentUser.companyId) {
+        return false;
+      }
+      if (selectedCompanyId !== 'ALL' && po.companyId !== selectedCompanyId) return false;
 
-    return true;
-  });
+      if (filterStatus !== 'ALL') {
+        const activePending = po.workflowState?.steps?.find(s => s.status === 'PENDING');
+        const isRejected = po.status === 'REJECTED_BY_OWNER' || po.workflowState?.finalDecision === 'REJECTED';
+
+        if (filterStatus === 'STAGE_DEPT') {
+          if (isRejected || (activePending?.stepNumber !== 1 && activePending?.role !== 'DEPARTMENT_HEAD')) return false;
+        } else if (filterStatus === 'STAGE_GM') {
+          if (isRejected || (activePending?.stepNumber !== 2 && activePending?.role !== 'GENERAL_MANAGER')) return false;
+        } else if (filterStatus === 'STAGE_OWNER') {
+          if (isRejected || (activePending?.stepNumber !== 3 && activePending?.role !== 'HOLDING_OWNER')) return false;
+        } else if (filterStatus === 'STAGE_APPROVED') {
+          if (!isPoFullyApproved(po)) return false;
+        } else if (filterStatus === 'REJECTED_BY_OWNER') {
+          if (!isRejected) return false;
+        } else if (po.status !== filterStatus) {
+          return false;
+        }
+      }
+
+      return true;
+    });
+  }, [purchaseOrders, currentUser, selectedCompanyId, filterStatus, isPoFullyApproved]);
 
   const handleAddItemRow = () => {
-    setItems(prev => [...prev, { name: '', quantity: 1, unit: 'Units', unitPriceUSD: 100 }]);
+    setItems(prev => [...prev, { name: '', quantity: 1, unit: getUIText(language, { ku: 'دانە', ar: 'وحدة', en: 'Units' }), unitPriceUSD: 100 }]);
   };
 
-  const handleUpdateItem = (index: number, field: string, value: any) => {
+  const handleUpdateItem = (index: number, field: string, value: string | number) => {
     setItems(prev => prev.map((item, idx) => idx === index ? { ...item, [field]: value } : item));
   };
 
@@ -118,19 +123,45 @@ export const ProcurementModule: React.FC = () => {
   };
 
   const calculateTotal = () => {
-    return items.reduce((sum, item) => sum + (item.quantity * item.unitPriceUSD), 0);
+    return items.reduce((sum, item) => sum + (Number(item.quantity) * Number(item.unitPriceUSD)), 0);
   };
+
+  const liveModalPreview = useMemo(() => {
+    const matchedStock = items
+      .filter(it => it.name.trim().length > 1)
+      .map(it => {
+        const match = warehouseItems.find(
+          w =>
+            w.companyId === targetCompanyId &&
+            (w.name.toLowerCase().includes(it.name.toLowerCase().trim()) ||
+              it.name.toLowerCase().includes(w.name.toLowerCase().trim()))
+        ) || warehouseItems.find(
+          w =>
+            w.name.toLowerCase().includes(it.name.toLowerCase().trim()) ||
+            it.name.toLowerCase().includes(w.name.toLowerCase().trim())
+        );
+        return { itemName: it.name, requestedQty: it.quantity, match };
+      });
+
+    const targetComp = companies.find(c => c.id === targetCompanyId);
+    const total = items.reduce((sum, item) => sum + (Number(item.quantity) * Number(item.unitPriceUSD)), 0);
+    const remainingBudget = Math.max(0, (targetComp?.allocatedBudgetUSD || 0) - (targetComp?.spentUSD || 0));
+    const withinBudget = targetComp ? total <= remainingBudget || targetComp.allocatedBudgetUSD === 0 : true;
+
+    return { matchedStock, targetComp, remainingBudget, withinBudget, total };
+  }, [items, warehouseItems, companies, targetCompanyId]);
 
   const handleSubmitPO = (e: React.FormEvent) => {
     e.preventDefault();
+    const deptMeta = COMPANY_DEPARTMENTS.find(d => d.category === targetDeptCategory) || COMPANY_DEPARTMENTS[0];
     const purchaseItems: PurchaseItem[] = items.map((it, idx) => ({
-      id: `it-${idx}`,
+      id: `it-${idx}-${Date.now()}`,
       name: it.name,
       quantity: Number(it.quantity),
       unit: it.unit,
       unitPriceUSD: Number(it.unitPriceUSD),
       totalUSD: Number(it.quantity) * Number(it.unitPriceUSD),
-      category: 'General Supplies',
+      category: deptMeta.name,
     }));
 
     const total = calculateTotal();
@@ -138,6 +169,10 @@ export const ProcurementModule: React.FC = () => {
     addPurchaseOrder({
       companyId: targetCompanyId,
       projectId: targetProjectId,
+      departmentCategory: deptMeta.category,
+      departmentName: deptMeta.name,
+      departmentNameKu: deptMeta.nameKu,
+      departmentNameAr: deptMeta.nameAr,
       requestedBy: currentUser.name,
       requesterRole: currentUser.title,
       supplierName,
@@ -155,47 +190,44 @@ export const ProcurementModule: React.FC = () => {
     setPurpose('');
   };
 
-  const handleAiAudit = (po: PurchaseOrder) => {
-    setIsAuditing(true);
-    setTimeout(() => {
-      setAiAuditResult(
-        `AI Compliance Audit for ${po.poNumber}:\n• Total: $${po.totalAmountUSD.toLocaleString()} USD.\n• Budget Verification: Passed within subsidiary annual allocation.\n• Holding Owner Authorization: STRICT REQUIREMENT before gate release.\n• Supplier Reputation: Verified in KRG Trade Registry.`
-      );
-      setIsAuditing(false);
-    }, 900);
-  };
-
   return (
-    <div className="space-y-6 animate-in fade-in duration-300">
-      
+    <div className="space-y-6">
       {/* Module Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white border border-slate-200/80 rounded-3xl p-6 shadow-xs">
+      <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 bg-white border border-slate-200/80 rounded-2xl p-6">
         <div>
-          <div className="flex items-center gap-2">
-            <div className="w-8 h-8 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center font-bold">
-              <ShoppingCart className="w-4 h-4 text-blue-600" />
+          <div className="flex items-center gap-2.5">
+            <div className="w-8 h-8 rounded-lg bg-blue-50 text-blue-600 flex items-center justify-center">
+              <ShoppingCart className="w-4 h-4" />
             </div>
-            <h1 className="text-xl sm:text-2xl font-extrabold text-slate-900">
-              {t('navProcurement')} & Supply Chain
+            <h1 className="text-xl font-bold text-slate-900">
+              {getUIText(language, {
+                ku: `${t('navProcurement')} و زنجیرەی ئۆتۆماتیکی پەسەندکردن`,
+                ar: `${t('navProcurement')} وسلسلة الموافقات الآلية`,
+                en: `${t('navProcurement')} & Automated Approval Chain`
+              })}
             </h1>
           </div>
           <p className="text-xs text-slate-500 mt-1">
-            Centralized purchase requisitions with strict Holding Owner digital pre-approval gate.
+            {getUIText(language, {
+              ku: 'داواکاری کڕین دەبێت بە ٣ قۆناغدا تێپەڕێت: بەشی کۆمپانیا ← بەڕێوەبەری کۆمپانیا ← خاوەنی هۆڵدینگ، بەبێ بوونی هیچ ڕێگایەکی تێپەڕاندن.',
+              ar: 'تمر طلبات الشراء بثلاث موافقات متسلسلة: القسم المختص ← مدير الشركة ← مالك القابضة، مع تكامل مباشر مع المخزون والمالية.',
+              en: 'Mandatory 3-tier consent workflow (Company Department → Company Manager → Holding Owner) synced with Inventory & Finance.'
+            })}
           </p>
         </div>
 
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-2.5 flex-wrap">
           <button
             onClick={() => setIsGateScannerOpen(true)}
-            className="flex items-center gap-2 px-3.5 py-2.5 rounded-xl text-xs font-bold bg-emerald-600 hover:bg-emerald-700 text-white shadow-xs transition transform active:scale-95 cursor-pointer"
+            className="flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-semibold bg-slate-100 hover:bg-slate-200 text-slate-800 border border-slate-200 transition cursor-pointer whitespace-nowrap shrink-0"
           >
-            <ScanLine className="w-4 h-4 animate-pulse" />
-            <span>{language === 'ku' ? 'سکانی بارکۆدی پسوولە' : 'Scan Barcode Receipt'}</span>
+            <ScanLine className="w-4 h-4 text-emerald-600" />
+            <span>{getUIText(language, { ku: 'سکانی دەروازە', ar: 'مسح باركود البوابة', en: 'Gate Receipt Scan' })}</span>
           </button>
 
           <button
             onClick={() => setIsCreateModalOpen(true)}
-            className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold bg-blue-600 hover:bg-blue-700 text-white shadow-xs transition transform active:scale-95 cursor-pointer"
+            className="flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-semibold bg-blue-600 hover:bg-blue-700 text-white transition cursor-pointer whitespace-nowrap shrink-0"
             id="create-po-btn"
           >
             <Plus className="w-4 h-4" />
@@ -204,585 +236,586 @@ export const ProcurementModule: React.FC = () => {
         </div>
       </div>
 
-      {/* Holding Rule Mandatory Notice */}
-      <div className="bg-amber-50 border border-amber-200 rounded-2xl p-4 flex items-center gap-3 text-amber-900 text-xs font-medium">
-        <Crown className="w-5 h-5 text-amber-600 shrink-0" />
-        <span>{t('holdingOwnerRuleBanner')}</span>
+      {/* Role Switcher & Mandatory Consent Governance Bar */}
+      <div className="bg-white border border-slate-200/80 rounded-2xl p-4 flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+        <div className="flex items-start gap-3 text-xs text-slate-700">
+          <ShieldCheck className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
+          <div>
+            <span className="font-bold text-slate-900 block">
+              {getUIText(language, {
+                ku: 'یاسای ڕەزامەندی فرە-ئاست (بێ تێپەڕاندن)',
+                ar: 'سياسة الاعتماد متعدد المستويات الإلزامية',
+                en: 'Non-Bypassable 3-Level Consent Policy'
+              })}
+            </span>
+            <span className="text-slate-600">
+              {getUIText(language, {
+                ku: '١. بەشی پەیوەندیدار ← ٢. بەڕێوەبەری کۆمپانیا ← ٣. خاوەنی هۆڵدینگ. هیچ کڕینێک لە کۆگا و دارایی جێبەجێ نابێت بێ تەواوبوونی هەر سێ قۆناغەکە.',
+                ar: '١. القسم المختص ← ٢. مدير الشركة ← ٣. مالك القابضة. يبقى الصرف المالي وإدخال المخزون مقفلين حتى إتمام جميع الموافقات.',
+                en: 'Level 1: Company Department · Level 2: Company Manager · Level 3: Holding Owner. Finance disbursement and Inventory receiving stay locked until all 3 sign.'
+              })}
+            </span>
+          </div>
+        </div>
+
+        {quickTierProfiles.length > 0 && (
+          <div className="flex items-center gap-1.5 bg-slate-100 p-1 rounded-lg shrink-0 overflow-x-auto">
+            <span className="text-[11px] font-semibold text-slate-500 px-2 flex items-center gap-1 whitespace-nowrap">
+              <UserCheck className="w-3.5 h-3.5" />
+              <span>{getUIText(language, { ku: 'ڕۆڵ:', ar: 'الدور:', en: 'Act as:' })}</span>
+            </span>
+            {quickTierProfiles.map((prof) => {
+              const active = currentUser.id === prof.id;
+              return (
+                <button
+                  key={prof.id}
+                  type="button"
+                  onClick={() => setCurrentUser(prof)}
+                  className={`px-2.5 py-1.5 rounded-md text-xs font-semibold transition cursor-pointer whitespace-nowrap shrink-0 ${
+                    active
+                      ? 'bg-white text-slate-900 shadow-xs'
+                      : 'text-slate-600 hover:text-slate-900'
+                  }`}
+                >
+                  {prof.role === 'DEPARTMENT_HEAD'
+                    ? getUIText(language, { ku: '١. سەرۆکی بەش', ar: '١. رئيس القسم', en: '1. Dept Head' })
+                    : prof.role === 'COMPANY_GM'
+                    ? getUIText(language, { ku: '٢. بەڕێوەبەری کۆمپانیا', ar: '٢. مدير الشركة', en: '2. Company Manager' })
+                    : prof.role === 'HOLDING_OWNER'
+                    ? getUIText(language, { ku: '٣. خاوەنی هۆڵدینگ', ar: '٣. مالك القابضة', en: '3. Holding Owner' })
+                    : prof.title}
+                </button>
+              );
+            })}
+          </div>
+        )}
       </div>
 
       {/* Filter Tabs */}
-      <div className="flex items-center gap-2 overflow-x-auto pb-1 text-xs">
+      <div className="flex items-center gap-1.5 p-1 bg-slate-100 rounded-xl overflow-x-auto w-fit max-w-full">
         {[
-          { id: 'ALL', labelEn: 'All Requisitions', labelKu: 'هەموو داواکارییەکان' },
-          { id: 'STAGE_WAREHOUSE', labelEn: '📦 Awaiting Warehouse (Step 2)', labelKu: '📦 چاوەڕوانی کۆگا (قۆناغی ۲)' },
-          { id: 'STAGE_FINANCE', labelEn: '💰 Awaiting Finance (Step 3)', labelKu: '💰 چاوەڕوانی دارایی (قۆناغی ۳)' },
-          { id: 'STAGE_GM', labelEn: '🏢 Awaiting GM (Step 4)', labelKu: '🏢 چاوەڕوانی بەڕێوەبەری گشتی (قۆناغی ٤)' },
-          { id: 'STAGE_OWNER', labelEn: '👑 Awaiting Holding Owner (Step 5)', labelKu: '👑 چاوەڕوانی خاوەنی هۆڵدینگ (قۆناغی ٥)' },
-          { id: 'STAGE_APPROVED', labelEn: '✅ Fully Approved & Ready to Execute', labelKu: '✅ پەسەندکراو و مۆڵەتدراو' },
-          { id: 'ARRIVED_AT_GATE', labelEn: '🚚 Arrived at Project Gate', labelKu: '🚚 گەیشتوو بۆ پڕۆژە' },
+          { id: 'ALL', labelKu: 'هەموو داواکارییەکان', labelAr: 'كافة الطلبات', labelEn: 'All Requests' },
+          { id: 'STAGE_DEPT', labelKu: '١. پێداچوونەوەی بەش', labelAr: '١. مراجعة القسم', labelEn: '1. Dept Review' },
+          { id: 'STAGE_GM', labelKu: '٢. بەڕێوەبەری کۆمپانیا', labelAr: '٢. مدير الشركة', labelEn: '2. Company Manager' },
+          { id: 'STAGE_OWNER', labelKu: '٣. خاوەنی هۆڵدینگ', labelAr: '٣. مالك القابضة', labelEn: '3. Holding Owner' },
+          { id: 'STAGE_APPROVED', labelKu: 'پەسەندکراوی تەواو', labelAr: 'معتمد نهائياً', labelEn: 'Finalized & Unlocked' },
+          { id: 'REJECTED_BY_OWNER', labelKu: 'ڕەتکراوە', labelAr: 'مرفوض', labelEn: 'Rejected' },
+          { id: 'ARRIVED_AT_GATE', labelKu: 'گەیشتوو بە دەروازە', labelAr: 'وصل للبوابة', labelEn: 'Arrived at Gate' },
         ].map((tab) => (
           <button
             key={tab.id}
             onClick={() => setFilterStatus(tab.id)}
-            className={`px-3 py-1.5 rounded-xl font-bold transition whitespace-nowrap cursor-pointer ${
+            className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition whitespace-nowrap shrink-0 cursor-pointer ${
               filterStatus === tab.id
-                ? 'bg-blue-600 text-white shadow-xs'
-                : 'bg-white hover:bg-slate-50 text-slate-600 border border-slate-200'
+                ? 'bg-white text-slate-900 shadow-xs'
+                : 'text-slate-600 hover:text-slate-900'
             }`}
           >
-            {language === 'ku' ? tab.labelKu : tab.labelEn}
+            {getUIText(language, { ku: tab.labelKu, ar: tab.labelAr, en: tab.labelEn })}
           </button>
         ))}
       </div>
 
       {/* PO Cards Grid */}
       <div className="space-y-4">
-        {filteredPOs.map((po) => {
-          const comp = companies.find(c => c.id === po.companyId);
-          const proj = projects.find(p => p.id === po.projectId);
-          const isPending = po.status === 'PENDING_OWNER_APPROVAL' || Boolean(po.workflowState?.steps?.some(s => s.status === 'PENDING'));
-          const isApproved = po.status === 'APPROVED_BY_OWNER' || isPoFullyApproved(po);
-          const isArrived = po.status === 'ARRIVED_AT_GATE' || po.status === 'INSPECTED_AND_STORED';
-          const delegation = isPoDelegatedOrAutonomous(po);
+        {filteredPOs.length === 0 ? (
+          <div className="bg-white border border-slate-200/80 rounded-2xl p-10 text-center space-y-2">
+            <p className="text-sm font-semibold text-slate-800">
+              {getUIText(language, {
+                ku: 'هیچ داواکارییەکی کڕین لەم فلتەرەدا نییە',
+                ar: 'لا توجد طلبات شراء في هذه المرحلة',
+                en: 'No purchase requisitions match this stage'
+              })}
+            </p>
+            <p className="text-xs text-slate-500">
+              {getUIText(language, {
+                ku: 'داواکاری نوێ دروست بکە بۆ دەستپێکردنی زنجیرەی ٣ قۆناغی پەسەندکردن.',
+                ar: 'أنشئ طلباً جديداً لبدء سلسلة الاعتماد ثلاثية المراحل.',
+                en: 'Create a purchase requisition to initiate the 3-level approval workflow.'
+              })}
+            </p>
+          </div>
+        ) : (
+          filteredPOs.map((po) => {
+            const comp = companies.find(c => c.id === po.companyId);
+            const proj = projects.find(p => p.id === po.projectId);
+            const isRejected = po.status === 'REJECTED_BY_OWNER' || po.workflowState?.finalDecision === 'REJECTED';
+            const isApproved = !isRejected && isPoFullyApproved(po);
+            const isPending = !isRejected && !isApproved;
+            const activePendingStep = po.workflowState?.steps?.find(s => s.status === 'PENDING');
+            const isStored = po.status === 'INSPECTED_AND_STORED' || Boolean(po.inventorySync?.stockUpdatedOnReceive);
+            const isPaid = po.financeEntry?.paymentStatus === 'PAID' || po.financeSync?.encumbranceStatus === 'DISBURSED';
 
-          return (
-            <div
-              key={po.id}
-              className={`bg-white border rounded-3xl p-6 shadow-xs space-y-4 transition ${
-                delegation.isDelegated ? 'border-amber-400 ring-1 ring-amber-300 bg-amber-50/20' :
-                isPending ? 'border-amber-300 ring-1 ring-amber-200 bg-amber-50/20' : isApproved ? 'border-blue-200' : 'border-slate-200/80'
-              }`}
-            >
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-100 pb-3">
-                <div className="flex items-center gap-2 flex-wrap">
-                  <span className="font-extrabold text-base text-slate-900 font-mono">{po.poNumber}</span>
-                  <span className="text-xs px-2.5 py-0.5 rounded-full bg-slate-100 text-slate-700 font-bold border border-slate-200">
-                    {comp?.name || 'Subsidiary'}
-                  </span>
-                  {proj && (
-                    <span className="text-xs px-2 py-0.5 rounded bg-indigo-50 text-indigo-700 font-medium border border-indigo-200">
-                      {proj.name}
-                    </span>
-                  )}
-                  {delegation.isDelegated && (
-                    <span className="text-[11px] px-2.5 py-0.5 rounded-full bg-gradient-to-r from-amber-500 to-orange-500 text-white font-extrabold flex items-center gap-1 shadow-2xs">
-                      <Zap className="w-3 h-3 fill-white" />
-                      <span>{language === 'ku' ? '⚡ دەسەڵاتی خەرجکردن شۆڕکراوەتەوە' : '⚡ Delegated Authority'}</span>
-                    </span>
-                  )}
-                </div>
-
-                <div className="flex items-center gap-2">
-                  <span className="text-sm font-extrabold text-emerald-600 font-mono">
-                    ${po.totalAmountUSD.toLocaleString()} {po.currency}
-                  </span>
-                  <span className={`text-[10px] font-bold px-2.5 py-1 rounded-full border ${
-                    isPending ? 'bg-amber-50 text-amber-800 border-amber-200 animate-pulse-subtle' :
-                    isApproved ? 'bg-emerald-50 text-emerald-800 border-emerald-200' :
-                    isArrived ? 'bg-blue-50 text-blue-800 border-blue-200' :
-                    'bg-slate-100 text-slate-700 border-slate-200'
-                  }`}>
-                    {po.status.replace(/_/g, ' ')}
-                  </span>
-                </div>
-              </div>
-
-              {/* Items & Details */}
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-xs text-slate-600">
-                <div>
-                  <span className="text-slate-400 font-semibold block">Supplier:</span>
-                  <span className="font-bold text-slate-900 text-sm">{po.supplierName}</span>
-                  <span className="text-slate-500 block mt-1">Requested by: {po.requestedBy} ({po.requesterRole})</span>
-                </div>
-
-                <div>
-                  <span className="text-slate-400 font-semibold block">Purpose / Justification:</span>
-                  <p className="text-slate-700 italic mt-0.5 leading-relaxed">"{po.purpose}"</p>
-                </div>
-
-                <div>
-                  <span className="text-slate-400 font-semibold block">Items Summary:</span>
-                  <ul className="list-disc list-inside space-y-0.5 text-slate-600 mt-1">
-                    {po.items.map((it, idx) => (
-                      <li key={idx} className="truncate">
-                        {it.quantity} {it.unit} • {it.name} (${it.totalUSD.toLocaleString()})
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-              </div>
-
-              {/* Strict Execution Authorization Gate */}
-              <div className={`p-3 rounded-2xl border flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs ${
-                isApproved
-                  ? 'bg-emerald-500/10 border-emerald-300 text-emerald-950'
-                  : 'bg-rose-50 border-rose-300 text-rose-950'
-              }`}>
-                <div className="flex items-center gap-2.5">
-                  <div className={`p-1.5 rounded-xl text-white shrink-0 ${isApproved ? 'bg-emerald-600' : 'bg-rose-600'}`}>
-                    {isApproved ? <CheckCircle2 className="w-4 h-4" /> : <Lock className="w-4 h-4" />}
+            return (
+              <div
+                key={po.id}
+                className="bg-white border border-slate-200/80 rounded-2xl p-5 sm:p-6 space-y-4"
+              >
+                {/* Header Row: PO Number + Unboxed Metadata + Amount */}
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-100 pb-3.5">
+                  <div className="space-y-1">
+                    <div className="flex items-center gap-2.5 flex-wrap">
+                      <span className="font-mono font-bold text-base text-slate-900">{po.poNumber}</span>
+                      <span aria-hidden="true" className="text-slate-300">·</span>
+                      <span className={`text-xs font-semibold ${
+                        isRejected
+                          ? 'text-rose-700'
+                          : isApproved
+                          ? 'text-emerald-700'
+                          : 'text-amber-700'
+                      }`}>
+                        {isRejected
+                          ? getUIText(language, { ku: 'ڕەتکراوەتەوە (کڕین ڕاگیرا)', ar: 'مرفوض — متوقف', en: 'Rejected — Halted' })
+                          : isApproved
+                          ? getUIText(language, { ku: 'ڕەزامەندی تەواوی هەیە (١٠٠٪)', ar: 'معتمد بالكامل (٣ مستويات)', en: 'Finalized — Multi-Level Consent Complete' })
+                          : getUIText(language, {
+                              ku: `چاوەڕوانی قۆناغی ${activePendingStep?.stepNumber || 1}`,
+                              ar: `بانتظار موافقة المستوى ${activePendingStep?.stepNumber || 1}`,
+                              en: `Pending Level ${activePendingStep?.stepNumber || 1} Approval`
+                            })}
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-2 text-xs text-slate-500 flex-wrap">
+                      <span className="font-medium text-slate-700">{comp?.nameKu || comp?.name || getUIText(language, { ku: 'کۆمپانیا', ar: 'الشركة', en: 'Subsidiary' })}</span>
+                      <span aria-hidden="true">·</span>
+                      <span>
+                        {language === 'ku'
+                          ? (po.departmentNameKu || 'بەشی کۆمپانیا')
+                          : language === 'ar'
+                          ? (po.departmentNameAr || 'قسم الشركة')
+                          : (po.departmentName || 'Company Department')}
+                      </span>
+                      {proj && (
+                        <>
+                          <span aria-hidden="true">·</span>
+                          <span>{proj.nameKu || proj.name}</span>
+                        </>
+                      )}
+                      <span aria-hidden="true">·</span>
+                      <span className="font-mono tabular-nums">{po.createdDate}</span>
+                    </div>
                   </div>
+
+                  <div className="text-left sm:text-right shrink-0">
+                    <div className="text-lg font-bold text-slate-900 font-mono tabular-nums">
+                      ${po.totalAmountUSD.toLocaleString()} {po.currency}
+                    </div>
+                    <div className="text-xs text-slate-500">
+                      {po.supplierName}
+                    </div>
+                  </div>
+                </div>
+
+                {/* Items & Purpose */}
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-xs text-slate-600">
                   <div>
-                    <span className="font-extrabold block">
-                      {isApproved
-                        ? (language === 'ku' ? '🔓 مۆڵەتی جێبەجێکردنی کڕین درا (Execution Authorized)' : '🔓 Purchase Execution Authorized')
-                        : (language === 'ku' ? '🔒 ڕاگرتنی جێبەجێکردنی کڕین (Execution Locked)' : '🔒 Purchase Execution Strictly Locked')}
+                    <span className="text-slate-400 font-semibold block">
+                      {getUIText(language, { ku: 'داواکار و سەرچاوە', ar: 'مقدم الطلب', en: 'Requester & Origin' })}
                     </span>
-                    <span className="text-[11px] opacity-90 block">
-                      {isApproved
-                        ? (language === 'ku' ? 'ڕەزامەندی و مۆری خاوەنی هۆڵدینگ دراوە. کڕین و سەرفکردنی پارە لەلایەن بەشی کڕین و دارایی ڕێگەپێدراوە.' : 'Holding Company Owner final seal has been captured. Procurement and finance are authorized to execute order.')
-                        : (language === 'ku' ? 'هیچ کڕین و سەرفکردنی پارەیەک ناکرێت تاوەکو ڕەزامەندی و مۆری کۆتایی خاوەنی هۆڵدینگ نەدرێت.' : 'Strict gate: No vendor issuance, cash disbursement, or item entry permitted until final Holding Owner approval.')}
+                    <span className="font-semibold text-slate-900 block mt-0.5">{po.requestedBy}</span>
+                    <span className="text-slate-500 block">{po.requesterRole}</span>
+                  </div>
+
+                  <div>
+                    <span className="text-slate-400 font-semibold block">
+                      {getUIText(language, { ku: 'مەبەست و هۆکاری کڕین', ar: 'الغرض والمبرر', en: 'Purpose / Justification' })}
                     </span>
+                    <p className="text-slate-700 mt-0.5 leading-relaxed">{po.purpose}</p>
+                  </div>
+
+                  <div>
+                    <span className="text-slate-400 font-semibold block">
+                      {getUIText(language, {
+                        ku: `کەرەستە داواکراوەکان (${po.items.length})`,
+                        ar: `الأصناف المطلوبة (${po.items.length})`,
+                        en: `Line Items (${po.items.length})`
+                      })}
+                    </span>
+                    <ul className="space-y-0.5 text-slate-700 mt-0.5 tabular-nums">
+                      {po.items.map((it, idx) => (
+                        <li key={idx} className="truncate">
+                          <span className="font-mono font-semibold">{it.quantity} {it.unit}</span> · {it.name} (<span className="font-mono">${it.totalUSD.toLocaleString()}</span>)
+                        </li>
+                      ))}
+                    </ul>
                   </div>
                 </div>
-                <span className={`text-[10px] font-mono font-bold px-2.5 py-1 rounded-full shrink-0 self-start sm:self-auto ${
-                  isApproved ? 'bg-emerald-200 text-emerald-900 border border-emerald-300' : 'bg-rose-200 text-rose-900 border border-rose-300'
-                }`}>
-                  {isApproved ? 'OWNER SEAL ACTIVE' : 'AWAITING HOLDING OWNER'}
-                </span>
-              </div>
 
-              {/* Approval Workflow Pipeline Stepper */}
-              {po.workflowState && (
-                <div className="bg-slate-50/80 border border-slate-200/80 rounded-2xl p-3 my-2 space-y-2">
-                  <div className="flex items-center justify-between text-[11px] font-bold text-slate-700">
-                    <span className="flex items-center gap-1.5">
-                      <ShieldCheck className="w-3.5 h-3.5 text-blue-600" />
-                      {language === 'ku' ? 'زنجیرەی پەسەندکردنی دارایی ٥ قۆناغی (Sequential 5-Step Approval):' : 'Executive Approval Pipeline (5-Step Sequential):'}
-                    </span>
-                    <span className="text-[10px] text-slate-500 font-mono">
-                      {language === 'ku' ? (po.workflowState.chainRuleNameKu || po.workflowState.chainRuleName) : po.workflowState.chainRuleName}
-                    </span>
-                  </div>
+                {/* 3-Tier Sequential Approval Pipeline */}
+                {po.workflowState && (
+                  <div className="border-t border-slate-100 pt-4 space-y-2.5">
+                    <div className="flex items-center justify-between text-xs">
+                      <span className="font-bold text-slate-800 flex items-center gap-1.5">
+                        <ShieldCheck className="w-4 h-4 text-blue-600" />
+                        <span>
+                          {getUIText(language, {
+                            ku: 'زنجیرەی پەسەندکردنی ٣ قۆناغی (بەش ← بەڕێوەبەری کۆمپانیا ← خاوەنی هۆڵدینگ)',
+                            ar: 'سلسلة الموافقات ثلاثية المراحل (القسم ← مدير الشركة ← مالك القابضة)',
+                            en: '3-Level Sequential Consent Chain'
+                          })}
+                        </span>
+                      </span>
+                      <span className="text-slate-500 font-mono tabular-nums">
+                        {po.workflowState.steps.filter(s => s.status === 'APPROVED').length}/{po.workflowState.steps.length}{' '}
+                        {getUIText(language, { ku: 'تەواو', ar: 'مكتمل', en: 'Approved' })}
+                      </span>
+                    </div>
 
-                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-2">
-                    {po.workflowState.steps.map((st) => {
-                      const isDone = st.status === 'APPROVED';
-                      const isPending = st.status === 'PENDING';
-                      const isCurrentActive = isPending && st.stepNumber === po.workflowState?.currentStepNumber;
-                      return (
-                        <div
-                          key={st.stepNumber}
-                          className={`p-2.5 rounded-xl border text-[11px] transition flex flex-col justify-between ${
-                            isDone
-                              ? 'bg-emerald-50/70 border-emerald-200 text-emerald-900'
-                              : isCurrentActive
-                              ? 'bg-blue-50 border-blue-300 text-blue-900 shadow-2xs ring-1 ring-blue-300'
-                              : 'bg-white border-slate-200 text-slate-500 opacity-60'
-                          }`}
-                        >
-                          <div>
-                            <div className="flex items-center justify-between font-bold mb-1">
-                              <span className="flex items-center gap-1">
-                                {isDone ? (
-                                  <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
-                                ) : isCurrentActive ? (
-                                  <Clock className="w-3.5 h-3.5 text-blue-600 animate-pulse shrink-0" />
-                                ) : (
-                                  <span className="w-4 h-4 rounded-full bg-slate-200 text-slate-600 flex items-center justify-center text-[9px] font-mono shrink-0">
-                                    {st.stepNumber}
-                                  </span>
-                                )}
-                                <span className="text-[10px] text-slate-400 font-mono">#{st.stepNumber}</span>
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                      {po.workflowState.steps.map((st) => {
+                        const isDone = st.status === 'APPROVED';
+                        const isStepRejected = st.status === 'REJECTED';
+                        const isCurrentActive = isPending && st.status === 'PENDING' && st.stepNumber === activePendingStep?.stepNumber;
+                        return (
+                          <div
+                            key={st.stepNumber}
+                            className={`p-3 rounded-xl border text-xs flex flex-col justify-between ${
+                              isDone
+                                ? 'bg-emerald-50/50 border-emerald-200 text-emerald-950'
+                                : isStepRejected
+                                ? 'bg-rose-50/70 border-rose-200 text-rose-950'
+                                : isCurrentActive
+                                ? 'bg-blue-50/60 border-blue-300 text-slate-900'
+                                : 'bg-slate-50/60 border-slate-200 text-slate-500'
+                            }`}
+                          >
+                            <div className="flex items-center justify-between gap-2 mb-1">
+                              <span className="font-mono font-bold text-slate-500">
+                                {getUIText(language, { ku: `قۆناغی ${st.stepNumber}`, ar: `المستوى ${st.stepNumber}`, en: `Level ${st.stepNumber}` })}
                               </span>
-                              <span
-                                className={`text-[9px] px-1.5 py-0.5 rounded-full font-extrabold ${
-                                  isDone
-                                    ? 'bg-emerald-200 text-emerald-900'
-                                    : isCurrentActive
-                                    ? 'bg-blue-200 text-blue-900'
-                                    : 'bg-slate-200 text-slate-600'
-                                }`}
-                              >
-                                {isDone ? (language === 'ku' ? 'تەواو' : 'Approved') : (language === 'ku' ? 'ماوە' : 'Pending')}
+                              <span className={`font-semibold inline-flex items-center gap-1 ${
+                                isDone ? 'text-emerald-700' : isStepRejected ? 'text-rose-700' : isCurrentActive ? 'text-blue-700' : 'text-slate-500'
+                              }`}>
+                                {isDone ? (
+                                  <>
+                                    <CheckCircle2 className="w-3.5 h-3.5" />
+                                    <span>{getUIText(language, { ku: 'پەسەندکراو', ar: 'معتمد', en: 'Approved' })}</span>
+                                  </>
+                                ) : isStepRejected ? (
+                                  <>
+                                    <XCircle className="w-3.5 h-3.5" />
+                                    <span>{getUIText(language, { ku: 'ڕەتکراوە', ar: 'مرفوض', en: 'Rejected' })}</span>
+                                  </>
+                                ) : isCurrentActive ? (
+                                  <>
+                                    <Clock className="w-3.5 h-3.5" />
+                                    <span>{getUIText(language, { ku: 'ئێستا لێرەیە', ar: 'قيد المراجعة الآن', en: 'Awaiting Sign-Off' })}</span>
+                                  </>
+                                ) : (
+                                  <span>{getUIText(language, { ku: 'قفڵکراو (پێشوو ماوە)', ar: 'مقفل (بانتظار السابق)', en: 'Locked' })}</span>
+                                )}
                               </span>
                             </div>
 
-                            <p className="font-extrabold text-[11px] leading-tight text-slate-900 mt-1 line-clamp-2">
-                              {language === 'ku' ? st.titleKu : st.titleEn}
-                            </p>
+                            <div className="font-semibold text-slate-900 leading-snug">
+                              {language === 'ku' ? st.titleKu : language === 'ar' ? (st.titleAr || st.titleEn) : st.titleEn}
+                            </div>
+
+                            <div className="text-[11px] text-slate-500 mt-1.5 flex items-center justify-between gap-2">
+                              <span className="truncate">
+                                {st.approverName || getUIText(language, { ku: 'چاوەڕوانی واژۆ', ar: 'بانتظار التوقيع', en: 'Pending Signer' })}
+                              </span>
+                              {st.actionDate && <span className="font-mono tabular-nums shrink-0">{st.actionDate}</span>}
+                            </div>
                           </div>
-
-                          <div className="text-[10px] mt-2 pt-1.5 border-t border-slate-200/60 text-slate-600 flex flex-col gap-0.5">
-                            <span className="truncate font-medium">
-                              {st.approverName || (st.role === 'HOLDING_OWNER' ? 'خاوەنی هۆڵدینگ (Holding Owner)' : 'Authorized Manager')}
-                            </span>
-                            {st.actionDate && <span className="font-mono text-[9px] text-slate-400">{st.actionDate}</span>}
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-                </div>
-              )}
-
-              {/* CEO Pre-Approval Notice Banner */}
-              {po.ceoPreApproved && (
-                <div className="bg-amber-50/90 border border-amber-300 rounded-2xl p-3 my-2 flex items-center justify-between gap-3 text-xs text-amber-900 shadow-2xs">
-                  <div className="flex items-center gap-2">
-                    <div className="w-7 h-7 rounded-xl bg-amber-400 text-slate-950 flex items-center justify-center shrink-0 shadow-xs">
-                      <Crown className="w-4 h-4 animate-pulse" />
-                    </div>
-                    <div>
-                      <span className="font-black text-amber-950 block">
-                        {language === 'ku' ? '👑 ڕەزامەندی پێشوەختەی سەرۆکایەتی (CEO Pre-Approved)' : '👑 Sovereign CEO Pre-Approval Active'}
-                      </span>
-                      <span className="text-[11px] text-amber-800 font-medium">
-                        {language === 'ku'
-                          ? `ڕەزامەندی لەلایەن ${po.ceoPreApprovedBy || 'سەرۆکایەتی'} دراوە. بۆ هاتنە ناو پڕۆژە، تەنها واژۆی بەڕێوەبەری پڕۆژە (PM) یان بەڕێوەبەری کارگێڕی (GM) پێویستە.`
-                          : `Pre-approved by ${po.ceoPreApprovedBy || 'Holding Owner'}. Project site entry strictly requires only PM or Admin Manager (GM) sign-off.`}
-                      </span>
+                        );
+                      })}
                     </div>
                   </div>
-                  <span className="text-[10px] font-mono font-black bg-amber-400 text-slate-950 px-2 py-0.5 rounded-lg shrink-0">
-                    GATE CLEARED ON PM/GM
-                  </span>
-                </div>
-              )}
+                )}
 
-              {/* Automated Project Fund Deduction & Procurement Escrow Allocation */}
-              {po.projectFundDeduction && (
-                <div className="bg-gradient-to-br from-indigo-50/95 via-white to-purple-50/90 border-2 border-indigo-200 rounded-2xl p-3.5 my-2 space-y-2 shadow-xs">
-                  <div className="flex items-center justify-between flex-wrap gap-2">
-                    <div className="flex items-center gap-2">
-                      <div className="w-7 h-7 rounded-xl bg-indigo-600 text-white flex items-center justify-center shrink-0 shadow-xs">
-                        <Wallet className="w-4 h-4" />
+                {/* Integrated Inventory & Finance Module Status Row */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3 pt-2 border-t border-slate-100 text-xs">
+                  {/* Inventory Module Integration */}
+                  <div className="flex items-center justify-between gap-3 p-3 rounded-xl bg-slate-50 border border-slate-200/80">
+                    <div className="min-w-0">
+                      <div className="font-semibold text-slate-800 flex items-center gap-1.5">
+                        <Boxes className="w-3.5 h-3.5 text-blue-600 shrink-0" />
+                        <span>{getUIText(language, { ku: 'هاوکاتکردنی کۆگا', ar: 'مزامنة المخزون', en: 'Inventory Sync' })}</span>
                       </div>
-                      <div>
-                        <span className="text-xs font-black text-indigo-950 block">
-                          {language === 'ku'
-                            ? 'پارەی کەمکراوە لە پڕۆژە و گواستراوە بۆ بەشی کڕین (Procurement Escrow):'
-                            : 'Project Fund Deduction Transferred to Procurement:'}
-                        </span>
-                        <span className="text-[10px] text-indigo-700 font-mono">
-                          {po.projectFundDeduction.deductedAt} • {po.projectFundDeduction.projectName}
-                        </span>
-                      </div>
-                    </div>
-                    <span className="font-mono font-black text-sm text-indigo-900 bg-white px-2.5 py-1 rounded-xl border border-indigo-200 shadow-2xs">
-                      ${po.projectFundDeduction.amountUSD.toLocaleString()} USD
-                    </span>
-                  </div>
-
-                  <p className="text-[11px] text-indigo-900/80 leading-relaxed font-medium">
-                    {language === 'ku'
-                      ? `چونکە شتەکە گەیشت و دارایی هێشتا پارەکەی خەرج نەکردبوو، ئەم بڕە خۆکارانە لە پارەی پڕۆژە کەمکرایەوە و بۆ بەشی کڕین زیادکرا. کاتێک بەشی کڕین دەتوانێت وەریگرێت کە یەک لە بەڕێوەبەرانی پڕۆژە واژۆی بکات.`
-                      : `Items arrived at site before treasury payout. Amount was auto-deducted from project budget and credited to Procurement escrow. Procurement can collect funds once a Project Manager signs off.`}
-                  </p>
-
-                  <div className="flex items-center justify-between flex-wrap gap-2 pt-2 border-t border-indigo-100">
-                    <div className="flex items-center gap-1.5 flex-wrap">
-                      {po.projectFundDeduction.procurementStatus === 'HELD_IN_ESCROW' && (
-                        <span className="px-2.5 py-1 rounded-xl bg-amber-100 border border-amber-300 text-amber-900 text-xs font-bold flex items-center gap-1">
-                          <Lock className="w-3.5 h-3.5 text-amber-700" />
-                          <span>{language === 'ku' ? '🔒 چاوەڕوانی واژۆی بەڕێوەبەری پڕۆژەیە بۆ ڕادەستکردن' : '🔒 Awaiting Project Manager Sign-off'}</span>
-                        </span>
-                      )}
-
-                      {po.projectFundDeduction.procurementStatus === 'PM_RELEASE_SIGNED' && (
-                        <span className="px-2.5 py-1 rounded-xl bg-blue-100 border border-blue-300 text-blue-900 text-xs font-bold flex items-center gap-1">
-                          <CheckCircle2 className="w-3.5 h-3.5 text-blue-700" />
-                          <span>{language === 'ku' ? `✅ واژۆکرا لەلایەن بەڕێوەبەری پڕۆژە (${po.projectFundDeduction.authorizedByPm})` : `✅ PM Sign-off by ${po.projectFundDeduction.authorizedByPm}`}</span>
-                        </span>
-                      )}
-
-                      {po.projectFundDeduction.procurementStatus === 'COLLECTED_BY_PROCUREMENT' && (
-                        <span className="px-2.5 py-1 rounded-xl bg-emerald-100 border border-emerald-300 text-emerald-900 text-xs font-black flex items-center gap-1">
-                          <Check className="w-3.5 h-3.5 text-emerald-700" />
-                          <span>{language === 'ku' ? '🎉 پارەکە لەلایەن بەشی کڕین وەرگیرا' : '🎉 Successfully Collected by Procurement'}</span>
-                        </span>
-                      )}
-                    </div>
-
-                    <div className="flex items-center gap-2">
-                      {po.projectFundDeduction.procurementStatus === 'HELD_IN_ESCROW' && (
-                        <button
-                          onClick={() => {
-                            const res = signPmReleaseForProcurement(po.id);
-                            if (!res.success) {
-                              alert(res.message);
-                            }
-                          }}
-                          className="px-3.5 py-1.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs flex items-center gap-1.5 transition cursor-pointer shadow-xs"
-                          title={language === 'ku' ? 'واژۆکردن وەک بەڕێوەبەری پڕۆژە بۆ ڕادەستکردنی پارە بە کڕین' : 'Sign as PM to release funds to procurement'}
-                        >
-                          <PenTool className="w-3.5 h-3.5" />
-                          <span>{language === 'ku' ? '✍️ واژۆی بەڕێوەبەری پڕۆژە بۆ ڕادەستکردنی پارە' : '✍️ PM Sign-off to Release'}</span>
-                        </button>
-                      )}
-
-                      {po.projectFundDeduction.procurementStatus === 'PM_RELEASE_SIGNED' && (
-                        <button
-                          onClick={() => {
-                            const res = collectFundsByProcurement(po.id);
-                            if (!res.success) alert(res.message);
-                          }}
-                          className="px-4 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-black text-xs flex items-center gap-1.5 transition cursor-pointer shadow-md"
-                        >
-                          <Wallet className="w-3.5 h-3.5" />
-                          <span>{language === 'ku' ? '💰 وەرگرتنی پارە لەلایەن بەشی کڕین' : '💰 Collect Funds (Procurement)'}</span>
-                        </button>
-                      )}
-                    </div>
-                  </div>
-                </div>
-              )}
-
-              {/* Delegation decree banner */}
-              {delegation.isDelegated && (
-                <div className="bg-gradient-to-r from-amber-50 to-orange-50 border border-amber-300 rounded-2xl p-3 flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
-                  <div className="flex items-start gap-2.5">
-                    <div className="p-1.5 rounded-xl bg-amber-500 text-white shadow-xs shrink-0 mt-0.5">
-                      <Zap className="w-4 h-4 fill-white" />
-                    </div>
-                    <div>
-                      <div className="flex items-center gap-2 flex-wrap">
-                        <span className="font-black text-xs text-amber-950">
-                          {language === 'ku' ? '⚡ دەسەڵاتی خەرجکردن لە بنکەی سەرەکییەوە شۆڕکراوەتەوە بۆ لقی کۆمپانیا/پڕۆژە' : '⚡ Spending Authority Delegated Downward by HQ'}
-                        </span>
-                        <span className="text-[10px] font-mono font-bold bg-amber-200/80 text-amber-900 px-2 py-0.5 rounded-md">
-                          {delegation.mandate?.decreeNumber || 'HQ-DECREE'}
-                        </span>
-                      </div>
-                      <p className="text-[11px] text-amber-800 mt-0.5 leading-relaxed">
-                        {language === 'ku'
-                          ? `بنکەی سەرەکی دەسەڵاتی تەواوی بەخشیوە بە کۆمپانیا/پڕۆژە بۆ بڕیاردان لەسەر ئەم خەرجییە بەبێ گەڕانەوە بۆ بنکەی سەرەکی. واژۆی بەڕێوەبەری پڕۆژە (PM) یان بەڕێوەبەری کارگێڕی (GM) دەسەڵاتی جێبەجێکردن دەبەخشێت.`
-                          : `Holding HQ delegated full spending discretion to this unit without referral back to the CEO. PM or GM sign-off authorizes execution.`}
+                      <p className="text-[11px] text-slate-600 truncate mt-0.5">
+                        {isStored
+                          ? `${getUIText(language, { ku: 'تۆمارکرا لە کۆگا:', ar: 'مخزن في:', en: 'Stocked in:' })} ${po.warehouseReceipt?.binLocation || getUIText(language, { ku: 'کۆگای سەرەکی', ar: 'المستودع المركزي', en: 'Central Warehouse' })}`
+                          : po.inventorySync?.preCheckSummary || getUIText(language, {
+                              ku: 'پشکنینی کۆگا کراوە — وەرگرتن قفڵە تا مۆری خاوەن هۆڵدینگ',
+                              ar: 'تم فحص المخزون — الاستلام مقفل حتى اعتماد المالك',
+                              en: 'Pre-checked — receiving gated until Holding Owner signs'
+                            })}
                       </p>
                     </div>
+                    {isStored ? (
+                      <span className="text-[11px] font-semibold text-emerald-700 whitespace-nowrap shrink-0">
+                        {getUIText(language, { ku: 'زیادکرا', ar: 'تم التخزين', en: 'Stocked' })}
+                      </span>
+                    ) : isApproved ? (
+                      <button
+                        type="button"
+                        onClick={() => receiveApprovedPoToWarehouse(po.id)}
+                        className="px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold flex items-center gap-1.5 transition cursor-pointer whitespace-nowrap shrink-0"
+                      >
+                        <ArrowDownToLine className="w-3.5 h-3.5" />
+                        <span>{getUIText(language, { ku: 'وەرگرتن لە کۆگا', ar: 'استلام بالمستودع', en: 'Receive to Stock' })}</span>
+                      </button>
+                    ) : (
+                      <span className="text-[11px] text-slate-500 flex items-center gap-1 whitespace-nowrap shrink-0">
+                        <Lock className="w-3 h-3" />
+                        <span>{isRejected
+                          ? getUIText(language, { ku: 'ڕاگیراوە', ar: 'موقوف', en: 'Blocked' })
+                          : getUIText(language, { ku: 'قفڵە', ar: 'مقفل', en: 'Gated' })}</span>
+                      </span>
+                    )}
                   </div>
-                </div>
-              )}
 
-              {/* Holding Decision Stamp or Gating Action Buttons */}
-              <div className="pt-3 border-t border-slate-100 flex flex-col md:flex-row md:items-center justify-between gap-3">
-                <div className="flex flex-col sm:flex-row sm:items-center gap-2">
-                  {po.holdingApproval ? (
-                    <div className="flex items-center gap-2 text-xs text-emerald-800 bg-emerald-50 border border-emerald-200 px-3 py-1.5 rounded-xl font-medium">
-                      <Crown className="w-4 h-4 text-amber-600 shrink-0" />
-                      <span>Approved by <strong>{po.holdingApproval.approvedBy}</strong> ({po.holdingApproval.approvedAt})</span>
-                      <span className="font-mono text-[10px] text-slate-500">[{po.holdingApproval.signatureHash}]</span>
-                    </div>
-                  ) : delegation.isDelegated ? (
-                    <div className="flex items-center gap-2 text-xs text-amber-900 bg-amber-50 border border-amber-300 px-3 py-1.5 rounded-xl font-bold">
-                      <Zap className="w-4 h-4 text-amber-600 fill-amber-500 shrink-0" />
-                      <span>
-                        {language === 'ku'
-                          ? `دەسەڵاتی بڕیاردان شۆڕکراوەتەوە بۆ: ${po.workflowState?.steps?.find(s => s.status === 'PENDING')?.titleKu || 'بەڕێوەبەری مەیدانی'}`
-                          : `Delegated to Branch: ${po.workflowState?.steps?.find(s => s.status === 'PENDING')?.titleEn || 'Local Field Manager'}`}
-                      </span>
-                    </div>
-                  ) : (
-                    <div className="flex items-center gap-2 text-xs text-amber-800 bg-amber-50 border border-amber-200 px-3 py-1.5 rounded-xl font-medium">
-                      <Clock className="w-4 h-4 text-amber-600 animate-pulse shrink-0" />
-                      <span>
-                        {language === 'ku'
-                          ? `گەیشتۆتە لای: ${po.workflowState?.steps?.find(s => s.status === 'PENDING')?.titleKu || 'خاوەنی هۆڵدینگ (سەرۆکایەتی)'}`
-                          : `Currently with: ${po.workflowState?.steps?.find(s => s.status === 'PENDING')?.titleEn || 'Holding Owner Signature'}`}
-                      </span>
-                    </div>
-                  )}
-
-                  <button
-                    onClick={() => setTrackingPo(po)}
-                    className="px-3 py-1.5 rounded-xl bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 text-xs font-bold flex items-center gap-1.5 transition cursor-pointer self-start sm:self-auto shadow-2xs"
-                  >
-                    <PenTool className="w-3.5 h-3.5 text-blue-600" />
-                    <span>{language === 'ku' ? 'چاودێری واژۆ و مۆرەکان' : 'Track Approval Journey'}</span>
-                    <ChevronRight className="w-3.5 h-3.5 rtl:rotate-180" />
-                  </button>
-
-                  <button
-                    onClick={() => setIsGateScannerOpen(true)}
-                    className="px-3 py-1.5 rounded-xl bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-300 text-xs font-bold flex items-center gap-1.5 transition cursor-pointer self-start sm:self-auto shadow-2xs"
-                    title={language === 'ku' ? 'سکانی بارکۆدی ئەم پسوولەیە لە دەروازەی پڕۆژە' : 'Scan this receipt barcode at security gate'}
-                  >
-                    <ScanLine className="w-3.5 h-3.5 text-emerald-600" />
-                    <span>{language === 'ku' ? 'سکانی بارکۆدی پسوولە' : 'Scan Barcode'}</span>
-                  </button>
-                </div>
-
-                {/* Workflow Actions with Sequential Permissions */}
-                <div className="flex items-center gap-2 flex-wrap">
-                  <button
-                    onClick={() => handleAiAudit(po)}
-                    className="flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-medium bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-200 transition cursor-pointer"
-                  >
-                    <Sparkles className="w-3.5 h-3.5 text-blue-600" />
-                    <span>AI Audit</span>
-                  </button>
-
-                  {/* CEO Fast-Track Pre-Approval Button for Holding Owner */}
-                  {isHoldingApprover && !po.ceoPreApproved && isPending && (
-                    <button
-                      onClick={() => grantCeoPreApproval(po.id, 'CEO Fast-Track Pre-Approval Authorized')}
-                      className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-black bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700 text-slate-950 shadow-xs transition cursor-pointer"
-                      title="ڕەزامەندی پێشوەختەی CEO: تەنها واژۆی PM یان GM پێویست دەبێت بۆ هاتنە ناو پڕۆژە"
-                    >
-                      <Crown className="w-3.5 h-3.5 text-slate-950" />
-                      <span>{language === 'ku' ? '👑 ڕەزامەندی پێشوەختەی CEO' : '👑 CEO Pre-Approval'}</span>
-                    </button>
-                  )}
-
-                  {/* Dedicated Button for Delegating Spending Authority Downwards from HQ */}
-                  {isHoldingApprover && !delegation.isDelegated && isPending && (
-                    <button
-                      onClick={() => {
-                        setDelegatingPo(po);
-                        setPoDecreeNo(`DEC-HQ-${Math.floor(1000 + Math.random() * 9000)}`);
-                        setPoDelegationNotes('بڕیاری سەرۆکایەتی بنکەی سەرەکی: دەسەڵاتی خەرجکردن شۆڕکرایەوە بۆ خوارەوە بۆ کۆمپانیا و پڕۆژە بەبێ پێویستی گەڕانەوە بۆ سەرۆکایەتی (CEO).');
-                      }}
-                      className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-black bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 text-white shadow-xs transition cursor-pointer"
-                      title="شۆڕکردنەوەی دەسەڵاتی خەرجکردن بۆ خوارەوە بەبێ گەڕانەوە بۆ بنکەی سەرەکی"
-                    >
-                      <Zap className="w-3.5 h-3.5 fill-white" />
-                      <span>{language === 'ku' ? '⚡ شۆڕکردنەوەی دەسەڵات بۆ خوارەوە' : '⚡ Delegate Downward'}</span>
-                    </button>
-                  )}
-
-                  {isPending && (() => {
-                    const activePendingStep = po.workflowState?.steps?.find(s => s.status === 'PENDING');
-                    if (!activePendingStep) return null;
-
-                    const auth = canUserApproveWorkflowStep(currentUser, po, activePendingStep.stepNumber);
-
-                    if (auth.allowed) {
-                      return (
-                        <div className="flex items-center gap-2">
-                          <button
-                            onClick={() => approveWorkflowStep(po.id, activePendingStep.stepNumber, 'APPROVED')}
-                            className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl text-xs font-bold bg-emerald-600 hover:bg-emerald-700 text-white shadow-xs transition cursor-pointer"
-                          >
-                            <CheckCircle2 className="w-4 h-4" />
-                            <span>
-                              {language === 'ku'
-                                ? `واژۆکردن وەک (${activePendingStep.titleKu})`
-                                : `Sign Step (${activePendingStep.titleEn})`}
-                            </span>
-                          </button>
-                          <button
-                            onClick={() => approveWorkflowStep(po.id, activePendingStep.stepNumber, 'REJECTED', 'Rejected during procurement review')}
-                            className="flex items-center gap-1 px-2.5 py-1.5 rounded-xl text-xs font-bold bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 transition cursor-pointer"
-                          >
-                            <XCircle className="w-3.5 h-3.5" />
-                            <span>{t('rejectPurchase')}</span>
-                          </button>
-                        </div>
-                      );
-                    }
-
-                    return (
-                      <div className="flex items-center gap-2">
-                        <span className="text-[11px] font-bold text-slate-500 bg-slate-100 border border-slate-200 px-2.5 py-1 rounded-lg flex items-center gap-1">
-                          <span>🔒 {language === 'ku' ? `چاوەڕوانی واژۆی (${activePendingStep.titleKu})یە` : `Awaiting (${activePendingStep.titleEn}) sign-off`}</span>
-                        </span>
-                        {auth.requiresOverride && (
-                          <button
-                            onClick={() => approveWorkflowStep(po.id, activePendingStep.stepNumber, 'APPROVED', 'Executive Sovereign Override Decree by Holding Chairman', undefined, undefined, true)}
-                            className="px-2.5 py-1 rounded-lg bg-amber-50 hover:bg-amber-100 text-amber-800 border border-amber-300 text-[11px] font-bold flex items-center gap-1 transition cursor-pointer"
-                            title="بڕیاری دەسەڵاتداری سەرۆکایەتی بەپەلە"
-                          >
-                            <Crown className="w-3.5 h-3.5 text-amber-600" />
-                            <span>{language === 'ku' ? 'واژۆی دەسەڵاتداری (Override)' : 'Executive Override'}</span>
-                          </button>
+                  {/* Finance Module Integration */}
+                  <div className="flex items-center justify-between gap-3 p-3 rounded-xl bg-slate-50 border border-slate-200/80">
+                    <div className="min-w-0">
+                      <div className="font-semibold text-slate-800 flex items-center gap-1.5">
+                        <Wallet className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                        <span>{getUIText(language, { ku: 'هاوکاتکردنی دارایی', ar: 'مزامنة المالية', en: 'Finance Sync' })}</span>
+                        {po.financeSync?.encumbranceRef && (
+                          <span className="font-mono text-[10px] text-slate-500">· {po.financeSync.encumbranceRef}</span>
                         )}
                       </div>
-                    );
-                  })()}
+                      <p className="text-[11px] text-slate-600 truncate mt-0.5">
+                        {isPaid
+                          ? `${getUIText(language, { ku: 'سەرفکرا:', ar: 'تم الصرف:', en: 'Disbursed:' })} ${po.financeEntry?.voucherNo || getUIText(language, { ku: 'پارەدراوە', ar: 'مسدد', en: 'Settled' })}`
+                          : isRejected
+                          ? getUIText(language, { ku: 'تەرخانکراو هەڵوەشێندرایەوە (پارەدان قفڵە)', ar: 'تحرر الحجز المالي بعد الرفض', en: 'Encumbrance released on rejection — payout blocked' })
+                          : isApproved
+                          ? getUIText(language, { ku: 'بودجە تەرخانکرا — ئامادەیە بۆ سەرفکردن', ar: 'مقيد بالدفتر — جاهز للصرف', en: 'Committed in ledger — cleared for treasury disbursal' })
+                          : getUIText(language, { ku: 'پێشوەختە بەستراوە — پارەدان قفڵە تا مۆری خاوەن هۆڵدینگ', ar: 'محجوز — الصرف مقفل حتى موافقة المالك', en: 'Encumbered — disbursal locked until 3-tier approval' })}
+                      </p>
+                    </div>
+                    {isPaid ? (
+                      <span className="text-[11px] font-semibold text-blue-700 whitespace-nowrap shrink-0">
+                        {getUIText(language, { ku: 'پارە درا', ar: 'تم الدفع', en: 'Disbursed' })}
+                      </span>
+                    ) : isApproved ? (
+                      <button
+                        type="button"
+                        onClick={() => disbursePoPayment(po.id)}
+                        className="px-3 py-1.5 rounded-lg bg-slate-900 hover:bg-slate-800 text-white text-xs font-semibold flex items-center gap-1.5 transition cursor-pointer whitespace-nowrap shrink-0"
+                      >
+                        <Coins className="w-3.5 h-3.5" />
+                        <span>{getUIText(language, { ku: 'سەرفکردنی پارە', ar: 'صرف المبلغ', en: 'Disburse Funds' })}</span>
+                      </button>
+                    ) : (
+                      <span className="text-[11px] text-slate-500 flex items-center gap-1 whitespace-nowrap shrink-0">
+                        <Lock className="w-3 h-3" />
+                        <span>{isRejected
+                          ? getUIText(language, { ku: 'هەڵوەشاوە', ar: 'محرر', en: 'Released' })
+                          : getUIText(language, { ku: 'قفڵە', ar: 'مقفل', en: 'Locked' })}</span>
+                      </span>
+                    )}
+                  </div>
+                </div>
 
-                  {isHoldingApprover && (
+                {/* Footer Action Bar */}
+                <div className="pt-3 border-t border-slate-100 flex flex-col md:flex-row md:items-center justify-between gap-3">
+                  <div className="flex items-center gap-2 flex-wrap">
                     <button
-                      type="button"
-                      onClick={() => deletePurchaseOrder(po.id)}
-                      className="flex items-center gap-1 px-2.5 py-1.5 rounded-xl text-xs font-medium text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition cursor-pointer"
-                      title="سڕینەوەی ئەم داواکارییە (Delete PO)"
+                      onClick={() => setTrackingPo(po)}
+                      className="px-3.5 py-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-800 border border-slate-200 text-xs font-semibold flex items-center gap-1.5 transition cursor-pointer whitespace-nowrap shrink-0"
                     >
-                      <Trash2 className="w-3.5 h-3.5" />
+                      <PenTool className="w-3.5 h-3.5 text-blue-600" />
+                      <span>{getUIText(language, { ku: 'ڕێڕەوی واژۆکان', ar: 'تتبع الموافقات', en: 'Inspect Approval Chain' })}</span>
+                      <ChevronRight className="w-3.5 h-3.5 rtl:rotate-180" />
                     </button>
-                  )}
+
+                    {isApproved && (
+                      <button
+                        onClick={() => setIsGateScannerOpen(true)}
+                        className="px-3.5 py-1.5 rounded-lg bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-200 text-xs font-semibold flex items-center gap-1.5 transition cursor-pointer whitespace-nowrap shrink-0"
+                      >
+                        <ScanLine className="w-3.5 h-3.5 text-emerald-600" />
+                        <span>{getUIText(language, { ku: 'سکانی دەروازە', ar: 'مسح البوابة', en: 'Gate Scan' })}</span>
+                      </button>
+                    )}
+                  </div>
+
+                  {/* Sequential Tier Sign-Off Controls */}
+                  <div className="flex items-center gap-2 flex-wrap">
+                    {isPending && activePendingStep && (() => {
+                      const auth = canUserApproveWorkflowStep(currentUser, po, activePendingStep.stepNumber);
+
+                      if (auth.allowed) {
+                        return (
+                          <>
+                            <button
+                              onClick={() => approveWorkflowStep(po.id, activePendingStep.stepNumber, 'APPROVED')}
+                              className="flex items-center gap-1.5 px-4 py-1.5 rounded-lg text-xs font-semibold bg-emerald-600 hover:bg-emerald-700 text-white transition cursor-pointer whitespace-nowrap shrink-0"
+                            >
+                              <CheckCircle2 className="w-4 h-4 shrink-0" />
+                              <span>
+                                {getUIText(language, {
+                                  ku: `پەسەندکردنی قۆناغی ${activePendingStep.stepNumber}`,
+                                  ar: `اعتماد المرحلة ${activePendingStep.stepNumber}`,
+                                  en: `Approve Tier ${activePendingStep.stepNumber}`
+                                })}
+                              </span>
+                            </button>
+                            <button
+                              onClick={() => approveWorkflowStep(po.id, activePendingStep.stepNumber, 'REJECTED', 'ڕەتکرایەوە لە کاتی پێداچوونەوەی زنجیرەییدا')}
+                              className="flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-semibold bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 transition cursor-pointer whitespace-nowrap shrink-0"
+                            >
+                              <XCircle className="w-3.5 h-3.5 shrink-0" />
+                              <span>{t('rejectPurchase')}</span>
+                            </button>
+                          </>
+                        );
+                      }
+
+                      return (
+                        <span className="text-xs text-slate-600 flex items-center gap-1.5">
+                          <Lock className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+                          <span>
+                            {getUIText(language, {
+                              ku: `چاوەڕوانی (${activePendingStep.titleKu}) — ناتوانرێت تێپەڕێندرێت`,
+                              ar: `مقفل بانتظار (${activePendingStep.titleAr || activePendingStep.titleEn})`,
+                              en: `Locked on Tier ${activePendingStep.stepNumber}: ${activePendingStep.titleEn}`
+                            })}
+                          </span>
+                        </span>
+                      );
+                    })()}
+
+                    {po.holdingApproval && (
+                      <span className="text-xs text-emerald-700 font-medium inline-flex items-center gap-1">
+                        <Crown className="w-3.5 h-3.5 text-amber-600" />
+                        <span>{po.holdingApproval.approvedBy}</span>
+                        <span className="font-mono text-slate-400">· {po.holdingApproval.signatureHash}</span>
+                      </span>
+                    )}
+
+                    {isHoldingAdmin && (
+                      <button
+                        type="button"
+                        onClick={() => deletePurchaseOrder(po.id)}
+                        className="p-1.5 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition cursor-pointer"
+                        title={getUIText(language, { ku: 'سڕینەوەی داواکاری', ar: 'حذف الطلب', en: 'Delete Purchase Order' })}
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    )}
+                  </div>
                 </div>
               </div>
-
-              {/* AI Audit Dialog */}
-              {aiAuditResult && (
-                <div className="bg-slate-50 rounded-2xl p-4 text-xs font-mono text-slate-800 border border-blue-200 whitespace-pre-line leading-relaxed">
-                  {aiAuditResult}
-                </div>
-              )}
-
-            </div>
-          );
-        })}
+            );
+          })
+        )}
       </div>
 
       {/* Create PO Modal */}
       {isCreateModalOpen && (
-        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 overflow-y-auto">
-          <div className="bg-white border border-slate-200 rounded-3xl max-w-2xl w-full p-6 sm:p-8 shadow-2xl space-y-6">
+        <div className="fixed inset-0 z-50 bg-slate-950/60 backdrop-blur-xs flex items-center justify-center p-4 overflow-y-auto">
+          <div className="bg-white border border-slate-200 rounded-2xl max-w-2xl w-full p-6 sm:p-7 shadow-xl space-y-5 my-8">
             <div className="flex items-center justify-between border-b border-slate-100 pb-3">
-              <h3 className="text-lg font-extrabold text-slate-900">Create Purchase Requisition</h3>
-              <button onClick={() => setIsCreateModalOpen(false)} className="text-slate-400 hover:text-slate-700 cursor-pointer">✕</button>
+              <div>
+                <h3 className="text-lg font-bold text-slate-900">
+                  {getUIText(language, { ku: 'دروستکردنی داواکاری کڕین', ar: 'إنشاء طلب شراء', en: 'Create Purchase Requisition' })}
+                </h3>
+                <p className="text-xs text-slate-500 mt-0.5">
+                  {getUIText(language, {
+                    ku: 'دەبێت ڕەزامەندی بەش ← بەڕێوەبەری کۆمپانیا ← خاوەنی هۆڵدینگ وەربگرێت.',
+                    ar: 'يمر آلياً عبر: القسم المختص ← مدير الشركة ← مالك القابضة',
+                    en: 'Routes automatically: Company Department → Company Manager → Holding Owner'
+                  })}
+                </p>
+              </div>
+              <button
+                onClick={() => setIsCreateModalOpen(false)}
+                className="text-slate-400 hover:text-slate-700 p-1 rounded-lg cursor-pointer"
+              >
+                ✕
+              </button>
             </div>
 
             <form onSubmit={handleSubmitPO} className="space-y-4">
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                 <div>
-                  <label className="block text-xs font-bold text-slate-700 mb-1">Target Subsidiary</label>
+                  <label className="block text-xs font-semibold text-slate-700 mb-1">
+                    {getUIText(language, { ku: 'کۆمپانیا', ar: 'الشركة التابعة', en: 'Subsidiary Company' })}
+                  </label>
                   <select
                     value={targetCompanyId}
                     onChange={(e) => setTargetCompanyId(e.target.value)}
-                    className="w-full bg-slate-50 border border-slate-200 text-slate-900 rounded-xl px-3 py-2 text-xs focus:bg-white focus:outline-none"
+                    className="w-full bg-slate-50 border border-slate-200 text-slate-900 rounded-lg px-3 py-2 text-xs focus:bg-white focus:outline-none"
                   >
-                    {companies.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                    {companies.map(c => <option key={c.id} value={c.id}>{c.nameKu || c.name}</option>)}
                   </select>
                 </div>
 
                 <div>
-                  <label className="block text-xs font-bold text-slate-700 mb-1">Project</label>
+                  <label className="block text-xs font-semibold text-slate-700 mb-1">
+                    {getUIText(language, { ku: 'بەشی داواکار لە کۆمپانیا', ar: 'القسم المختص', en: 'Company Department' })}
+                  </label>
+                  <select
+                    value={targetDeptCategory}
+                    onChange={(e) => setTargetDeptCategory(e.target.value as DepartmentCategory)}
+                    className="w-full bg-slate-50 border border-slate-200 text-slate-900 rounded-lg px-3 py-2 text-xs focus:bg-white focus:outline-none"
+                  >
+                    {COMPANY_DEPARTMENTS.map(d => (
+                      <option key={d.category} value={d.category}>
+                        {language === 'ku' ? d.nameKu : language === 'ar' ? d.nameAr : d.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-semibold text-slate-700 mb-1">
+                    {getUIText(language, { ku: 'پڕۆژە / شوێن', ar: 'المشروع / الموقع', en: 'Project / Site' })}
+                  </label>
                   <select
                     value={targetProjectId}
                     onChange={(e) => setTargetProjectId(e.target.value)}
-                    className="w-full bg-slate-50 border border-slate-200 text-slate-900 rounded-xl px-3 py-2 text-xs focus:bg-white focus:outline-none"
+                    className="w-full bg-slate-50 border border-slate-200 text-slate-900 rounded-lg px-3 py-2 text-xs focus:bg-white focus:outline-none"
                   >
-                    {projects.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+                    {projects.map(p => <option key={p.id} value={p.id}>{p.nameKu || p.name}</option>)}
                   </select>
                 </div>
               </div>
 
               <div>
-                <label className="block text-xs font-bold text-slate-700 mb-1">Supplier / Vendor Name</label>
+                <label className="block text-xs font-semibold text-slate-700 mb-1">
+                  {getUIText(language, { ku: 'ناوی دابینکەر یان کۆمپانیای فرۆشیار', ar: 'اسم المورد', en: 'Supplier / Vendor Name' })}
+                </label>
                 <input
                   type="text"
                   required
-                  placeholder="e.g. Al-Bayan Industrial Supplies Ltd"
+                  placeholder={getUIText(language, { ku: 'بۆ نموونە: کۆمپانیای بەیان بۆ کەرەستەی بیناسازی', ar: 'مثال: شركة البيان للتجهيزات', en: 'e.g. Al-Bayan Industrial Supplies Ltd' })}
                   value={supplierName}
                   onChange={(e) => setSupplierName(e.target.value)}
-                  className="w-full bg-slate-50 border border-slate-200 text-slate-900 rounded-xl px-3 py-2 text-xs focus:bg-white focus:outline-none"
+                  className="w-full bg-slate-50 border border-slate-200 text-slate-900 rounded-lg px-3 py-2 text-xs focus:bg-white focus:outline-none"
                 />
               </div>
 
               <div>
-                <label className="block text-xs font-bold text-slate-700 mb-1">Purpose / Justification</label>
+                <label className="block text-xs font-semibold text-slate-700 mb-1">
+                  {getUIText(language, { ku: 'مەبەست و ڕوونکردنەوەی پێویستی کڕین', ar: 'الغرض والمبررات الفنية', en: 'Purpose / Technical Justification' })}
+                </label>
                 <textarea
                   rows={2}
                   required
-                  placeholder="State the operational reason for this procurement..."
+                  placeholder={getUIText(language, { ku: 'هۆکاری پێویستی کڕینی ئەم کەرەستانە بنووسە...', ar: 'اشرح الحاجة التشغيلية لهذا الطلب...', en: 'State the operational reason for this procurement...' })}
                   value={purpose}
                   onChange={(e) => setPurpose(e.target.value)}
-                  className="w-full bg-slate-50 border border-slate-200 text-slate-900 rounded-xl px-3 py-2 text-xs focus:bg-white focus:outline-none"
+                  className="w-full bg-slate-50 border border-slate-200 text-slate-900 rounded-lg px-3 py-2 text-xs focus:bg-white focus:outline-none"
                 />
               </div>
 
               {/* Items Table */}
               <div className="space-y-2">
                 <div className="flex items-center justify-between">
-                  <span className="text-xs font-bold text-slate-700">Items & Materials</span>
+                  <span className="text-xs font-semibold text-slate-700">
+                    {getUIText(language, { ku: 'کەرەستە و ماددەکان', ar: 'المواد والأصناف', en: 'Items & Materials' })}
+                  </span>
                   <button
                     type="button"
                     onClick={handleAddItemRow}
-                    className="text-xs text-blue-600 font-bold hover:underline cursor-pointer"
+                    className="text-xs text-blue-600 font-semibold hover:underline cursor-pointer"
                   >
-                    + Add Item
+                    + {getUIText(language, { ku: 'زیادکردنی کەرەستە', ar: 'إضافة صنف', en: 'Add Item' })}
                   </button>
                 </div>
 
@@ -790,33 +823,35 @@ export const ProcurementModule: React.FC = () => {
                   <div key={idx} className="grid grid-cols-12 gap-2">
                     <input
                       type="text"
-                      placeholder="Item name"
+                      placeholder={getUIText(language, { ku: 'ناوی کەرەستە', ar: 'اسم المادة', en: 'Item name' })}
                       value={item.name}
                       onChange={(e) => handleUpdateItem(idx, 'name', e.target.value)}
-                      className="col-span-5 bg-slate-50 border border-slate-200 text-slate-900 rounded-xl px-2.5 py-1.5 text-xs focus:bg-white focus:outline-none"
+                      className="col-span-5 bg-slate-50 border border-slate-200 text-slate-900 rounded-lg px-2.5 py-1.5 text-xs focus:bg-white focus:outline-none"
                       required
                     />
                     <input
                       type="number"
-                      placeholder="Qty"
+                      min="1"
+                      placeholder={getUIText(language, { ku: 'بڕ', ar: 'الكمية', en: 'Qty' })}
                       value={item.quantity}
                       onChange={(e) => handleUpdateItem(idx, 'quantity', Number(e.target.value))}
-                      className="col-span-2 bg-slate-50 border border-slate-200 text-slate-900 rounded-xl px-2 py-1.5 text-xs focus:bg-white focus:outline-none"
+                      className="col-span-2 bg-slate-50 border border-slate-200 text-slate-900 rounded-lg px-2 py-1.5 text-xs font-mono tabular-nums focus:bg-white focus:outline-none"
                       required
                     />
                     <input
                       type="text"
-                      placeholder="Unit"
+                      placeholder={getUIText(language, { ku: 'یەکە', ar: 'الوحدة', en: 'Unit' })}
                       value={item.unit}
                       onChange={(e) => handleUpdateItem(idx, 'unit', e.target.value)}
-                      className="col-span-2 bg-slate-50 border border-slate-200 text-slate-900 rounded-xl px-2 py-1.5 text-xs focus:bg-white focus:outline-none"
+                      className="col-span-2 bg-slate-50 border border-slate-200 text-slate-900 rounded-lg px-2 py-1.5 text-xs focus:bg-white focus:outline-none"
                     />
                     <input
                       type="number"
-                      placeholder="Price $"
+                      min="0"
+                      placeholder={getUIText(language, { ku: 'نرخ $', ar: 'السعر $', en: 'Price $' })}
                       value={item.unitPriceUSD}
                       onChange={(e) => handleUpdateItem(idx, 'unitPriceUSD', Number(e.target.value))}
-                      className="col-span-2 bg-slate-50 border border-slate-200 text-slate-900 rounded-xl px-2 py-1.5 text-xs font-mono focus:bg-white focus:outline-none"
+                      className="col-span-2 bg-slate-50 border border-slate-200 text-slate-900 rounded-lg px-2 py-1.5 text-xs font-mono tabular-nums focus:bg-white focus:outline-none"
                       required
                     />
                     <button
@@ -830,116 +865,80 @@ export const ProcurementModule: React.FC = () => {
                 ))}
               </div>
 
+              {/* Live Inventory & Finance Integration Pre-Check */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 p-3.5 rounded-xl bg-slate-50 border border-slate-200 text-xs">
+                <div>
+                  <div className="font-semibold text-slate-800 flex items-center gap-1.5 mb-1">
+                    <Boxes className="w-3.5 h-3.5 text-blue-600" />
+                    <span>{getUIText(language, { ku: 'پشکنینی کۆگا (پێشوەختە)', ar: 'فحص المخزون المسبق', en: 'Inventory Stock Pre-Check' })}</span>
+                  </div>
+                  {liveModalPreview.matchedStock.some(m => m.match) ? (
+                    <div className="space-y-0.5 text-[11px] text-slate-600">
+                      {liveModalPreview.matchedStock.map((m, i) => m.match ? (
+                        <div key={i}>
+                          <span className="font-medium text-slate-800">{m.match.name}:</span>{' '}
+                          <span className="font-mono">{m.match.quantityOnHand} {m.match.unit}</span>{' '}
+                          {getUIText(language, { ku: 'لە کۆگادایە', ar: 'متوفر بالمستودع', en: 'on hand' })}
+                          {m.match.quantityOnHand <= m.match.minimumThreshold && (
+                            <span className="text-amber-700 font-semibold">
+                              {' '}({getUIText(language, { ku: 'کەمبووە — پێویستی پڕکردنەوەیە', ar: 'منخفض — يحتاج تعبئة', en: 'Low stock — restock needed' })})
+                            </span>
+                          )}
+                        </div>
+                      ) : null)}
+                    </div>
+                  ) : (
+                    <p className="text-[11px] text-slate-500">
+                      {getUIText(language, {
+                        ku: 'کەرەستەی نوێ — پاش ڕەزامەندی کۆتایی دەخرێتە ناو کۆگاوە.',
+                        ar: 'صنف جديد — يُضاف للمستودع بعد الاعتماد النهائي.',
+                        en: 'New catalog procurement — warehouse entry queued on final approval.'
+                      })}
+                    </p>
+                  )}
+                </div>
+
+                <div>
+                  <div className="font-semibold text-slate-800 flex items-center gap-1.5 mb-1">
+                    <Wallet className="w-3.5 h-3.5 text-emerald-600" />
+                    <span>{getUIText(language, { ku: 'پشکنینی بودجەی دارایی', ar: 'فحص الميزانية المالية', en: 'Finance Budget Encumbrance' })}</span>
+                  </div>
+                  <p className="text-[11px] text-slate-600 tabular-nums">
+                    {getUIText(language, { ku: 'بودجەی بەردەستی کۆمپانیا:', ar: 'الميزانية المتاحة للشركة:', en: 'Available company budget:' })}{' '}
+                    <span className="font-mono font-semibold text-slate-900">
+                      ${liveModalPreview.remainingBudget.toLocaleString()} USD
+                    </span>
+                    {' · '}
+                    <span className={liveModalPreview.withinBudget ? 'text-emerald-700 font-semibold' : 'text-amber-700 font-semibold'}>
+                      {liveModalPreview.withinBudget
+                        ? getUIText(language, { ku: 'لە ناو بودجەدایە', ar: 'ضمن الميزانية', en: 'Within Budget' })
+                        : getUIText(language, { ku: 'لە بودجە تێپەڕیوە', ar: 'يتجاوز الميزانية', en: 'Exceeds Subsidiary Budget' })}
+                    </span>
+                  </p>
+                </div>
+              </div>
+
               <div className="flex items-center justify-between pt-3 border-t border-slate-100">
-                <div className="text-sm font-extrabold text-emerald-600 font-mono">
-                  Total: ${calculateTotal().toLocaleString()} USD
+                <div className="text-sm font-bold text-slate-900 font-mono tabular-nums">
+                  {getUIText(language, { ku: 'کۆی گشتی:', ar: 'الإجمالي:', en: 'Total:' })} ${calculateTotal().toLocaleString()} USD
                 </div>
                 <div className="flex gap-2">
                   <button
                     type="button"
                     onClick={() => setIsCreateModalOpen(false)}
-                    className="px-4 py-2 rounded-xl text-xs font-medium bg-slate-100 text-slate-700 hover:bg-slate-200 cursor-pointer"
+                    className="px-4 py-2 rounded-lg text-xs font-semibold bg-slate-100 text-slate-700 hover:bg-slate-200 cursor-pointer whitespace-nowrap"
                   >
-                    Cancel
+                    {getUIText(language, { ku: 'پاشگەزبوونەوە', ar: 'إلغاء', en: 'Cancel' })}
                   </button>
                   <button
                     type="submit"
-                    className="px-5 py-2 rounded-xl text-xs font-extrabold bg-blue-600 hover:bg-blue-700 text-white shadow-xs cursor-pointer"
+                    className="px-5 py-2 rounded-lg text-xs font-semibold bg-blue-600 hover:bg-blue-700 text-white cursor-pointer whitespace-nowrap"
                   >
-                    Submit for Holding Owner Approval
+                    {getUIText(language, { ku: 'ناردن بۆ زنجیرەی ٣ قۆناغی', ar: 'إرسال لسلسلة الموافقات', en: 'Submit to 3-Tier Approval Chain' })}
                   </button>
                 </div>
               </div>
             </form>
-          </div>
-        </div>
-      )}
-
-      {/* PO Specific Delegation Decree Modal */}
-      {delegatingPo && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/70 backdrop-blur-sm animate-in fade-in">
-          <div className="bg-white rounded-3xl max-w-lg w-full p-6 shadow-2xl border border-amber-300 space-y-4">
-            <div className="flex items-start justify-between border-b border-slate-100 pb-3">
-              <div className="flex items-center gap-2.5">
-                <div className="p-2 rounded-2xl bg-amber-500 text-white shadow-xs">
-                  <Zap className="w-5 h-5 fill-white" />
-                </div>
-                <div>
-                  <h3 className="text-base font-black text-slate-900">
-                    {language === 'ku' ? '⚡ شۆڕکردنەوەی دەسەڵاتی خەرجکردن بۆ خوارەوە' : '⚡ Delegate Authority Downward'}
-                  </h3>
-                  <span className="text-xs font-mono font-bold text-amber-700">{delegatingPo.poNumber} • ${delegatingPo.totalAmountUSD.toLocaleString()} USD</span>
-                </div>
-              </div>
-              <button onClick={() => setDelegatingPo(null)} className="text-slate-400 hover:text-slate-700 cursor-pointer">
-                <XCircle className="w-5 h-5" />
-              </button>
-            </div>
-
-            <div className="space-y-3">
-              <p className="text-xs text-slate-600 leading-relaxed">
-                {language === 'ku'
-                  ? 'بە دەرکردنی ئەم فەرمانە، سەرۆکایەتی هۆڵدینگ دەسەڵاتی بڕیاردان لەسەر ئەم خەرجییە دەبەخشێت بە بەڕێوەبەری کۆمپانیا/پڕۆژە تاوەکو خۆیان بڕیاردەری کۆتایی بن بەبێ ئەوەی پێویست بکات بگەڕێنەوە بۆ بنکەی سەرەکی.'
-                  : 'Holding HQ delegates full spending discretion downwards to the company/project manager, eliminating the need to refer back to Headquarters.'}
-              </p>
-
-              <div>
-                <label className="block text-xs font-bold text-slate-700 mb-1">
-                  {language === 'ku' ? 'ژمارەی فەرمانی سەرۆکایەتی (Decree Number):' : 'Decree Number:'}
-                </label>
-                <input
-                  type="text"
-                  value={poDecreeNo}
-                  onChange={(e) => setPoDecreeNo(e.target.value)}
-                  className="w-full bg-slate-50 border border-slate-200 text-slate-900 rounded-xl px-3 py-2 text-xs font-mono font-bold focus:border-amber-500 focus:bg-white focus:outline-none"
-                />
-              </div>
-
-              <div>
-                <label className="block text-xs font-bold text-slate-700 mb-1">
-                  {language === 'ku' ? 'ڕێنمایی و ڕەزامەندی شۆڕکردنەوە (Directives / Notes):' : 'Directives & Notes:'}
-                </label>
-                <textarea
-                  rows={3}
-                  value={poDelegationNotes}
-                  onChange={(e) => setPoDelegationNotes(e.target.value)}
-                  className="w-full bg-slate-50 border border-slate-200 text-slate-900 rounded-xl p-3 text-xs focus:border-amber-500 focus:bg-white focus:outline-none"
-                />
-              </div>
-
-              <div className="bg-amber-50 border border-amber-200 rounded-xl p-2.5 text-[11px] text-amber-900 space-y-0.5">
-                <div className="font-bold flex items-center gap-1 text-amber-950">
-                  <Zap className="w-3.5 h-3.5 fill-amber-600 text-amber-600" />
-                  <span>{language === 'ku' ? 'ئاگاداری بۆ هاتنە ناو پڕۆژە و کۆگا:' : 'Gate & Warehouse Direct Clearance:'}</span>
-                </div>
-                <p>
-                  {language === 'ku'
-                    ? 'ئەم فەرمانە وا دەکات خاوەنی هۆڵدینگ وەک پەسەندکراو/شاندراو تۆمار بکرێت و تەنها واژۆی بەڕێوەبەری پڕۆژە یان بەڕێوەبەری کارگێڕی بەس بێت بۆ هێنانی کەرەستە و هەموو قۆناغەکان.'
-                    : 'The Holding Owner approval step will be satisfied as delegated, and local PM or GM sign-off will immediately authorize site entry and warehouse receipt.'}
-                </p>
-              </div>
-            </div>
-
-            <div className="flex items-center gap-3 pt-3 border-t border-slate-100">
-              <button
-                type="button"
-                onClick={() => setDelegatingPo(null)}
-                className="flex-1 py-2.5 rounded-xl border border-slate-200 text-slate-700 hover:bg-slate-50 font-bold text-xs transition cursor-pointer"
-              >
-                {language === 'ku' ? 'پەشیمانبوونەوە' : 'Cancel'}
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  delegatePoSpendingAuthority(delegatingPo.id, poDelegationNotes, poDecreeNo);
-                  setDelegatingPo(null);
-                }}
-                className="flex-1 py-2.5 rounded-xl bg-amber-600 hover:bg-amber-700 text-white font-black text-xs transition shadow-md cursor-pointer flex items-center justify-center gap-1.5"
-              >
-                <Zap className="w-4 h-4 fill-white" />
-                <span>{language === 'ku' ? '⚡ دەرکردنی فەرمانی شۆڕکردنەوە' : 'Execute Delegation'}</span>
-              </button>
-            </div>
           </div>
         </div>
       )}

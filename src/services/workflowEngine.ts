@@ -26,12 +26,12 @@ export const defaultHoldingThresholdPolicy: HoldingThresholdPolicy = {
 export const defaultWorkflowRules: ApprovalChainRule[] = [
   {
     id: 'rule-std-procurement',
-    nameEn: 'Automated Procurement & Supply Chain Governance',
-    nameKu: 'زنجیرەی خۆکارانەی پەسەندکردنی کڕین و کەرەستەکان',
-    nameAr: 'سلسلة الاعتماد المؤتمتة للمشتريات وسلاسل التوريد',
-    descriptionEn: 'Automated 5-tier procurement pipeline: Site Request -> Warehouse Stock Check -> Finance Budget Review -> GM Endorsement -> Holding Owner Final Approval.',
-    descriptionKu: 'ڕێڕەوی ٥ قۆناغی کڕین: داواکاری مەیدانی -> پشکنینی کۆگا -> وردبینی دارایی -> ڕەزامەندی بەڕێوەبەر -> واژۆی کۆتایی خاوەنی هۆڵدینگ پێش جێبەجێکردن.',
-    descriptionAr: 'مسار المشتريات الخماسي المؤتمت: طلب الموقع -> تدقيق المستودع -> مراجعة المالية -> اعتماد المدير -> موافقة مالك المجموعة النهائية.',
+    nameEn: 'Automated 3-Tier Procurement Approval Chain',
+    nameKu: 'زنجیرەی خۆکارانەی ٣ قۆناغی کڕین (بەش -> بەڕێوەبەری کۆمپانیا -> خاوەنی هۆڵدینگ)',
+    nameAr: 'سلسلة اعتماد المشتريات الثلاثية (القسم -> مدير الشركة -> مالك المجموعة)',
+    descriptionEn: 'Mandatory 3-tier consent pipeline: Relevant Company Department -> Company Manager -> Holding Owner Final Approval. Purchases stay locked across Inventory and Finance until all 3 consents complete.',
+    descriptionKu: 'ڕێڕەوی ناچاری ٣ قۆناغی کڕین: بەشی پەیوەندیداری کۆمپانیا -> بەڕێوەبەری کۆمپانیا -> واژۆی کۆتایی خاوەنی هۆڵدینگ. کۆگا و دارایی دەستبەسەرن تا هەر ٣ واژۆکە تەواو نەبن.',
+    descriptionAr: 'مسار الموافقات الثلاثي الإلزامي: القسم المختص بالشركة -> مدير الشركة -> الموافقة النهائية لمالك المجموعة. تبقى عمليات المخزون والمالية مقيدة حتى اكتمال الموافقات الثلاث.',
     companyId: 'ALL',
     projectId: 'ALL',
     transactionType: 'PURCHASE_ORDER',
@@ -41,53 +41,35 @@ export const defaultWorkflowRules: ApprovalChainRule[] = [
     steps: [
       {
         stepNumber: 1,
-        role: 'PROJECT_MANAGER',
-        titleEn: 'Project Site Requisition & Scope Validation',
-        titleKu: 'داواکاری مەیدانی پڕۆژە و دەستنیشانکردنی کەرەستە',
-        titleAr: 'طلب موقع المشروع وتحديد المواد الفنية',
+        role: 'DEPARTMENT_HEAD',
+        titleEn: 'Level 1: Relevant Company Department Consent',
+        titleKu: 'قۆناغی ١: ڕەزامەندی بەشی پەیوەندیداری کۆمپانیا',
+        titleAr: 'المستوى ١: موافقة القسم المختص بالشركة',
         minAmountUSD: 0,
         slaHours: 24
       },
       {
         stepNumber: 2,
-        role: 'WAREHOUSE_OFFICER',
-        titleEn: 'Warehouse Stock & Inventory Availability Clearance',
-        titleKu: 'پشکنینی کۆگا و نەبوونی کەرەستە لە عەمباردا',
-        titleAr: 'تدقيق المستودع وعدم توفر المواد في المخزن',
+        role: 'GENERAL_MANAGER',
+        titleEn: 'Level 2: Company Manager Approval',
+        titleKu: 'قۆناغی ٢: ڕەزامەندی بەڕێوەبەری کۆمپانیا',
+        titleAr: 'المستوى ٢: موافقة مدير الشركة',
         minAmountUSD: 0,
         slaHours: 24
       },
       {
         stepNumber: 3,
-        role: 'FINANCE_HEAD',
-        titleEn: 'Finance & Budget Allocation Review',
-        titleKu: 'وردبینی بەشی دارایی و تەرخانکردنی بودجە',
-        titleAr: 'تدقيق الإدارة المالية وتخصيص الميزانية',
-        minAmountUSD: 0,
-        slaHours: 24
-      },
-      {
-        stepNumber: 4,
-        role: 'GENERAL_MANAGER',
-        titleEn: 'Project / Subsidiary General Manager Approval',
-        titleKu: 'پەسەندکردنی بەڕێوەبەری گشتی کۆمپانیا / پڕۆژە',
-        titleAr: 'موافقة واعتماد المدير العام للشركة / المشروع',
-        minAmountUSD: 0,
-        slaHours: 24
-      },
-      {
-        stepNumber: 5,
         role: 'HOLDING_OWNER',
-        titleEn: 'Holding Company Owner Final Executive Approval & Seal',
-        titleKu: 'واژۆ و مۆری کۆتایی خاوەنی هۆڵدینگ (سەرۆکایەتی)',
-        titleAr: 'الموافقة والختم النهائي لمالك المجموعة (الرئاسة)',
+        titleEn: 'Level 3: Holding Owner Final Approval & Seal',
+        titleKu: 'قۆناغی ٣: ڕەزامەندی کۆتایی خاوەنی هۆڵدینگ',
+        titleAr: 'المستوى ٣: الموافقة النهائية لمالك المجموعة',
         minAmountUSD: 0,
         requiresOwnerSignature: true,
         slaHours: 48
       }
     ],
     createdAt: '2026-01-10',
-    updatedAt: '2026-11-11'
+    updatedAt: '2026-11-14'
   },
   {
     id: 'rule-capex-machinery',
@@ -295,35 +277,39 @@ export function generateInitialWorkflowState(
   requesterName: string,
   requesterRole: string,
   companyName: string,
-  poNumber: string
+  poNumber: string,
+  departmentLabel?: string
 ): WorkflowRequestState {
   const ownerThreshold = rule.ownerThresholdUSD;
   const requiresOwner = amountUSD >= ownerThreshold;
 
-  // Filter steps that apply to this amount
-  const applicableSteps = rule.steps.filter(step => amountUSD >= step.minAmountUSD);
+  // Enforce explicit multi-level consent across every step (no auto-approved Level 1)
+  const applicableSteps = rule.steps
+    .filter(step => amountUSD >= step.minAmountUSD)
+    .map((s, idx) => ({ ...s, stepNumber: idx + 1 }));
 
   const activeSteps: WorkflowActiveStepState[] = applicableSteps.map((s, idx) => {
-    // If Step 1 is PM and requester is PM or Engineer, it can be marked as auto-submitted
-    const isStep1Submitted = idx === 0;
+    const isDeptStep = idx === 0 && s.role === 'DEPARTMENT_HEAD';
+    const stepTitleEn = isDeptStep && departmentLabel
+      ? `Level 1: ${departmentLabel} Consent`
+      : s.titleEn;
 
     return {
       stepNumber: s.stepNumber,
       role: s.role,
-      titleEn: s.titleEn,
+      titleEn: stepTitleEn,
       titleKu: s.titleKu,
       titleAr: s.titleAr,
-      approverName: isStep1Submitted ? requesterName : undefined,
-      status: isStep1Submitted ? 'APPROVED' : 'PENDING',
-      actionDate: isStep1Submitted ? new Date().toISOString().split('T')[0] : undefined,
-      comments: isStep1Submitted ? `Submitted by ${requesterName} (${requesterRole})` : undefined,
-      signatureHash: isStep1Submitted ? `SUB-${poNumber}-${Math.random().toString(36).substring(2, 7).toUpperCase()}` : undefined
+      approverName: isDeptStep && departmentLabel
+        ? `${departmentLabel} Lead`
+        : s.role === 'GENERAL_MANAGER'
+          ? `${companyName} Manager`
+          : undefined,
+      status: 'PENDING'
     };
   });
 
-  // Identify next pending step number
-  const nextPendingStep = activeSteps.find(s => s.status === 'PENDING');
-  const currentStepNumber = nextPendingStep ? nextPendingStep.stepNumber : activeSteps.length;
+  const currentStepNumber = activeSteps[0]?.stepNumber || 1;
 
   const initialAudit: ApprovalAuditEntry[] = [
     {
@@ -335,7 +321,7 @@ export function generateInitialWorkflowState(
       performedBy: requesterName,
       performerRole: requesterRole,
       timestamp: new Date().toISOString(),
-      comments: `Request initiated for $${amountUSD.toLocaleString()} under workflow: ${rule.nameEn}`,
+      comments: `Request initiated for $${amountUSD.toLocaleString()}${departmentLabel ? ` (${departmentLabel})` : ''} under workflow: ${rule.nameEn}`,
       signatureHash: `SIG-SUB-${Math.random().toString(36).substring(2, 9).toUpperCase()}`
     }
   ];

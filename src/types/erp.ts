@@ -13,7 +13,8 @@ export type UserRole =
   | 'SECURITY_GATE'
   | 'HR_MANAGER'
   | 'HSE_OFFICER'
-  | 'TECHNICAL_HEAD';
+  | 'TECHNICAL_HEAD'
+  | 'DEPARTMENT_HEAD';
 
 export interface UserProfile {
   id: string;
@@ -21,6 +22,7 @@ export interface UserProfile {
   role: UserRole;
   companyId?: string;
   projectId?: string;
+  departmentCategory?: DepartmentCategory;
   email: string;
   avatar: string;
   phone: string;
@@ -418,6 +420,30 @@ export interface PurchaseOrder {
   };
   delegatedToLocal?: boolean;
   delegatedMandate?: DelegatedSpendingMandate;
+  departmentCategory?: DepartmentCategory;
+  departmentName?: string;
+  departmentNameKu?: string;
+  departmentNameAr?: string;
+  inventorySync?: {
+    matchedItemsCount: number;
+    lowStockTriggered: boolean;
+    linkedItemIds: string[];
+    preCheckStatus: 'LOW_STOCK_RESTOCK' | 'OUT_OF_STOCK' | 'IN_STOCK_SUPPLEMENT' | 'NEW_CATALOG_ITEM';
+    preCheckSummary: string;
+    stockUpdatedOnReceive: boolean;
+    receivedAt?: string;
+  };
+  financeSync?: {
+    companyBudgetUSD: number;
+    companySpentUSD: number;
+    projectBudgetUSD: number;
+    projectSpentUSD: number;
+    withinBudget: boolean;
+    encumbranceStatus: 'ENCUMBERED_PENDING' | 'COMMITTED_APPROVED' | 'DISBURSED' | 'RELEASED_REJECTED';
+    encumbranceRef: string;
+    committedVoucherNo?: string;
+    disbursedVoucherNo?: string;
+  };
 }
 
 export interface GateEntryLog {
@@ -662,16 +688,19 @@ export interface CorrespondenceLetter {
 export interface WarehouseItem {
   id: string;
   companyId: string;
-  itemCode: string;
+  projectId?: string;
+  itemCode?: string;
+  sku?: string;
   name: string;
   category: string;
   quantityOnHand: number;
   minimumThreshold: number;
   unit: string;
   binLocation: string;
-  averageUnitCostUSD: number;
+  averageUnitCostUSD?: number;
+  unitCostUSD?: number;
   lastRestockedDate: string;
-  supplier: string;
+  supplier?: string;
 }
 
 export interface DispatchShipment {
@@ -698,7 +727,7 @@ export interface FinanceLedgerEntry {
   debitUSD: number;
   creditUSD: number;
   description: string;
-  sourceModule: 'GATE_SCAN_AUTO' | 'PROCUREMENT' | 'PAYROLL' | 'DIRECT_MANUAL' | 'WORKFLOW_ENGINE_AUTO' | 'TREASURY_DISBURSEMENT';
+  sourceModule: 'GATE_SCAN_AUTO' | 'PROCUREMENT' | 'PROCUREMENT_ENCUMBRANCE' | 'PAYROLL' | 'DIRECT_MANUAL' | 'MANUAL_JOURNAL' | 'WORKFLOW_ENGINE_AUTO' | 'TREASURY_DISBURSEMENT';
   referencePoId?: string;
   postedBy: string;
 }

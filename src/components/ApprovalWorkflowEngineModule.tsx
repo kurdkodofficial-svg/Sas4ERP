@@ -50,7 +50,8 @@ import {
   GMEvaluationResult,
   GMDecisionMode
 } from '../types/workflow';
-import { PurchaseOrder } from '../types/erp';
+import { DepartmentCategory, PurchaseOrder } from '../types/erp';
+import { generateDefaultDepartments } from '../data/departmentsData';
 import {
   matchApprovalChain,
   generateInitialWorkflowState,
@@ -58,6 +59,13 @@ import {
   evaluateGMWorkflowDecision
 } from '../services/workflowEngine';
 import { DigitalSignatureStudio } from './workflow/DigitalSignatureStudio';
+
+const ENGINE_COMPANY_DEPARTMENTS = generateDefaultDepartments('COMPANY', 'Subsidiary', 'Company Manager').map((d) => ({
+  category: d.category,
+  name: d.name,
+  nameKu: d.nameKu,
+  nameAr: d.nameAr,
+}));
 
 export const ApprovalWorkflowEngineModule: React.FC = () => {
   const {
@@ -90,8 +98,8 @@ export const ApprovalWorkflowEngineModule: React.FC = () => {
     setIsPrinterModalOpen,
     openPrintManager,
     printPurchaseOrder,
-    delegatePoSpendingAuthority,
-    isPoDelegatedOrAutonomous
+    canUserApproveWorkflowStep,
+    approveWorkflowStep
   } = useERP();
 
   const { t, language } = useLanguage();
@@ -119,6 +127,7 @@ export const ApprovalWorkflowEngineModule: React.FC = () => {
 
   // New Request Form State
   const [newReqCompanyId, setNewReqCompanyId] = useState<string>(companies[0]?.id || 'comp-1');
+  const [newReqDeptCategory, setNewReqDeptCategory] = useState<DepartmentCategory>('ENGINEERING');
   const [newReqProjectId, setNewReqProjectId] = useState<string>(projects[0]?.id || '');
   const [newReqTxType, setNewReqTxType] = useState<TransactionType>('PURCHASE_ORDER');
   const [newReqPurpose, setNewReqPurpose] = useState('');
@@ -213,12 +222,17 @@ export const ApprovalWorkflowEngineModule: React.FC = () => {
   const handleCreateNewRequest = (e: React.FormEvent) => {
     e.preventDefault();
     if (!newReqPurpose || newReqAmountUSD <= 0) return;
+    const deptMeta = ENGINE_COMPANY_DEPARTMENTS.find(d => d.category === newReqDeptCategory) || ENGINE_COMPANY_DEPARTMENTS[0];
 
     submitPurchaseRequest({
       companyId: newReqCompanyId,
       projectId: newReqProjectId || undefined,
-      requestedBy: currentUser.name || 'Project Director',
-      requesterRole: currentUser.role === 'HOLDING_OWNER' ? 'Project Director' : currentUser.title || 'Director',
+      departmentCategory: deptMeta.category,
+      departmentName: deptMeta.name,
+      departmentNameKu: deptMeta.nameKu,
+      departmentNameAr: deptMeta.nameAr,
+      requestedBy: currentUser.name || 'Department Head',
+      requesterRole: currentUser.title || 'Department Lead',
       supplierName: newReqSupplier || 'Verified Holding Contractor',
       purpose: newReqPurpose,
       totalAmountUSD: Number(newReqAmountUSD),
@@ -235,7 +249,7 @@ export const ApprovalWorkflowEngineModule: React.FC = () => {
           unit: 'Lot',
           unitPriceUSD: Number(newReqAmountUSD),
           totalUSD: Number(newReqAmountUSD),
-          category: newReqTxType
+          category: deptMeta.name
         }
       ]
     });
@@ -922,50 +936,69 @@ export const ApprovalWorkflowEngineModule: React.FC = () => {
                         )}
                       </div>
 
-                      {isPendingOwner && (
-                        <div className="flex items-center gap-2.5 flex-wrap">
-                          <button
-                            onClick={() => setRejectionModalPo(po)}
-                            className="px-3.5 py-2 rounded-xl text-xs font-bold bg-rose-50 hover:bg-rose-600 text-rose-700 hover:text-white border border-rose-200 transition cursor-pointer flex items-center gap-1.5"
-                          >
-                            <XCircle className="w-4 h-4" />
-                            <span>{getUIText(language, { en: 'Reject', ku: 'ڕەتکردنەوە', ar: 'رفض' })}</span>
-                          </button>
+                      {isPendingOwner && (() => {
+                        const activePendingStep = po.workflowState?.steps?.find(s => s.status === 'PENDING');
+                        const stepAuth = activePendingStep ? canUserApproveWorkflowStep(currentUser, po, activePendingStep.stepNumber) : null;
+                        const isOwnerStepReady = activePendingStep?.role === 'HOLDING_OWNER' && stepAuth?.allowed;
 
-                          <button
-                            onClick={() => {
-                              setStudioPoId(po.id);
-                              setActiveEngineTab('SIGNATURE_STUDIO');
-                            }}
-                            className="px-4 py-2 rounded-xl text-xs font-black bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700 text-white shadow-md transition transform active:scale-95 flex items-center gap-1.5 cursor-pointer"
-                            title="Open Drag & Drop Digital Signature and Seal Studio"
-                          >
-                            <Stamp className="w-4 h-4" />
-                            <span>{getUIText(language, { en: 'Digital Stamp & Sign Studio', ku: 'ستۆدیۆی واژۆ و مۆر (درەگ)', ar: 'استوديو التوقيع والختم (سحب)' })}</span>
-                          </button>
+                        return (
+                          <div className="flex items-center gap-2.5 flex-wrap">
+                            {stepAuth?.allowed && activePendingStep ? (
+                              <>
+                                <button
+                                  onClick={() => approveWorkflowStep(po.id, activePendingStep.stepNumber, 'REJECTED', 'Rejected during sequential approval review')}
+                                  className="px-3.5 py-2 rounded-lg text-xs font-semibold bg-rose-50 hover:bg-rose-600 text-rose-700 hover:text-white border border-rose-200 transition cursor-pointer flex items-center gap-1.5"
+                                >
+                                  <XCircle className="w-4 h-4" />
+                                  <span>{getUIText(language, { en: 'Reject', ku: 'ڕەتکردنەوە', ar: 'رفض' })}</span>
+                                </button>
 
-                          <button
-                            onClick={() => handleApproveWithSeal(po)}
-                            className="px-5 py-2 rounded-xl text-xs font-black bg-emerald-600 hover:bg-emerald-700 text-white shadow-md transition transform active:scale-95 flex items-center gap-2 cursor-pointer"
-                          >
-                            <CheckCircle2 className="w-4 h-4" />
-                            <span>{getUIText(language, { en: 'Authorize Order', ku: 'پەسەندکردنی کۆتایی', ar: 'اعتماد نهائي' })}</span>
-                          </button>
+                                {isOwnerStepReady && (
+                                  <button
+                                    onClick={() => {
+                                      setStudioPoId(po.id);
+                                      setActiveEngineTab('SIGNATURE_STUDIO');
+                                    }}
+                                    className="px-4 py-2 rounded-lg text-xs font-semibold bg-amber-500 hover:bg-amber-600 text-white transition flex items-center gap-1.5 cursor-pointer"
+                                    title="Open Drag & Drop Digital Signature and Seal Studio"
+                                  >
+                                    <Stamp className="w-4 h-4" />
+                                    <span>{getUIText(language, { en: 'Digital Stamp & Sign', ku: 'ستۆدیۆی واژۆ و مۆر', ar: 'استوديو التوقيع والختم' })}</span>
+                                  </button>
+                                )}
 
-                          {(currentUser.role === 'HOLDING_OWNER' || currentUser.role === 'SUPER_ADMIN') && !isPoDelegatedOrAutonomous(po).isDelegated && (
-                            <button
-                              onClick={() => {
-                                delegatePoSpendingAuthority(po.id, 'بڕیاری سەرۆکایەتی هۆڵدینگ بۆ شۆڕکردنەوەی دەسەڵاتی خەرجکردن بۆ کۆمپانیا/پڕۆژە بەبێ گەڕانەوە بۆ بنکەی سەرەکی');
-                              }}
-                              className="px-4 py-2 rounded-xl text-xs font-black bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 text-white shadow-md transition transform active:scale-95 flex items-center gap-1.5 cursor-pointer"
-                              title={language === 'ku' ? 'شۆڕکردنەوەی دەسەڵاتی خەرجکردن بۆ خوارەوە بەبێ گەڕانەوە بۆ بنکەی سەرەکی' : 'Delegate spending authority downward to branch'}
-                            >
-                              <Zap className="w-4 h-4 fill-white" />
-                              <span>{getUIText(language, { en: 'Delegate Downward', ku: '⚡ شۆڕکردنەوەی دەسەڵات بۆ خوارەوە', ar: '⚡ تفويض الصلاحيات للفرع' })}</span>
-                            </button>
-                          )}
-                        </div>
-                      )}
+                                <button
+                                  onClick={() => {
+                                    if (isOwnerStepReady) {
+                                      handleApproveWithSeal(po);
+                                    } else {
+                                      approveWorkflowStep(po.id, activePendingStep.stepNumber, 'APPROVED');
+                                    }
+                                  }}
+                                  className="px-4 py-2 rounded-lg text-xs font-semibold bg-emerald-600 hover:bg-emerald-700 text-white transition flex items-center gap-1.5 cursor-pointer"
+                                >
+                                  <CheckCircle2 className="w-4 h-4" />
+                                  <span>
+                                    {isOwnerStepReady
+                                      ? getUIText(language, { en: 'Final Owner Approval', ku: 'پەسەندکردنی کۆتایی خاوەن', ar: 'الاعتماد النهائي' })
+                                      : getUIText(language, {
+                                          en: `Approve Tier ${activePendingStep.stepNumber}`,
+                                          ku: `پەسەندکردنی قۆناغی ${activePendingStep.stepNumber}`,
+                                          ar: `اعتماد المرحلة ${activePendingStep.stepNumber}`
+                                        })}
+                                  </span>
+                                </button>
+                              </>
+                            ) : (
+                              <span className="text-xs font-medium text-slate-500">
+                                {language === 'ku'
+                                  ? stepAuth?.reasonKu || 'چاوەڕوانی ڕەزامەندی قۆناغەکانی پێشووە'
+                                  : stepAuth?.reasonEn || 'Sequential consent locked until prior tier signs'}
+                              </span>
+                            )}
+                          </div>
+                        );
+                      })()}
                     </div>
                   </div>
                 );
@@ -2283,6 +2316,23 @@ export const ApprovalWorkflowEngineModule: React.FC = () => {
                     <option value="CAPITAL_EXPENDITURE">{getUIText(language, { en: 'CAPEX / Machinery', ku: 'سەرمایەداری / ئامێر', ar: 'نفقات رأسمالية' })}</option>
                     <option value="SUBCONTRACT_AGREEMENT">{getUIText(language, { en: 'Subcontract Agreement', ku: 'گرێبەستی لاوەکی', ar: 'عقد مقاولة باطن' })}</option>
                     <option value="BUDGET_OVERRUN_EXCEPTION">{getUIText(language, { en: 'Budget Overrun Exception', ku: 'بەزاندنی بودجە', ar: 'تجاوز ميزانية' })}</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="font-bold text-slate-700 block mb-1">
+                    {getUIText(language, { en: 'Company Department:', ku: 'بەشی داواکار لە کۆمپانیا:', ar: 'القسم المختص:' })}
+                  </label>
+                  <select
+                    value={newReqDeptCategory}
+                    onChange={(e) => setNewReqDeptCategory(e.target.value as DepartmentCategory)}
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-slate-900 font-bold focus:outline-none"
+                  >
+                    {ENGINE_COMPANY_DEPARTMENTS.map(d => (
+                      <option key={d.category} value={d.category}>
+                        {language === 'ku' ? d.nameKu : d.name}
+                      </option>
+                    ))}
                   </select>
                 </div>
 
