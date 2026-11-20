@@ -39,7 +39,9 @@ import {
   Image,
   FileSpreadsheet,
   Key,
-  Settings2
+  Settings2,
+  ChevronDown,
+  ChevronUp
 } from 'lucide-react';
 import { useERP } from '../context/ERPContext';
 import { useLanguage } from '../context/LanguageContext';
@@ -295,6 +297,105 @@ export const ItSystemsView: React.FC = () => {
   } = useERP();
   const { language } = useLanguage();
   const [activeItTab, setActiveItTab] = useState<'SYNC_HEALTH' | 'THRESHOLD_ALERTS' | 'ASSET_UTILIZATION' | 'ASSET_TRACKING' | 'HARDWARE_MAINTENANCE' | 'LATENCY_MONITOR' | 'BANDWIDTH_MANAGER' | 'LOCAL_BUFFER' | 'CLOUD_BACKUP' | 'SMART_RELAY' | 'GEO_ZONES' | 'CONFLICTS' | 'AUDIT_REPORT' | 'INFRASTRUCTURE' | 'CLOUD_TOPOLOGY'>('SYNC_HEALTH');
+  const [showAdvancedDiagnostics, setShowAdvancedDiagnostics] = useState<boolean>(false);
+
+  const coreItTabs = [
+    {
+      id: 'SYNC_HEALTH' as const,
+      icon: Radio,
+      labelKu: 'تەندروستی سینک',
+      labelEn: 'Sync Health'
+    },
+    {
+      id: 'ASSET_TRACKING' as const,
+      icon: QrCode,
+      labelKu: 'ئامێرەکان و QR',
+      labelEn: 'Hardware & QR'
+    },
+    {
+      id: 'HARDWARE_MAINTENANCE' as const,
+      icon: Wrench,
+      labelKu: 'چاککردنەوە و گەرەنتی',
+      labelEn: 'Maintenance'
+    },
+    {
+      id: 'AUDIT_REPORT' as const,
+      icon: FileText,
+      labelKu: 'وردبینی ئاسایش',
+      labelEn: 'Security Audit'
+    },
+    {
+      id: 'INFRASTRUCTURE' as const,
+      icon: Cpu,
+      labelKu: 'سێرڤەر و دەروازە',
+      labelEn: 'Servers & Gates'
+    },
+    {
+      id: 'CLOUD_TOPOLOGY' as const,
+      icon: CloudLightning,
+      labelKu: 'لاپتۆپە بەستراوەکان',
+      labelEn: 'Connected Nodes'
+    }
+  ];
+
+  const advancedItTabs = [
+    {
+      id: 'THRESHOLD_ALERTS' as const,
+      icon: ShieldAlert,
+      labelKu: 'ئاگاداری سنوورەکان',
+      labelEn: 'Threshold Alerts'
+    },
+    {
+      id: 'ASSET_UTILIZATION' as const,
+      icon: BarChart3,
+      labelKu: 'بەکارهێنانی ئامێرەکان',
+      labelEn: 'Asset Utilization'
+    },
+    {
+      id: 'LATENCY_MONITOR' as const,
+      icon: Activity,
+      labelKu: 'خێرایی و سەقامگیری تۆڕ',
+      labelEn: 'Network Latency'
+    },
+    {
+      id: 'BANDWIDTH_MANAGER' as const,
+      icon: Gauge,
+      labelKu: 'بەڕێوەبەری باندویس',
+      labelEn: 'Bandwidth QoS'
+    },
+    {
+      id: 'LOCAL_BUFFER' as const,
+      icon: Inbox,
+      labelKu: 'بافەری ئۆفلاین',
+      labelEn: 'Local Buffer'
+    },
+    {
+      id: 'CLOUD_BACKUP' as const,
+      icon: HardDrive,
+      labelKu: 'پاڵپشتی خۆکار',
+      labelEn: 'Backup Vault'
+    },
+    {
+      id: 'SMART_RELAY' as const,
+      icon: Network,
+      labelKu: 'ڕیلەیی زیرەک',
+      labelEn: 'Smart Relay'
+    },
+    {
+      id: 'GEO_ZONES' as const,
+      icon: Compass,
+      labelKu: 'زۆنە جوگرافییەکان',
+      labelEn: 'Geo Zones & IP'
+    },
+    {
+      id: 'CONFLICTS' as const,
+      icon: ArrowRightLeft,
+      labelKu: 'چارەسەری ناکۆکی سینک',
+      labelEn: 'Sync Conflicts'
+    }
+  ];
+
+  const isAdvancedTabActive = advancedItTabs.some(t => t.id === activeItTab);
 
   const quickSettingsCards = [
     {
@@ -304,7 +405,6 @@ export const ItSystemsView: React.FC = () => {
       descKu: 'دەستکاریکردنی ناوی هۆڵدینگ، لۆگۆ، ئیمەیڵ و زانیاری خاوەن',
       descEn: 'Configure holding name, logo, email & chairman profile',
       icon: Building2,
-      color: 'from-blue-600 to-indigo-700',
       action: () => setIsHoldingSetupOpen(true)
     },
     {
@@ -314,7 +414,6 @@ export const ItSystemsView: React.FC = () => {
       descKu: 'زیادکردنی بەکارهێنەر، دیاریکردنی ڕۆڵ و بەشە ڕێگەپێدراوەکان',
       descEn: 'Add staff, assign GM/PM/Employee roles & module access',
       icon: Shield,
-      color: 'from-indigo-600 to-violet-700',
       action: () => setIsUserRolesModalOpen(true)
     },
     {
@@ -324,7 +423,6 @@ export const ItSystemsView: React.FC = () => {
       descKu: 'دروستکردن و ڕێکخستنی کۆمپانیاکان، بەشەکان و بودجەکان',
       descEn: 'Create & manage subsidiary companies, departments & projects',
       icon: FolderKanban,
-      color: 'from-emerald-600 to-teal-700',
       action: () => setActiveTab('companies-projects')
     },
     {
@@ -334,7 +432,6 @@ export const ItSystemsView: React.FC = () => {
       descKu: 'بەستنەوەی لاپتۆپ و لقەکان بە کلیلی هاوبەشی هۆڵدینگ',
       descEn: 'Link branch laptops & terminals with holding sync gateway',
       icon: CloudLightning,
-      color: 'from-cyan-600 to-blue-700',
       action: () => setIsCloudSyncModalOpen(true)
     },
     {
@@ -344,7 +441,6 @@ export const ItSystemsView: React.FC = () => {
       descKu: 'بەڕێوەبردنی پرینتەرەکان، پسوولەکان و قەبارەی کاغەز',
       descEn: 'Manage holding printers, voucher layouts & default device',
       icon: Printer,
-      color: 'from-slate-700 to-slate-900',
       action: () => setIsPrinterModalOpen(true)
     },
     {
@@ -354,7 +450,6 @@ export const ItSystemsView: React.FC = () => {
       descKu: 'تۆمارکردن و بەڕێوەبردنی واژۆی فەرمی بەڕێوەبەران',
       descEn: 'Create & assign authorized digital signatures for approvals',
       icon: PenTool,
-      color: 'from-amber-600 to-orange-700',
       action: () => setIsSignatureModalOpen(true)
     },
     {
@@ -364,7 +459,6 @@ export const ItSystemsView: React.FC = () => {
       descKu: 'گۆڕینی وێنەی باکگراوند، شەفافییەت و تەڵخی ڕووکار',
       descEn: 'Customize corporate skyline backdrop, opacity & blur',
       icon: Image,
-      color: 'from-fuchsia-600 to-purple-700',
       action: () => setIsSkylineModalOpen(true)
     },
     {
@@ -374,48 +468,50 @@ export const ItSystemsView: React.FC = () => {
       descKu: 'هاوردەکردنی خێرای کۆمپانیا، کارمەند، کۆگا و ژمێریاری',
       descEn: 'Batch import companies, projects, staff, warehouse & ledgers',
       icon: FileSpreadsheet,
-      color: 'from-teal-600 to-emerald-700',
       action: () => setIsImportModalOpen(true)
     },
     {
       id: 'client-license',
       titleKu: 'کاراکردنی کلیلی لایسنس',
       titleEn: 'Client License Activation',
-      descKu: `باری مۆڵەت: ${systemLicense.licenseType} • داخڵکردنی کلیل بۆ هۆڵدینگ`,
-      descEn: `Status: ${systemLicense.licenseType} • Enter holding activation key`,
+      descKu: `باری مۆڵەت: ${systemLicense.licenseType} · داخڵکردنی کلیل بۆ هۆڵدینگ`,
+      descEn: `Status: ${systemLicense.licenseType} · Enter holding activation key`,
       icon: Key,
-      color: 'from-rose-600 to-amber-600',
       action: () => openLicenseModal('activate')
     }
   ];
 
   return (
-    <div className="space-y-6 animate-in fade-in duration-300">
+    <div className="space-y-6 animate-in fade-in duration-200">
       {/* Autonomous Holding & IT Control Center */}
-      <div className="bg-gradient-to-br from-slate-900 via-indigo-950 to-slate-900 border border-indigo-500/30 rounded-3xl p-5 sm:p-6 text-white shadow-xl space-y-4">
-        <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 border-b border-white/10 pb-4">
+      <div className="bg-white border border-slate-200 rounded-2xl p-5 sm:p-6 space-y-5">
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 border-b border-slate-100 pb-4">
           <div className="flex items-center gap-3">
-            <div className="w-11 h-11 rounded-2xl bg-gradient-to-br from-cyan-400 to-blue-600 text-slate-950 flex items-center justify-center shadow-lg shrink-0">
-              <Settings2 className="w-6 h-6" />
+            <div className="w-10 h-10 rounded-xl bg-slate-900 text-white flex items-center justify-center shrink-0">
+              <Settings2 className="w-5 h-5" />
             </div>
             <div>
-              <div className="flex items-center gap-2 flex-wrap">
-                <h2 className="text-base sm:text-lg font-black text-white">
-                  {language === 'ku'
-                    ? 'ناوەندی سەربەخۆی ڕێکخستنەکانی هۆڵدینگ و IT'
-                    : 'Autonomous Holding & IT Settings Hub'}
-                </h2>
-                <span className="px-2.5 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-400/30 text-[10px] font-bold">
-                  {language === 'ku' ? 'کۆنترۆڵی تەواوی هۆڵدینگ' : 'Full Client Autonomy'}
-                </span>
-              </div>
-              <p className="text-xs text-slate-300 mt-0.5">
+              <h2 className="text-base sm:text-lg font-bold text-slate-900 tracking-tight">
                 {language === 'ku'
-                  ? `سەرجەم ڕێکخستنەکانی "${holding.nameKu || holding.name}" لێرەوە بە سەربەخۆیی بەڕێوەدەبرێن بەبێ پێویستی گەڕانەوە بۆ خاوەن سەکۆ.`
-                  : `All configurations for "${holding.name}" are autonomously managed here without returning to the platform vendor.`}
+                  ? 'ناوەندی سەربەخۆی ڕێکخستنەکانی هۆڵدینگ و IT'
+                  : 'Holding & IT Settings Hub'}
+              </h2>
+              <p className="text-xs text-slate-500 mt-0.5">
+                {language === 'ku'
+                  ? `سەرجەم ڕێکخستنەکانی "${holding.nameKu || holding.name || 'هۆڵدینگ'}" لێرەوە بە سەربەخۆیی بەڕێوەدەبرێن.`
+                  : `All configurations for "${holding.name || 'Holding'}" are autonomously managed here.`}
               </p>
             </div>
           </div>
+
+          <button
+            type="button"
+            onClick={() => setIsCloudSyncModalOpen(true)}
+            className="px-3.5 py-2 rounded-lg bg-slate-900 hover:bg-slate-800 text-white text-xs font-semibold inline-flex items-center gap-1.5 transition cursor-pointer shrink-0 self-start md:self-auto"
+          >
+            <CloudLightning className="w-3.5 h-3.5" />
+            <span>{language === 'ku' ? 'وێستگەی Cloud Sync' : 'Cloud Sync Gateway'}</span>
+          </button>
         </div>
 
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
@@ -426,16 +522,16 @@ export const ItSystemsView: React.FC = () => {
                 key={card.id}
                 type="button"
                 onClick={card.action}
-                className="group p-3.5 rounded-2xl bg-white/5 hover:bg-white/12 border border-white/10 hover:border-cyan-400/50 text-start transition flex items-start gap-3 cursor-pointer"
+                className="group p-3.5 rounded-xl bg-slate-50/70 hover:bg-white border border-slate-200 hover:border-slate-300 text-start transition flex items-start gap-3 cursor-pointer"
               >
-                <div className={`w-10 h-10 rounded-xl bg-gradient-to-br ${card.color} text-white flex items-center justify-center shrink-0 shadow-md group-hover:scale-105 transition`}>
-                  <IconComp className="w-5 h-5" />
+                <div className="w-9 h-9 rounded-lg bg-white border border-slate-200 text-slate-700 group-hover:text-slate-900 group-hover:border-slate-300 flex items-center justify-center shrink-0 transition">
+                  <IconComp className="w-4 h-4" />
                 </div>
                 <div className="min-w-0 flex-1">
-                  <div className="font-extrabold text-xs text-white group-hover:text-cyan-200 transition truncate">
+                  <div className="font-semibold text-xs text-slate-900 truncate">
                     {language === 'ku' ? card.titleKu : card.titleEn}
                   </div>
-                  <p className="text-[11px] text-slate-300/90 mt-0.5 leading-snug line-clamp-2">
+                  <p className="text-[11px] text-slate-500 mt-0.5 leading-snug line-clamp-2">
                     {language === 'ku' ? card.descKu : card.descEn}
                   </p>
                 </div>
@@ -445,266 +541,76 @@ export const ItSystemsView: React.FC = () => {
         </div>
       </div>
 
-      {/* Module Navigation Tabs */}
-      <div className="bg-white border border-slate-200/80 rounded-3xl p-3 shadow-xs flex items-center justify-between gap-3 flex-wrap">
-        <div className="flex items-center gap-1.5 flex-wrap">
+      {/* Clean 2-Tier IT Operational Navigation */}
+      <div className="bg-white border border-slate-200 rounded-2xl p-3 space-y-2.5">
+        <div className="flex items-center justify-between gap-3 flex-wrap">
+          <div className="inline-flex items-center bg-slate-100 p-1 rounded-xl flex-wrap gap-0.5">
+            {coreItTabs.map((tab) => {
+              const IconComp = tab.icon;
+              const isActive = activeItTab === tab.id;
+              return (
+                <button
+                  key={tab.id}
+                  type="button"
+                  onClick={() => setActiveItTab(tab.id)}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition cursor-pointer ${
+                    isActive
+                      ? 'bg-white text-slate-900 shadow-2xs'
+                      : 'text-slate-600 hover:text-slate-900'
+                  }`}
+                >
+                  <IconComp className="w-3.5 h-3.5" />
+                  <span>{language === 'ku' ? tab.labelKu : tab.labelEn}</span>
+                </button>
+              );
+            })}
+          </div>
+
           <button
-            onClick={() => setActiveItTab('SYNC_HEALTH')}
-            className={`px-4 py-2.5 rounded-2xl text-xs font-extrabold flex items-center gap-2 transition cursor-pointer ${
-              activeItTab === 'SYNC_HEALTH'
-                ? 'bg-indigo-600 text-white shadow-md shadow-indigo-600/20'
-                : 'bg-slate-100 hover:bg-slate-200/80 text-slate-700'
+            type="button"
+            onClick={() => setShowAdvancedDiagnostics(prev => !prev)}
+            className={`px-3 py-1.5 rounded-lg text-xs font-semibold border transition cursor-pointer inline-flex items-center gap-1.5 ${
+              showAdvancedDiagnostics || isAdvancedTabActive
+                ? 'bg-slate-900 text-white border-slate-900'
+                : 'bg-white hover:bg-slate-50 text-slate-700 border-slate-200'
             }`}
           >
-            <Radio className="w-4 h-4" />
-            <span>{language === 'ku' ? 'داشبۆردی تەندروستی سینک' : 'Sync Health Dashboard'}</span>
-            <span className={`text-[10px] px-2 py-0.5 rounded-full font-bold flex items-center gap-1 ${
-              activeItTab === 'SYNC_HEALTH' ? 'bg-white/20 text-white' : 'bg-emerald-100 text-emerald-800'
-            }`}>
-              <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-ping" />
-              Live Fleet
+            <span>
+              {language === 'ku'
+                ? `پشکنین و تۆڕی پێشکەوتوو (${advancedItTabs.length})`
+                : `Advanced Diagnostics (${advancedItTabs.length})`}
             </span>
-          </button>
-
-          <button
-            onClick={() => setActiveItTab('THRESHOLD_ALERTS')}
-            className={`px-4 py-2.5 rounded-2xl text-xs font-extrabold flex items-center gap-2 transition cursor-pointer ${
-              activeItTab === 'THRESHOLD_ALERTS'
-                ? 'bg-rose-600 text-white shadow-md shadow-rose-600/25 ring-2 ring-rose-400/30'
-                : 'bg-slate-100 hover:bg-slate-200/80 text-slate-700'
-            }`}
-          >
-            <ShieldAlert className="w-4 h-4 text-rose-300" />
-            <span>{language === 'ku' ? 'سستەمی ئاگاداری سنورەکان' : 'Threshold Alert Engine'}</span>
-            <span className={`text-[10px] px-2 py-0.5 rounded-full font-bold flex items-center gap-1 ${
-              activeItTab === 'THRESHOLD_ALERTS' ? 'bg-white/20 text-white' : 'bg-rose-100 text-rose-800'
-            }`}>
-              SLA Auto-Alerts
-            </span>
-          </button>
-
-          <button
-            onClick={() => setActiveItTab('ASSET_UTILIZATION')}
-            className={`px-4 py-2.5 rounded-2xl text-xs font-extrabold flex items-center gap-2 transition cursor-pointer ${
-              activeItTab === 'ASSET_UTILIZATION'
-                ? 'bg-gradient-to-r from-indigo-600 to-blue-600 text-white shadow-md shadow-indigo-600/25 ring-2 ring-indigo-400/30'
-                : 'bg-slate-100 hover:bg-slate-200/80 text-slate-700'
-            }`}
-          >
-            <BarChart3 className="w-4 h-4 text-emerald-400" />
-            <span>{language === 'ku' ? 'داشبۆردی بەکارهێنانی ئامێرەکان (D3)' : 'Asset Utilization Dashboard'}</span>
-            <span className={`text-[10px] px-2 py-0.5 rounded-full font-bold flex items-center gap-1 ${
-              activeItTab === 'ASSET_UTILIZATION' ? 'bg-white/20 text-white' : 'bg-indigo-100 text-indigo-800'
-            }`}>
-              D3 Visual
-            </span>
-          </button>
-
-          <button
-            onClick={() => setActiveItTab('ASSET_TRACKING')}
-            className={`px-4 py-2.5 rounded-2xl text-xs font-extrabold flex items-center gap-2 transition cursor-pointer ${
-              activeItTab === 'ASSET_TRACKING'
-                ? 'bg-indigo-600 text-white shadow-md shadow-indigo-600/20'
-                : 'bg-slate-100 hover:bg-slate-200/80 text-slate-700'
-            }`}
-          >
-            <QrCode className="w-4 h-4" />
-            <span>{language === 'ku' ? 'چاودێری ئامێرەکان و QR' : 'Hardware Asset Tracking & QR'}</span>
-            <span className={`text-[10px] px-2 py-0.5 rounded-full font-bold flex items-center gap-1 ${
-              activeItTab === 'ASSET_TRACKING' ? 'bg-white/20 text-white' : 'bg-indigo-100 text-indigo-800'
-            }`}>
-              QR Mapped
-            </span>
-          </button>
-
-          <button
-            onClick={() => setActiveItTab('HARDWARE_MAINTENANCE')}
-            className={`px-4 py-2.5 rounded-2xl text-xs font-extrabold flex items-center gap-2 transition cursor-pointer ${
-              activeItTab === 'HARDWARE_MAINTENANCE'
-                ? 'bg-amber-600 text-white shadow-md shadow-amber-600/20'
-                : 'bg-slate-100 hover:bg-slate-200/80 text-slate-700'
-            }`}
-          >
-            <Wrench className="w-4 h-4" />
-            <span>{language === 'ku' ? 'چاککردنەوە و گەرەنتی' : 'Maintenance & Warranty'}</span>
-            <span className={`text-[10px] px-2 py-0.5 rounded-full font-bold flex items-center gap-1 ${
-              activeItTab === 'HARDWARE_MAINTENANCE' ? 'bg-white/20 text-white' : 'bg-amber-100 text-amber-800'
-            }`}>
-              Repair SLA
-            </span>
-          </button>
-
-          <button
-            onClick={() => setActiveItTab('LATENCY_MONITOR')}
-            className={`px-4 py-2.5 rounded-2xl text-xs font-extrabold flex items-center gap-2 transition cursor-pointer ${
-              activeItTab === 'LATENCY_MONITOR'
-                ? 'bg-indigo-600 text-white shadow-md shadow-indigo-600/20'
-                : 'bg-slate-100 hover:bg-slate-200/80 text-slate-700'
-            }`}
-          >
-            <Activity className="w-4 h-4" />
-            <span>{language === 'ku' ? 'چاودێری خێرایی و سەقامگیری تۆڕ' : 'Network Latency & Stability'}</span>
-            <span className={`text-[10px] px-2 py-0.5 rounded-full font-bold flex items-center gap-1 ${
-              activeItTab === 'LATENCY_MONITOR' ? 'bg-white/20 text-white' : 'bg-emerald-100 text-emerald-800'
-            }`}>
-              <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-ping" />
-              Live Ping
-            </span>
-          </button>
-
-          <button
-            onClick={() => setActiveItTab('BANDWIDTH_MANAGER')}
-            className={`px-4 py-2.5 rounded-2xl text-xs font-extrabold flex items-center gap-2 transition cursor-pointer ${
-              activeItTab === 'BANDWIDTH_MANAGER'
-                ? 'bg-indigo-600 text-white shadow-md shadow-indigo-600/20'
-                : 'bg-slate-100 hover:bg-slate-200/80 text-slate-700'
-            }`}
-          >
-            <Gauge className="w-4 h-4" />
-            <span>{language === 'ku' ? 'بەڕێوەبەری باندویس (Auto-QoS)' : 'Bandwidth Manager (Auto-QoS)'}</span>
-            <span className={`text-[10px] px-2 py-0.5 rounded-full font-bold flex items-center gap-1 ${
-              activeItTab === 'BANDWIDTH_MANAGER' ? 'bg-white/20 text-white' : 'bg-indigo-100 text-indigo-800'
-            }`}>
-              Auto-QoS Active
-            </span>
-          </button>
-
-          <button
-            onClick={() => setActiveItTab('LOCAL_BUFFER')}
-            className={`px-4 py-2.5 rounded-2xl text-xs font-extrabold flex items-center gap-2 transition cursor-pointer ${
-              activeItTab === 'LOCAL_BUFFER'
-                ? 'bg-indigo-600 text-white shadow-md shadow-indigo-600/20'
-                : 'bg-slate-100 hover:bg-slate-200/80 text-slate-700'
-            }`}
-          >
-            <Inbox className="w-4 h-4" />
-            <span>{language === 'ku' ? 'بافەری داتای لۆکاڵ (IndexedDB)' : 'Local Data Buffer (IndexedDB)'}</span>
-            <span className={`text-[10px] px-2 py-0.5 rounded-full font-bold flex items-center gap-1 ${
-              activeItTab === 'LOCAL_BUFFER' ? 'bg-white/20 text-white' : 'bg-amber-100 text-amber-800'
-            }`}>
-              Offline Cache
-            </span>
-          </button>
-
-          <button
-            onClick={() => setActiveItTab('CLOUD_BACKUP')}
-            className={`px-4 py-2.5 rounded-2xl text-xs font-extrabold flex items-center gap-2 transition cursor-pointer ${
-              activeItTab === 'CLOUD_BACKUP'
-                ? 'bg-indigo-600 text-white shadow-md shadow-indigo-600/20'
-                : 'bg-slate-100 hover:bg-slate-200/80 text-slate-700'
-            }`}
-          >
-            <HardDrive className="w-4 h-4" />
-            <span>{language === 'ku' ? 'گرتەی ئۆتۆماتیکی و گەنجینە' : 'Auto-Backup & Secondary Vault'}</span>
-            <span className={`text-[10px] px-2 py-0.5 rounded-full font-bold flex items-center gap-1 ${
-              activeItTab === 'CLOUD_BACKUP' ? 'bg-white/20 text-white' : 'bg-emerald-100 text-emerald-800'
-            }`}>
-              Zero Loss
-            </span>
-          </button>
-
-          <button
-            onClick={() => setActiveItTab('SMART_RELAY')}
-            className={`px-4 py-2.5 rounded-2xl text-xs font-extrabold flex items-center gap-2 transition cursor-pointer ${
-              activeItTab === 'SMART_RELAY'
-                ? 'bg-indigo-600 text-white shadow-md shadow-indigo-600/20'
-                : 'bg-slate-100 hover:bg-slate-200/80 text-slate-700'
-            }`}
-          >
-            <Network className="w-4 h-4" />
-            <span>{language === 'ku' ? 'ڕیلەیی زیرەک و سێرڤیسی دۆزینەوە' : 'Smart Sync Relay & Discovery'}</span>
-            <span className={`text-[10px] px-2 py-0.5 rounded-full font-bold ${
-              activeItTab === 'SMART_RELAY' ? 'bg-white/20 text-white' : 'bg-indigo-100 text-indigo-800'
-            }`}>
-              No Static IP
-            </span>
-          </button>
-
-          <button
-            onClick={() => setActiveItTab('GEO_ZONES')}
-            className={`px-4 py-2.5 rounded-2xl text-xs font-extrabold flex items-center gap-2 transition cursor-pointer ${
-              activeItTab === 'GEO_ZONES'
-                ? 'bg-blue-600 text-white shadow-md shadow-blue-600/20'
-                : 'bg-slate-100 hover:bg-slate-200/80 text-slate-700'
-            }`}
-          >
-            <Compass className="w-4 h-4" />
-            <span>{language === 'ku' ? 'نەخشەی زۆنەکان و سنووری ئایپی' : 'Geographical Operational Zones & IP Boundaries'}</span>
-            <span className={`text-[10px] px-2 py-0.5 rounded-full font-bold ${
-              activeItTab === 'GEO_ZONES' ? 'bg-white/20 text-white' : 'bg-blue-100 text-blue-800'
-            }`}>
-              7 Sites
-            </span>
-          </button>
-
-          <button
-            onClick={() => setActiveItTab('CONFLICTS')}
-            className={`px-4 py-2.5 rounded-2xl text-xs font-extrabold flex items-center gap-2 transition cursor-pointer ${
-              activeItTab === 'CONFLICTS'
-                ? 'bg-amber-500 text-white shadow-md shadow-amber-500/20'
-                : 'bg-slate-100 hover:bg-slate-200/80 text-slate-700'
-            }`}
-          >
-            <ArrowRightLeft className="w-4 h-4" />
-            <span>{language === 'ku' ? 'چارەسەری ناکۆکییەکانی سینک (Sync Conflicts)' : 'Sync Conflict Resolution'}</span>
-            <span className={`text-[10px] px-1.5 py-0.2 rounded-full font-mono ${
-              activeItTab === 'CONFLICTS' ? 'bg-white/20 text-white' : 'bg-amber-100 text-amber-800'
-            }`}>
-              Live Engine
-            </span>
-          </button>
-
-          <button
-            onClick={() => setActiveItTab('AUDIT_REPORT')}
-            className={`px-4 py-2.5 rounded-2xl text-xs font-extrabold flex items-center gap-2 transition cursor-pointer ${
-              activeItTab === 'AUDIT_REPORT'
-                ? 'bg-rose-600 text-white shadow-md shadow-rose-600/20'
-                : 'bg-slate-100 hover:bg-slate-200/80 text-slate-700'
-            }`}
-          >
-            <FileText className="w-4 h-4" />
-            <span>{language === 'ku' ? 'ڕاپۆرتی وردبینی ئاسایش (PDF, Excel, CSV)' : 'Security Audit Report (PDF, Excel, CSV)'}</span>
-            <span className={`text-[10px] px-2 py-0.5 rounded-full font-bold flex items-center gap-1 ${
-              activeItTab === 'AUDIT_REPORT' ? 'bg-white/20 text-white' : 'bg-rose-100 text-rose-800'
-            }`}>
-              <ShieldCheck className="w-3 h-3" />
-              PDF • XLSX • CSV
-            </span>
-          </button>
-
-          <button
-            onClick={() => setActiveItTab('INFRASTRUCTURE')}
-            className={`px-4 py-2.5 rounded-2xl text-xs font-extrabold flex items-center gap-2 transition cursor-pointer ${
-              activeItTab === 'INFRASTRUCTURE'
-                ? 'bg-slate-800 text-white shadow-md shadow-slate-800/20'
-                : 'bg-slate-100 hover:bg-slate-200/80 text-slate-700'
-            }`}
-          >
-            <Cpu className="w-4 h-4" />
-            <span>{language === 'ku' ? 'سێرڤەر و ژێرخانی ئایتی' : 'Hardware & Gate Infrastructure'}</span>
-          </button>
-
-          <button
-            onClick={() => setActiveItTab('CLOUD_TOPOLOGY')}
-            className={`px-4 py-2.5 rounded-2xl text-xs font-extrabold flex items-center gap-2 transition cursor-pointer ${
-              activeItTab === 'CLOUD_TOPOLOGY'
-                ? 'bg-indigo-600 text-white shadow-md shadow-indigo-600/20'
-                : 'bg-slate-100 hover:bg-slate-200/80 text-slate-700'
-            }`}
-          >
-            <CloudLightning className="w-4 h-4" />
-            <span>{language === 'ku' ? 'تۆڕی لاپتۆپەکانی هۆڵدینگ' : 'Holding Cloud Nodes'}</span>
-            <span className="w-2 h-2 rounded-full bg-emerald-400 animate-ping" />
+            {showAdvancedDiagnostics || isAdvancedTabActive ? (
+              <ChevronUp className="w-3.5 h-3.5" />
+            ) : (
+              <ChevronDown className="w-3.5 h-3.5" />
+            )}
           </button>
         </div>
 
-        <button
-          onClick={() => setIsCloudSyncModalOpen(true)}
-          className="px-3.5 py-2 rounded-2xl bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 text-xs font-bold flex items-center gap-1.5 transition cursor-pointer"
-        >
-          <CloudLightning className="w-3.5 h-3.5 text-blue-600" />
-          <span>{language === 'ku' ? 'کردنەوەی وێستگەی سینکی خۆکار' : 'Holding Cloud Gateway Station'}</span>
-        </button>
+        {(showAdvancedDiagnostics || isAdvancedTabActive) && (
+          <div className="pt-2.5 border-t border-slate-100 flex items-center gap-1.5 flex-wrap">
+            {advancedItTabs.map((tab) => {
+              const IconComp = tab.icon;
+              const isActive = activeItTab === tab.id;
+              return (
+                <button
+                  key={tab.id}
+                  type="button"
+                  onClick={() => setActiveItTab(tab.id)}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-medium flex items-center gap-1.5 transition cursor-pointer border ${
+                    isActive
+                      ? 'bg-slate-900 text-white border-slate-900'
+                      : 'bg-slate-50 hover:bg-slate-100 text-slate-700 border-slate-200'
+                  }`}
+                >
+                  <IconComp className="w-3.5 h-3.5" />
+                  <span>{language === 'ku' ? tab.labelKu : tab.labelEn}</span>
+                </button>
+              );
+            })}
+          </div>
+        )}
       </div>
 
       {/* Tab 0: Real-Time Sync Health Dashboard (Aggregated Fleet Heartbeats, Buffer Caches & Sync Queues) */}

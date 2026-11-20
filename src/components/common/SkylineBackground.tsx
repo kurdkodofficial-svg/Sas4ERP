@@ -71,43 +71,27 @@ export const SkylineBackground: React.FC = () => {
   const activePreset =
     SKYLINE_PRESETS.find(p => p.id === skylineBgPreset) || SKYLINE_PRESETS[0];
 
-  // Opacity factor calculation (bounded between 5% and 55% to guarantee text legibility)
-  const normalizedOpacity = Math.max(0.06, Math.min(0.55, skylineBgOpacity / 100));
+  // Soft subtle backdrop opacity so executive data tables and text stay razor-sharp
+  const normalizedOpacity = Math.max(0.04, Math.min(0.28, (skylineBgOpacity / 100) * 0.5));
 
   return (
     <div
       aria-hidden="true"
       className="fixed inset-0 pointer-events-none z-0 overflow-hidden select-none"
     >
-      {/* Background Architectural Image */}
       <img
         src={activePreset.imageSrc}
         alt=""
         role="presentation"
         referrerPolicy="no-referrer"
-        className={`w-full h-full object-cover object-center transition-all duration-1000 ease-in-out ${
-          skylineBgBlur ? 'blur-[1.5px] scale-[1.03]' : 'scale-100'
+        className={`w-full h-full object-cover object-center transition-opacity duration-500 ${
+          skylineBgBlur ? 'blur-[2px] scale-[1.02]' : 'scale-100'
         }`}
         style={{
           opacity: normalizedOpacity
         }}
       />
-
-      {/* Multi-tier protective contrast scrim:
-          Ensures that no matter what text sits in front, contrast remains WCAG AA compliant.
-          The user explicitly requested: "بە جۆرێک نووسینەکان بزر نەکات" (in a way that does NOT obscure writing)
-      */}
-      <div className="absolute inset-0 bg-gradient-to-b from-[#F4F7FA]/75 via-[#F4F7FA]/70 to-[#F4F7FA]/85" />
-      <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-white/30 via-transparent to-slate-900/10" />
-
-      {/* Subtle fine architectural mesh grid (adds precision feel without visual noise) */}
-      <div
-        className="absolute inset-0 opacity-[0.035]"
-        style={{
-          backgroundImage: `radial-gradient(circle at 1px 1px, #1e293b 1px, transparent 0)`,
-          backgroundSize: '32px 32px'
-        }}
-      />
+      <div className="absolute inset-0 bg-gradient-to-b from-[#F8FAFC]/88 via-[#F8FAFC]/85 to-[#F8FAFC]/94" />
     </div>
   );
 };

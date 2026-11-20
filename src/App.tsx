@@ -57,21 +57,18 @@ const MainContent: React.FC = () => {
   const renderActiveView = () => {
     if (!isAuthorized) {
       return (
-        <div className="max-w-2xl mx-auto my-12 p-8 bg-white border border-rose-200 rounded-3xl shadow-xl text-center space-y-4 animate-in fade-in">
-          <div className="w-16 h-16 rounded-3xl bg-rose-100 text-rose-600 flex items-center justify-center mx-auto text-2xl font-black">
-            🔒
-          </div>
-          <h2 className="text-xl font-black text-slate-900">
+        <div className="max-w-lg mx-auto my-16 p-8 bg-white border border-slate-200 rounded-2xl text-center space-y-4">
+          <h2 className="text-lg font-bold text-slate-900">
             {language === 'ku'
-              ? 'ئەم بەشە بۆ ڕۆڵەکەت سنووردارکراوە (Access Restricted)'
-              : 'Access Restricted for Your User Role'}
+              ? 'ئەم بەشە بۆ ڕۆڵەکەت سنووردارکراوە'
+              : 'Access Restricted for Your Role'}
           </h2>
           <p className="text-sm text-slate-600 leading-relaxed">
             {language === 'ku'
-              ? `هەژمارەکەت بە ڕۆڵی "${currentUser.name} (${currentUser.role})" دەسەڵاتی بینینی بەشی "${activeTab}"ی نییە. تەنها خاوەنی هۆلدینگ دەتوانێت لە بەشی ڕێکخستنی ڕۆڵەکان ئەم مۆڵەتەت پێ بدات.`
-              : `Your account (${currentUser.name} - ${currentUser.role}) does not have permission to view module "${activeTab}". Contact the Holding Owner to grant access.`}
+              ? `هەژمارەکەت (${currentUser.name}) دەسەڵاتی بینینی ئەم بەشەی نییە. بەڕێوەبەری IT یان خاوەنی هۆڵدینگ دەتوانێت لە بەشی دەسەڵاتەکان مۆڵەتت پێ بدات.`
+              : `Your account (${currentUser.name}) does not have access to this module. Contact your Holding Owner or IT Administrator.`}
           </p>
-          <div className="pt-2 flex justify-center gap-3">
+          <div className="pt-2">
             <button
               onClick={() => {
                 if (hasModuleAccess(currentUser, 'holding-dashboard')) {
@@ -83,7 +80,7 @@ const MainContent: React.FC = () => {
                   if (firstAllowed) setActiveTab(firstAllowed.id);
                 }
               }}
-              className="px-5 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs shadow-md transition cursor-pointer"
+              className="px-4 py-2 rounded-lg bg-slate-900 hover:bg-slate-800 text-white font-semibold text-xs transition cursor-pointer"
             >
               {language === 'ku' ? 'گەڕانەوە بۆ بەشە ڕێگەپێدراوەکانت' : 'Go to Authorized Module'}
             </button>
@@ -111,7 +108,7 @@ const MainContent: React.FC = () => {
       case 'project-reports':
         return <ProjectReportsModule />;
       case 'gate-scanner':
-        return <WarehouseModule />; // Also opens GateScannerModal directly
+        return <WarehouseModule />;
       case 'procurement':
         return <ProcurementModule />;
       case 'finance':
@@ -142,18 +139,14 @@ const MainContent: React.FC = () => {
   };
 
   return (
-    <div className="relative min-h-screen bg-[#F4F7FA] text-slate-800 flex flex-col font-sans selection:bg-blue-600 selection:text-white">
-      {/* Architectural Colored Skyline Background with Multi-Tier Protective Scrim */}
+    <div className="relative min-h-screen bg-[#F8FAFC] text-slate-900 flex flex-col font-sans selection:bg-slate-900 selection:text-white">
       <SkylineBackground />
-
-      {/* Top Navigation Bar */}
       <Header />
 
-      {/* Main Workspace Layout */}
       <div className="flex-1 flex overflow-hidden relative z-10">
         <Sidebar />
 
-        <main className="flex-1 p-4 sm:p-6 lg:p-8 overflow-y-auto max-w-[1700px] mx-auto w-full">
+        <main className="flex-1 p-4 sm:p-6 lg:p-8 overflow-y-auto max-w-[1600px] mx-auto w-full">
           {renderActiveView()}
         </main>
       </div>

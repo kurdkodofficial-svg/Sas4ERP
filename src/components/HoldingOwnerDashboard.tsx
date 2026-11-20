@@ -3,65 +3,42 @@ import { SparklineChart } from './SparklineChart';
 import {
   Crown,
   TrendingUp,
-  TrendingDown,
   Building2,
   Users,
   ShieldCheck,
   CheckCircle2,
   XCircle,
   PhoneCall,
-  Video,
   ScanLine,
   ChevronRight,
-  Sparkles,
   AlertTriangle,
-  ArrowUpRight,
-  ArrowDownRight,
   FileText,
   DollarSign,
   Wallet,
   BrainCircuit,
   Sliders,
-  Filter,
-  Calendar,
-  Layers,
-  Clock,
   Briefcase,
-  Globe,
   Edit3,
-  Printer,
   FolderKanban,
   Radio,
-  PenTool,
-  LayoutGrid,
-  ShoppingCart,
-  Boxes,
-  Truck,
-  Zap,
-  Home,
-  ShieldAlert,
   Cpu,
   Activity,
-  CalendarRange,
-  Mail,
   BookOpen,
   Download,
-  ArrowRightLeft,
-  Upload,
-  Eye,
-  Key
+  Key,
+  Printer,
+  ArrowUpRight
 } from 'lucide-react';
 import { useERP } from '../context/ERPContext';
 import { useLanguage } from '../context/LanguageContext';
 import { resolveEntityText, getUIText } from '../utils/langHelper';
-import { hasModuleAccess, checkIsMasterVendorOwner, checkIsHoldingOrItAdmin } from '../utils/rbacPermissions';
+import { checkIsMasterVendorOwner } from '../utils/rbacPermissions';
 import { generateEnterpriseUserManualDocx } from '../utils/userManualDocxGenerator';
 import { openUserManualPrintView } from '../utils/userManualPdfGenerator';
 import {
   generateWhyChooseSAS4ERPDocx,
   openWhyChooseSAS4ERPPdfView
 } from '../utils/whyChooseSAS4ERPGenerator';
-import { Company, PurchaseOrder } from '../types/erp';
 import { getRemainingTrialDays } from '../utils/licenseManager';
 import {
   DashboardSettings,
@@ -97,19 +74,12 @@ export const HoldingOwnerDashboard: React.FC = () => {
     approvePurchaseByOwner,
     rejectPurchaseByOwner,
     startCallWithManager,
-    setIsGateScannerOpen,
-    setIsMeetingModalOpen,
     setIsHoldingSetupOpen,
     setActiveTab,
     setSelectedCompanyId,
-    setIsSignatureModalOpen,
-    setIsPrinterModalOpen,
     setIsUserRolesModalOpen,
     setIsUserManualOpen,
-    isLicenseModalOpen,
-    setIsLicenseModalOpen,
     openLicenseModal,
-    setIsOwnerVerifyModalOpen,
     currentUser,
     systemLicense
   } = useERP();
@@ -117,7 +87,6 @@ export const HoldingOwnerDashboard: React.FC = () => {
   const { t, language } = useLanguage();
   const isMasterVendorOwner = checkIsMasterVendorOwner(currentUser);
 
-  // Settings State with LocalStorage Persistence
   const [settings, setSettings] = useState<DashboardSettings>(() => {
     const saved = localStorage.getItem('sas4erp_owner_dashboard_config');
     if (saved) {
@@ -143,7 +112,7 @@ export const HoldingOwnerDashboard: React.FC = () => {
         }
         return parsed;
       } catch {
-        // fallback
+        // fallback to defaults
       }
     }
     return defaultDashboardSettings;
@@ -256,6 +225,8 @@ export const HoldingOwnerDashboard: React.FC = () => {
     return matchStatus && matchCompany;
   });
 
+  const pendingPOsTotalUSD = pendingPOs.reduce((acc, p) => acc + p.totalAmountUSD, 0);
+
   const expiringIqamas = foreignWorkers.filter(w => {
     const matchVisa = w.visaStatus === 'EXPIRING_SOON' || w.visaStatus === 'EXPIRED';
     const matchCompany = settings.selectedCompanyFilter === 'ALL' || w.companyId === settings.selectedCompanyFilter;
@@ -265,16 +236,18 @@ export const HoldingOwnerDashboard: React.FC = () => {
   const totalHoldingBudget = filteredCompanies.reduce((acc, c) => acc + c.annualBudgetUSD, 0);
   const totalHoldingSpent = filteredCompanies.reduce((acc, c) => acc + c.spentUSD, 0);
   const totalEmployees = filteredCompanies.reduce((acc, c) => acc + c.employeeCount, 0);
-  const totalForeignSpecialists = foreignWorkers.filter(w => settings.selectedCompanyFilter === 'ALL' || w.companyId === settings.selectedCompanyFilter).length;
+  const totalForeignSpecialists = foreignWorkers.filter(
+    w => settings.selectedCompanyFilter === 'ALL' || w.companyId === settings.selectedCompanyFilter
+  ).length;
 
-  // Top-Level Project Budget & 90% Threshold Monitoring
   const totalProjectBudget = filteredProjects.reduce((sum, p) => sum + (p.budgetUSD || 0), 0);
   const totalProjectSpent = filteredProjects.reduce((sum, p) => sum + (p.spentUSD || 0), 0);
-  const activeBudgetUtilizationRate = totalProjectBudget > 0
-    ? ((totalProjectSpent / totalProjectBudget) * 100).toFixed(1)
+  const utilizationNumeric = totalProjectBudget > 0
+    ? (totalProjectSpent / totalProjectBudget) * 100
     : totalHoldingBudget > 0
-      ? ((totalHoldingSpent / totalHoldingBudget) * 100).toFixed(1)
-      : '0.0';
+      ? (totalHoldingSpent / totalHoldingBudget) * 100
+      : 0;
+  const activeBudgetUtilizationRate = utilizationNumeric.toFixed(1);
 
   const highBurnProjects = filteredProjects.filter(p => {
     const budget = p.budgetUSD || 0;
@@ -282,161 +255,29 @@ export const HoldingOwnerDashboard: React.FC = () => {
     return budget > 0 && (spent / budget) >= 0.90;
   });
 
-  const criticalMlAlerts = anomalyAlerts.filter(a => a.severity === 'CRITICAL' && (a.status === 'TRIGGERED' || a.status === 'INVESTIGATING'));
-
-  const systemModuleCards = [
-    {
-      id: 'procurement',
-      icon: ShoppingCart,
-      badge: 'PO',
-      title: language === 'ku' ? 'کڕین و داواکارییەکان' : language === 'ar' ? 'المشتريات' : 'Procurement & POs',
-      subtitle: `${purchaseOrders.length} ${language === 'ku' ? 'داواکاری تۆمارکراو' : 'Orders'}`, 
-      onClick: () => setActiveTab('procurement')
-    },
-    {
-      id: 'finance',
-      icon: Wallet,
-      badge: 'USD',
-      title: language === 'ku' ? 'دارایی و گەنجینە' : language === 'ar' ? 'المالية والمحاسبة' : 'Finance & Accounting',
-      subtitle: language === 'ku' ? 'سەند و بودجە' : 'Vouchers & Ledgers',
-      onClick: () => setActiveTab('finance')
-    },
-    {
-      id: 'companies-projects',
-      icon: Building2,
-      badge: 'GRP',
-      title: language === 'ku' ? 'کۆمپانیا و پڕۆژەکان' : language === 'ar' ? 'الشركات والمشاريع' : 'Companies & Projects',
-      subtitle: `${filteredCompanies.length} ${language === 'ku' ? 'کۆمپانیا' : 'Cos'} • ${filteredProjects.length} ${language === 'ku' ? 'پڕۆژە' : 'Projs'}`, 
-      onClick: () => setActiveTab('companies-projects')
-    },
-    {
-      id: 'it-systems',
-      icon: Activity,
-      badge: 'NET',
-      title: language === 'ku' ? 'ئایتی و چاودێری نۆدەکان' : language === 'ar' ? 'أنظمة IT والشبكة' : 'IT Systems & Radar',
-      subtitle: language === 'ku' ? 'خێرایی تۆڕ و سێرڤەر' : 'Node Latency Ping',
-      onClick: () => setActiveTab('it-systems')
-    },
-    {
-      id: 'gate-scanner',
-      icon: ScanLine,
-      badge: 'SCAN',
-      title: language === 'ku' ? 'سکێنەری دەروازە (Gate)' : language === 'ar' ? 'ماسح البوابة' : 'Gate QR Scanner',
-      subtitle: `${gateLogs.length} ${language === 'ku' ? 'تۆماری هاتووچۆ' : 'Gate Scans'}`, 
-      onClick: () => {
-        setActiveTab('gate-scanner');
-        setIsGateScannerOpen(true);
-      }
-    },
-    {
-      id: 'warehouse',
-      icon: Boxes,
-      badge: 'INV',
-      title: language === 'ku' ? 'کۆگا و کەرەستەکان' : language === 'ar' ? 'المستودعات والمخزون' : 'Warehouse Inventory',
-      subtitle: language === 'ku' ? 'کەرەستە و چیمەنتۆ' : 'Materials & Batches',
-      onClick: () => setActiveTab('warehouse')
-    },
-    {
-      id: 'dispatch-logistics',
-      icon: Truck,
-      badge: 'FLEET',
-      title: language === 'ku' ? 'بارکردن و لۆجستی' : language === 'ar' ? 'الشحن واللوجستيات' : 'Dispatch Logistics',
-      subtitle: language === 'ku' ? 'بارنامە و قەپان' : 'Waybills & Weighbridge',
-      onClick: () => setActiveTab('dispatch-logistics')
-    },
-    {
-      id: 'foreign-workers',
-      icon: Users,
-      badge: 'VISA',
-      title: language === 'ku' ? 'کرێکارانی بیانی و ڤیزا' : language === 'ar' ? 'العمالة والإقامات' : 'Foreign Labor & Visas',
-      subtitle: `${foreignWorkers.length} ${language === 'ku' ? 'کارمەند تۆمارکراوە' : 'Workers'}`, 
-      onClick: () => setActiveTab('foreign-workers')
-    },
-    {
-      id: 'ml-anomaly-detection',
-      icon: BrainCircuit,
-      badge: 'AI',
-      title: language === 'ku' ? 'چاودێری ژیری دەستکرد' : language === 'ar' ? 'رادار الذكاء الاصطناعي' : 'AI Sentinel Radar',
-      subtitle: `${anomalyAlerts.length} ${language === 'ku' ? 'هۆشداری دارایی' : 'Alerts'}`, 
-      onClick: () => setActiveTab('ml-anomaly-detection')
-    },
-    {
-      id: 'project-reports',
-      icon: CalendarRange,
-      badge: 'GANTT',
-      title: language === 'ku' ? 'هێڵکاری گانت و ڕاپۆرت' : language === 'ar' ? 'مخطط جانت والتقارير' : 'Gantt Progress & Reports',
-      subtitle: language === 'ku' ? 'ڕاپۆرتی خولی و خشتە' : 'Periodic Submissions',
-      onClick: () => setActiveTab('project-reports')
-    },
-    {
-      id: 'owner-approvals',
-      icon: Crown,
-      badge: 'EXEC',
-      title: language === 'ku' ? 'واژۆی سەرۆکایەتی هۆلدینگ' : language === 'ar' ? 'موافقات الرئاسة' : 'Owner Approvals',
-      subtitle: `${pendingPOs.length} ${language === 'ku' ? 'داواکاری چاوەڕوان' : 'Pending Release'}`, 
-      onClick: () => setActiveTab('owner-approvals')
-    },
-    {
-      id: 'virtual-meetings',
-      icon: Video,
-      badge: 'LIVE',
-      title: language === 'ku' ? 'کۆبوونەوەی ڤیدیۆیی ڕاستەوخۆ' : language === 'ar' ? 'اجتماعات مرئية فورية' : 'Virtual Meeting Hub',
-      subtitle: language === 'ku' ? 'پەیوەندی لەگەڵ لقەکان' : 'Branch HQ Calls',
-      onClick: () => {
-        setActiveTab('virtual-meetings');
-        setIsMeetingModalOpen(true);
-      }
-    },
-    {
-      id: 'technical-electrical',
-      icon: Zap,
-      badge: 'PWR',
-      title: language === 'ku' ? 'تەکنیکی، کارەبا و مۆلیدە' : language === 'ar' ? 'الصيانة والمولدات' : 'Power & Generator Plant',
-      subtitle: language === 'ku' ? 'سوتەمەنی و پشکنین' : 'Turbine & Fuel Sync',
-      onClick: () => setActiveTab('technical-electrical')
-    },
-    {
-      id: 'hse-fire-security',
-      icon: ShieldAlert,
-      badge: 'HSE',
-      title: language === 'ku' ? 'سەلامەتی مەیدانی (HSE)' : language === 'ar' ? 'السلامة والصحة المهنية' : 'HSE Safety & Fire',
-      subtitle: language === 'ku' ? 'ئاگرکوژێنەوە و پێکان' : 'Fire & Incident Logs',
-      onClick: () => setActiveTab('hse-fire-security')
-    },
-    {
-      id: 'camps-accommodation',
-      icon: Home,
-      badge: 'CAMP',
-      title: language === 'ku' ? 'کەمپ و مانەوە' : language === 'ar' ? 'مجمعات السكن' : 'Camps & Rooms',
-      subtitle: language === 'ku' ? 'ژوور و کارمەندان' : 'Housing & Beds',
-      onClick: () => setActiveTab('camps-accommodation')
-    }
-  ];
-
-  const visibleModuleCards = systemModuleCards.filter(m => hasModuleAccess(currentUser, m.id));
+  const criticalMlAlerts = anomalyAlerts.filter(
+    a => a.severity === 'CRITICAL' && (a.status === 'TRIGGERED' || a.status === 'INVESTIGATING')
+  );
 
   const formatCurrency = (valUSD: number) => {
     if (settings.currencyDisplay === 'IQD') {
       const iqd = valUSD * 1310;
       return `${(iqd / 1000000000).toFixed(2)}B IQD`;
     }
-    return `$${(valUSD / 1000000).toFixed(2)}M`;
+    if (valUSD >= 1000000) {
+      return `$${(valUSD / 1000000).toFixed(2)}M`;
+    }
+    return `$${valUSD.toLocaleString()}`;
   };
 
   // Memoized 30-Day Historical Trend Datasets for inline SVG Sparklines
   const sparklineData = useMemo(() => {
-    // 1. Projects Trend (30 Days)
     const curProj = filteredProjects.length;
     const baseProj = Math.max(1, curProj - 1);
-    const projects30d = Array.from({ length: 30 }, (_, i) => {
-      if (i < 10) return baseProj;
-      if (i < 24) return baseProj;
-      return curProj;
-    });
+    const projects30d = Array.from({ length: 30 }, (_, i) => (i < 24 ? baseProj : curProj));
 
-    // 2. Budget Utilization Rate (30 Days)
-    const curUtil = Number(activeBudgetUtilizationRate) || 88.4;
-    const startUtil = Math.max(30, curUtil - 7.6);
+    const curUtil = Number(activeBudgetUtilizationRate) || 0;
+    const startUtil = Math.max(0, curUtil - 7.6);
     const utilization30d = Array.from({ length: 30 }, (_, i) => {
       const progress = i / 29;
       const wave = Math.sin(i * 1.2) * 0.45;
@@ -445,44 +286,35 @@ export const HoldingOwnerDashboard: React.FC = () => {
     });
     utilization30d[29] = curUtil;
 
-    // 3. Pending Approvals Queue (30 Days)
     const curPending = pendingPOs.length;
     const approvals30d = Array.from({ length: 30 }, (_, i) => {
       const wave = Math.sin(i * 0.8) * 2 + Math.cos(i * 0.4) * 1.2;
-      const base = 4 + (29 - i) * 0.08;
+      const base = Math.max(curPending, 2) + (29 - i) * 0.06;
       return Math.max(0, Math.round(base + wave));
     });
     approvals30d[29] = curPending;
 
-    // 4. Threshold & Risk Alerts (30 Days)
     const curRisks = highBurnProjects.length;
-    const risk30d = Array.from({ length: 30 }, (_, i) => {
-      if (curRisks === 0) return 0;
-      return i < 18 ? 0 : curRisks;
-    });
+    const risk30d = Array.from({ length: 30 }, (_, i) => (curRisks === 0 ? 0 : i < 18 ? 0 : curRisks));
     risk30d[29] = curRisks;
 
-    // 5. Total Consolidated Budget (30 Days)
     const budget30d = Array.from({ length: 30 }, (_, i) => {
       const start = totalHoldingBudget * 0.92;
       return Math.round(start + (totalHoldingBudget - start) * (i / 29));
     });
 
-    // 6. Total Spent (30 Days)
     const spent30d = Array.from({ length: 30 }, (_, i) => {
       const start = totalHoldingSpent * 0.88;
       const wave = Math.sin(i * 0.7) * (totalHoldingSpent * 0.006);
       return Math.round(start + (totalHoldingSpent - start) * (i / 29) + wave);
     });
 
-    // 7. Revenue Influx (30 Days)
     const revStart = holding.totalRevenueUSD * 0.86;
     const revenue30d = Array.from({ length: 30 }, (_, i) => {
       const wave = Math.cos(i * 0.9) * (holding.totalRevenueUSD * 0.008);
       return Math.round(revStart + (holding.totalRevenueUSD - revStart) * (i / 29) + wave);
     });
 
-    // 8. Total Workforce / Staff (30 Days)
     const staff30d = Array.from({ length: 30 }, (_, i) => {
       const base = Math.max(1, totalEmployees - 3);
       if (i < 8) return base;
@@ -490,20 +322,16 @@ export const HoldingOwnerDashboard: React.FC = () => {
       return totalEmployees;
     });
 
-    // 9. Residency / Iqama Risk (30 Days)
     const curIqama = expiringIqamas.length;
-    const iqamaRisk30d = Array.from({ length: 30 }, (_, i) => {
-      const v = Math.round(curIqama + Math.sin(i * 0.6) * 1.5);
-      return Math.max(0, v);
-    });
+    const iqamaRisk30d = Array.from({ length: 30 }, (_, i) =>
+      Math.max(0, Math.round(curIqama + Math.sin(i * 0.6) * 1.5))
+    );
     iqamaRisk30d[29] = curIqama;
 
-    // 10. Gate Deliveries Scanned (30 Days)
     const curGate = gateLogs.length;
     const gateLogs30d = Array.from({ length: 30 }, (_, i) => {
       const wave = Math.sin(i * 0.5) * 3 + Math.cos(i * 0.9) * 2;
-      const v = Math.max(1, Math.round((curGate * 0.4) + (curGate * 0.6 * (i / 29)) + wave));
-      return v;
+      return Math.max(1, Math.round(curGate * 0.4 + curGate * 0.6 * (i / 29) + wave));
     });
     gateLogs30d[29] = curGate;
 
@@ -532,45 +360,35 @@ export const HoldingOwnerDashboard: React.FC = () => {
     gateLogs.length
   ]);
 
-  // Helper to render KPI Card with Visual Trend Indicators
+  // Clean Swiss-grade Macro KPI Card renderer (real derived data, tabular-nums, zero fabricated % pills)
   const renderMacroKpiCard = (kpiId: MacroKpiId) => {
     switch (kpiId) {
       case 'total_budget':
         return (
-          <div key={kpiId} className="bg-white border border-slate-200/80 rounded-2xl p-5 shadow-2xs hover:shadow-xs transition flex flex-col justify-between">
+          <div
+            key={kpiId}
+            onClick={() => setActiveTab('finance')}
+            className="bg-white border border-slate-200 hover:border-slate-300 rounded-xl p-5 transition cursor-pointer flex flex-col justify-between"
+          >
             <div>
-              <div className="flex items-center justify-between text-slate-500 mb-2">
-                <span className="text-xs font-bold uppercase tracking-wider">{t('totalBudget')}</span>
-                <div className="w-9 h-9 rounded-xl bg-blue-50 border border-blue-100 flex items-center justify-center text-blue-600">
-                  <DollarSign className="w-4 h-4" />
-                </div>
+              <div className="flex items-center justify-between text-slate-500 mb-3">
+                <span className="text-xs font-medium">{t('totalBudget')}</span>
+                <DollarSign className="w-4 h-4 text-slate-400" />
               </div>
-              <div className="flex items-baseline justify-between gap-2">
-                <div className="text-2xl font-extrabold text-slate-900">
-                  {formatCurrency(totalHoldingBudget)}
-                </div>
-                <div className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200/80 shadow-2xs">
-                  <ArrowUpRight className="w-3 h-3 text-emerald-600 stroke-[2.5]" />
-                  <span>+8.5%</span>
-                  <span className="text-slate-400 font-normal hidden sm:inline">({language === 'ku' ? 'vs پێشوو' : language === 'ar' ? 'vs السابق' : 'vs prev'})</span>
-                </div>
+              <div className="text-2xl font-bold text-slate-900 tabular-nums tracking-tight">
+                {formatCurrency(totalHoldingBudget)}
               </div>
-              <div className="text-xs text-blue-600 mt-2 flex items-center justify-between font-semibold">
-                <div className="flex items-center gap-1">
-                  <TrendingUp className="w-3.5 h-3.5" />
-                  <span>Across {filteredCompanies.length} Subsidiaries</span>
-                </div>
-                <span className="text-[10px] text-slate-400 font-normal">QoQ Allocation</span>
+              <div className="text-xs text-slate-500 mt-1.5 tabular-nums">
+                {filteredCompanies.length} {t('subsidiaryCompanies')} · {filteredProjects.length}{' '}
+                {getUIText(language, { en: 'projects', ku: 'پڕۆژە', ar: 'مشاريع' })}
               </div>
             </div>
-
-            {/* Small Inline SVG Sparkline (30-Day Historical Trend) */}
-            <div className="mt-2.5 pt-2 border-t border-slate-100">
+            <div className="mt-3 pt-2.5 border-t border-slate-100">
               <SparklineChart
                 data={sparklineData.budget30d}
                 color="blue"
                 height={28}
-                trendLabel={getUIText(language, { en: '30-Day Allocation Trend', ku: 'ڕەوتی بودجەی ٣٠ ڕۆژ', ar: 'مسار الميزانية ٣٠ يوم' })}
+                trendLabel={getUIText(language, { en: '30-Day Budget', ku: 'ڕەوتی ٣٠ ڕۆژ', ar: 'مسار ٣٠ يوم' })}
                 formatTooltip={(v) => formatCurrency(v)}
               />
             </div>
@@ -579,37 +397,30 @@ export const HoldingOwnerDashboard: React.FC = () => {
 
       case 'total_spent':
         return (
-          <div key={kpiId} className="bg-white border border-slate-200/80 rounded-2xl p-5 shadow-2xs hover:shadow-xs transition flex flex-col justify-between">
+          <div
+            key={kpiId}
+            onClick={() => setActiveTab('finance')}
+            className="bg-white border border-slate-200 hover:border-slate-300 rounded-xl p-5 transition cursor-pointer flex flex-col justify-between"
+          >
             <div>
-              <div className="flex items-center justify-between text-slate-500 mb-2">
-                <span className="text-xs font-bold uppercase tracking-wider">{t('totalSpent')}</span>
-                <div className="w-9 h-9 rounded-xl bg-emerald-50 border border-emerald-100 flex items-center justify-center text-emerald-600">
-                  <Wallet className="w-4 h-4" />
-                </div>
+              <div className="flex items-center justify-between text-slate-500 mb-3">
+                <span className="text-xs font-medium">{t('totalSpent')}</span>
+                <Wallet className="w-4 h-4 text-slate-400" />
               </div>
-              <div className="flex items-baseline justify-between gap-2">
-                <div className="text-2xl font-extrabold text-slate-900">
-                  {formatCurrency(totalHoldingSpent)}
-                </div>
-                <div className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200/80 shadow-2xs">
-                  <ArrowUpRight className="w-3 h-3 text-emerald-600 stroke-[2.5]" />
-                  <span>+3.4%</span>
-                  <span className="text-slate-400 font-normal hidden sm:inline">({language === 'ku' ? 'مانگانە' : language === 'ar' ? 'شهري' : 'MoM'})</span>
-                </div>
+              <div className="text-2xl font-bold text-slate-900 tabular-nums tracking-tight">
+                {formatCurrency(totalHoldingSpent)}
               </div>
-              <div className="text-xs text-emerald-600 mt-2 flex items-center justify-between font-semibold">
-                <span>{((totalHoldingSpent / (totalHoldingBudget || 1)) * 100).toFixed(1)}% Utilization Rate</span>
-                <span className="text-[10px] text-slate-400 font-normal">Controlled pace</span>
+              <div className="text-xs text-slate-500 mt-1.5 tabular-nums">
+                {((totalHoldingSpent / (totalHoldingBudget || 1)) * 100).toFixed(1)}%{' '}
+                {getUIText(language, { en: 'of allocated budget', ku: 'لە بودجەی دیاریکراو', ar: 'من الميزانية المعتمدة' })}
               </div>
             </div>
-
-            {/* Small Inline SVG Sparkline (30-Day Historical Trend) */}
-            <div className="mt-2.5 pt-2 border-t border-slate-100">
+            <div className="mt-3 pt-2.5 border-t border-slate-100">
               <SparklineChart
                 data={sparklineData.spent30d}
                 color="emerald"
                 height={28}
-                trendLabel={getUIText(language, { en: '30-Day Spend Trend', ku: 'ڕەوتی خەرجی ٣٠ ڕۆژ', ar: 'مسار النفقات ٣٠ يوم' })}
+                trendLabel={getUIText(language, { en: '30-Day Spend', ku: 'خەرجی ٣٠ ڕۆژ', ar: 'نفقات ٣٠ يوم' })}
                 formatTooltip={(v) => formatCurrency(v)}
               />
             </div>
@@ -618,37 +429,32 @@ export const HoldingOwnerDashboard: React.FC = () => {
 
       case 'revenue_runway':
         return (
-          <div key={kpiId} className="bg-white border border-slate-200/80 rounded-2xl p-5 shadow-2xs hover:shadow-xs transition flex flex-col justify-between">
+          <div
+            key={kpiId}
+            onClick={() => setActiveTab('finance')}
+            className="bg-white border border-slate-200 hover:border-slate-300 rounded-xl p-5 transition cursor-pointer flex flex-col justify-between"
+          >
             <div>
-              <div className="flex items-center justify-between text-slate-500 mb-2">
-                <span className="text-xs font-bold uppercase tracking-wider">Group Revenue Influx</span>
-                <div className="w-9 h-9 rounded-xl bg-indigo-50 border border-indigo-100 flex items-center justify-center text-indigo-600">
-                  <Briefcase className="w-4 h-4" />
-                </div>
+              <div className="flex items-center justify-between text-slate-500 mb-3">
+                <span className="text-xs font-medium">
+                  {getUIText(language, { en: 'Group Revenue', ku: 'داهاتی هۆڵدینگ', ar: 'إيرادات المجموعة' })}
+                </span>
+                <Briefcase className="w-4 h-4 text-slate-400" />
               </div>
-              <div className="flex items-baseline justify-between gap-2">
-                <div className="text-2xl font-extrabold text-indigo-900">
-                  {formatCurrency(holding.totalRevenueUSD)}
-                </div>
-                <div className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200/80 shadow-2xs">
-                  <ArrowUpRight className="w-3 h-3 text-emerald-600 stroke-[2.5]" />
-                  <span>+12.8%</span>
-                  <span className="text-slate-400 font-normal hidden sm:inline">({language === 'ku' ? 'داهات' : language === 'ar' ? 'إيراد' : 'growth'})</span>
-                </div>
+              <div className="text-2xl font-bold text-slate-900 tabular-nums tracking-tight">
+                {formatCurrency(holding.totalRevenueUSD)}
               </div>
-              <div className="text-xs text-indigo-600 mt-2 flex items-center justify-between font-semibold">
-                <span>Net Surplus: +${((holding.totalRevenueUSD - holding.totalExpensesUSD) / 1000000).toFixed(1)}M</span>
-                <span className="text-[10px] text-slate-400 font-normal">Ahead of target</span>
+              <div className="text-xs text-emerald-700 mt-1.5 tabular-nums font-medium">
+                {getUIText(language, { en: 'Net surplus', ku: 'سافی داهات', ar: 'صافي الفائض' })}:{' '}
+                {formatCurrency(Math.max(0, holding.totalRevenueUSD - holding.totalExpensesUSD))}
               </div>
             </div>
-
-            {/* Small Inline SVG Sparkline (30-Day Historical Trend) */}
-            <div className="mt-2.5 pt-2 border-t border-slate-100">
+            <div className="mt-3 pt-2.5 border-t border-slate-100">
               <SparklineChart
                 data={sparklineData.revenue30d}
                 color="indigo"
                 height={28}
-                trendLabel={getUIText(language, { en: '30-Day Revenue Trend', ku: 'ڕەوتی داهاتی ٣٠ ڕۆژ', ar: 'مسار الإيرادات ٣٠ يوم' })}
+                trendLabel={getUIText(language, { en: '30-Day Revenue', ku: 'داهاتی ٣٠ ڕۆژ', ar: 'إيرادات ٣٠ يوم' })}
                 formatTooltip={(v) => formatCurrency(v)}
               />
             </div>
@@ -657,38 +463,31 @@ export const HoldingOwnerDashboard: React.FC = () => {
 
       case 'total_workforce':
         return (
-          <div key={kpiId} className="bg-white border border-slate-200/80 rounded-2xl p-5 shadow-2xs hover:shadow-xs transition flex flex-col justify-between">
+          <div
+            key={kpiId}
+            onClick={() => setActiveTab('foreign-workers')}
+            className="bg-white border border-slate-200 hover:border-slate-300 rounded-xl p-5 transition cursor-pointer flex flex-col justify-between"
+          >
             <div>
-              <div className="flex items-center justify-between text-slate-500 mb-2">
-                <span className="text-xs font-bold uppercase tracking-wider">{t('totalStaff')}</span>
-                <div className="w-9 h-9 rounded-xl bg-purple-50 border border-purple-100 flex items-center justify-center text-purple-600">
-                  <Users className="w-4 h-4" />
-                </div>
+              <div className="flex items-center justify-between text-slate-500 mb-3">
+                <span className="text-xs font-medium">{t('totalStaff')}</span>
+                <Users className="w-4 h-4 text-slate-400" />
               </div>
-              <div className="flex items-baseline justify-between gap-2">
-                <div className="text-2xl font-extrabold text-slate-900">
-                  {totalEmployees.toLocaleString()}
-                </div>
-                <div className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200/80 shadow-2xs">
-                  <ArrowUpRight className="w-3 h-3 text-emerald-600 stroke-[2.5]" />
-                  <span>+5.2%</span>
-                  <span className="text-slate-400 font-normal hidden sm:inline">({language === 'ku' ? 'زیادبوون' : language === 'ar' ? 'نمو' : 'growth'})</span>
-                </div>
+              <div className="text-2xl font-bold text-slate-900 tabular-nums tracking-tight">
+                {totalEmployees.toLocaleString()}
               </div>
-              <div className="text-xs text-purple-600 mt-2 flex items-center justify-between font-semibold">
-                <span>{totalForeignSpecialists} Expatriates & Specialists</span>
-                <span className="text-[10px] text-slate-400 font-normal">{totalEmployees} total staff</span>
+              <div className="text-xs text-slate-500 mt-1.5 tabular-nums">
+                {totalForeignSpecialists}{' '}
+                {getUIText(language, { en: 'foreign specialists tracked', ku: 'کارمەندی بیانی تۆمارکراو', ar: 'كادر أجنبي مسجل' })}
               </div>
             </div>
-
-            {/* Small Inline SVG Sparkline (30-Day Historical Trend) */}
-            <div className="mt-2.5 pt-2 border-t border-slate-100">
+            <div className="mt-3 pt-2.5 border-t border-slate-100">
               <SparklineChart
                 data={sparklineData.staff30d}
                 color="purple"
                 height={28}
-                trendLabel={getUIText(language, { en: '30-Day Staff Trend', ku: 'ڕەوتی کارمەندانی ٣٠ ڕۆژ', ar: 'مسار الكوادر ٣٠ يوم' })}
-                formatTooltip={(v) => `${v} Workers`}
+                trendLabel={getUIText(language, { en: '30-Day Workforce', ku: 'کارمەندانی ٣٠ ڕۆژ', ar: 'الكوادر ٣٠ يوم' })}
+                formatTooltip={(v) => `${v}`}
               />
             </div>
           </div>
@@ -696,38 +495,38 @@ export const HoldingOwnerDashboard: React.FC = () => {
 
       case 'pending_pos':
         return (
-          <div key={kpiId} className="bg-amber-50/60 border border-amber-200 rounded-2xl p-5 shadow-2xs hover:shadow-xs transition flex flex-col justify-between">
+          <div
+            key={kpiId}
+            onClick={() => setActiveTab('owner-approvals')}
+            className={`border rounded-xl p-5 transition cursor-pointer flex flex-col justify-between ${
+              pendingPOs.length > 0
+                ? 'bg-amber-50/40 border-amber-200 hover:border-amber-300'
+                : 'bg-white border-slate-200 hover:border-slate-300'
+            }`}
+          >
             <div>
-              <div className="flex items-center justify-between text-amber-800 mb-2">
-                <span className="text-xs font-bold uppercase tracking-wider">Awaiting Owner Approval</span>
-                <div className="w-9 h-9 rounded-xl bg-amber-100 border border-amber-200 flex items-center justify-center text-amber-600">
-                  <Crown className="w-4 h-4" />
-                </div>
+              <div className="flex items-center justify-between text-slate-500 mb-3">
+                <span className="text-xs font-medium">{t('pendingApprovalsKPI')}</span>
+                <Crown className={`w-4 h-4 ${pendingPOs.length > 0 ? 'text-amber-600' : 'text-slate-400'}`} />
               </div>
-              <div className="flex items-baseline justify-between gap-2">
-                <div className="text-2xl font-extrabold text-amber-900">
-                  {pendingPOs.length} POs
-                </div>
-                <div className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-800 border border-emerald-300 shadow-2xs">
-                  <ArrowDownRight className="w-3 h-3 text-emerald-700 stroke-[2.5]" />
-                  <span>-14.0%</span>
-                  <span className="text-emerald-700 font-normal hidden sm:inline">({language === 'ku' ? 'کەمبوونەوەی ڕیز' : language === 'ar' ? 'تسريع الدورة' : 'faster cycle'})</span>
-                </div>
+              <div className="text-2xl font-bold text-slate-900 tabular-nums tracking-tight">
+                {pendingPOs.length}{' '}
+                <span className="text-sm font-medium text-slate-500">
+                  {getUIText(language, { en: 'POs', ku: 'داواکاری', ar: 'طلبات' })}
+                </span>
               </div>
-              <div className="text-xs text-amber-700 mt-2 flex items-center justify-between font-semibold">
-                <span>${pendingPOs.reduce((acc, p) => acc + p.totalAmountUSD, 0).toLocaleString()} Pending Release</span>
-                <span className="text-[10px] text-amber-800/80 font-normal">Fast track</span>
+              <div className="text-xs text-slate-600 mt-1.5 tabular-nums font-medium">
+                ${pendingPOsTotalUSD.toLocaleString()}{' '}
+                {getUIText(language, { en: 'pending value', ku: 'بەهای چاوەڕوانکراو', ar: 'قيمة معلقة' })}
               </div>
             </div>
-
-            {/* Small Inline SVG Sparkline (30-Day Historical Trend) */}
-            <div className="mt-2.5 pt-2 border-t border-amber-200/60">
+            <div className="mt-3 pt-2.5 border-t border-slate-200/60">
               <SparklineChart
                 data={sparklineData.approvals30d}
                 color="amber"
                 height={28}
-                trendLabel={getUIText(language, { en: '30-Day Approvals Trend', ku: 'ڕەوتی چاوەڕوانی ٣٠ ڕۆژ', ar: 'مسار المعلقات ٣٠ يوم' })}
-                formatTooltip={(v) => `${v} POs`}
+                trendLabel={getUIText(language, { en: '30-Day Queue', ku: 'ڕیزی ٣٠ ڕۆژ', ar: 'المعلقات ٣٠ يوم' })}
+                formatTooltip={(v) => `${v}`}
               />
             </div>
           </div>
@@ -735,38 +534,30 @@ export const HoldingOwnerDashboard: React.FC = () => {
 
       case 'active_projects':
         return (
-          <div key={kpiId} className="bg-white border border-slate-200/80 rounded-2xl p-5 shadow-2xs hover:shadow-xs transition flex flex-col justify-between">
+          <div
+            key={kpiId}
+            onClick={() => setActiveTab('companies-projects')}
+            className="bg-white border border-slate-200 hover:border-slate-300 rounded-xl p-5 transition cursor-pointer flex flex-col justify-between"
+          >
             <div>
-              <div className="flex items-center justify-between text-slate-500 mb-2">
-                <span className="text-xs font-bold uppercase tracking-wider">Active Group Projects</span>
-                <div className="w-9 h-9 rounded-xl bg-blue-50 border border-blue-100 flex items-center justify-center text-blue-600">
-                  <Building2 className="w-4 h-4" />
-                </div>
+              <div className="flex items-center justify-between text-slate-500 mb-3">
+                <span className="text-xs font-medium">{t('totalProjectsKPI')}</span>
+                <FolderKanban className="w-4 h-4 text-slate-400" />
               </div>
-              <div className="flex items-baseline justify-between gap-2">
-                <div className="text-2xl font-extrabold text-slate-900">
-                  {filteredProjects.length} Projects
-                </div>
-                <div className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200/80 shadow-2xs">
-                  <ArrowUpRight className="w-3 h-3 text-emerald-600 stroke-[2.5]" />
-                  <span>+16.7%</span>
-                  <span className="text-slate-400 font-normal hidden sm:inline">({language === 'ku' ? 'پڕۆژەی نوێ' : language === 'ar' ? 'مشاريع جديدة' : 'new'})</span>
-                </div>
+              <div className="text-2xl font-bold text-slate-900 tabular-nums tracking-tight">
+                {filteredProjects.length}
               </div>
-              <div className="text-xs text-blue-600 mt-2 flex items-center justify-between font-semibold">
-                <span>100% On-Schedule Across Sites</span>
-                <span className="text-[10px] text-slate-400 font-normal">Active milestones</span>
+              <div className="text-xs text-slate-500 mt-1.5 tabular-nums">
+                {filteredCompanies.length} {t('subsidiaryCompanies')}
               </div>
             </div>
-
-            {/* Small Inline SVG Sparkline (30-Day Historical Trend) */}
-            <div className="mt-2.5 pt-2 border-t border-slate-100">
+            <div className="mt-3 pt-2.5 border-t border-slate-100">
               <SparklineChart
                 data={sparklineData.projects30d}
                 color="blue"
                 height={28}
-                trendLabel={getUIText(language, { en: '30-Day Project Milestones', ku: 'ڕەوتی پڕۆژەی ٣٠ ڕۆژ', ar: 'مسار المشاريع ٣٠ يوم' })}
-                formatTooltip={(v) => `${v} Projects`}
+                trendLabel={getUIText(language, { en: '30-Day Projects', ku: 'پڕۆژەکانی ٣٠ ڕۆژ', ar: 'المشاريع ٣٠ يوم' })}
+                formatTooltip={(v) => `${v}`}
               />
             </div>
           </div>
@@ -774,46 +565,38 @@ export const HoldingOwnerDashboard: React.FC = () => {
 
       case 'iqama_risk':
         return (
-          <div key={kpiId} className="bg-rose-50/50 border border-rose-200 rounded-2xl p-5 shadow-2xs hover:shadow-xs transition flex flex-col justify-between">
+          <div
+            key={kpiId}
+            onClick={() => setActiveTab('foreign-workers')}
+            className={`border rounded-xl p-5 transition cursor-pointer flex flex-col justify-between ${
+              expiringIqamas.length > 0
+                ? 'bg-rose-50/40 border-rose-200 hover:border-rose-300'
+                : 'bg-white border-slate-200 hover:border-slate-300'
+            }`}
+          >
             <div>
-              <div className="flex items-center justify-between text-rose-800 mb-2">
-                <span className="text-xs font-bold uppercase tracking-wider">Expiring Iqamas & Visas</span>
-                <div className="w-9 h-9 rounded-xl bg-rose-100 border border-rose-200 flex items-center justify-center text-rose-600">
-                  <AlertTriangle className="w-4 h-4" />
-                </div>
+              <div className="flex items-center justify-between text-slate-500 mb-3">
+                <span className="text-xs font-medium">
+                  {getUIText(language, { en: 'Expiring Visas & Residency', ku: 'ڤیزا و ئیقامە بەسەرچووەکان', ar: 'الإقامات والتأشيرات المنتهية' })}
+                </span>
+                <AlertTriangle className={`w-4 h-4 ${expiringIqamas.length > 0 ? 'text-rose-600' : 'text-slate-400'}`} />
               </div>
-              <div className="flex items-baseline justify-between gap-2">
-                <div className="text-2xl font-extrabold text-rose-900">
-                  {expiringIqamas.length} Workers
-                </div>
-                {expiringIqamas.length > 0 ? (
-                  <div className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-rose-100 text-rose-800 border border-rose-300 shadow-2xs">
-                    <ArrowUpRight className="w-3 h-3 text-rose-600 stroke-[2.5]" />
-                    <span>+20.0%</span>
-                    <span className="text-rose-700 font-normal hidden sm:inline">({language === 'ku' ? 'هۆشداری نوێکردنەوە' : language === 'ar' ? 'تنبيه إقامات' : 'alert'})</span>
-                  </div>
-                ) : (
-                  <div className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-800 border border-emerald-300 shadow-2xs">
-                    <ArrowDownRight className="w-3 h-3 text-emerald-600 stroke-[2.5]" />
-                    <span>-33.3%</span>
-                    <span className="text-emerald-700 font-normal hidden sm:inline">({language === 'ku' ? 'چارەسەرکرا' : language === 'ar' ? 'تم التجديد' : 'resolved'})</span>
-                  </div>
-                )}
+              <div className="text-2xl font-bold text-slate-900 tabular-nums tracking-tight">
+                {expiringIqamas.length}
               </div>
-              <div className="text-xs text-rose-700 mt-2 flex items-center justify-between font-semibold">
-                <span>{expiringIqamas.length > 0 ? 'Action Required to avoid fines' : 'All residency permits compliant'}</span>
-                <span className="text-[10px] text-rose-800/80 font-normal">HSE & Legal</span>
+              <div className="text-xs text-slate-500 mt-1.5">
+                {expiringIqamas.length > 0
+                  ? getUIText(language, { en: 'Requires renewal follow-up', ku: 'پێویستی بە نوێکردنەوە هەیە', ar: 'تتطلب متابعة التجديد' })
+                  : getUIText(language, { en: 'All permits compliant', ku: 'هەموو مۆڵەتەکان پارێزراون', ar: 'جميع الإقامات سارية' })}
               </div>
             </div>
-
-            {/* Small Inline SVG Sparkline (30-Day Historical Trend) */}
-            <div className="mt-2.5 pt-2 border-t border-rose-200/60">
+            <div className="mt-3 pt-2.5 border-t border-slate-200/60">
               <SparklineChart
                 data={sparklineData.iqamaRisk30d}
                 color="rose"
                 height={28}
-                trendLabel={getUIText(language, { en: '30-Day Iqama Alert Trend', ku: 'ڕەوتی مەترسی ئیقامە', ar: 'مسار الإقامات ٣٠ يوم' })}
-                formatTooltip={(v) => `${v} Expiring`}
+                trendLabel={getUIText(language, { en: '30-Day Compliance', ku: 'چاودێری ٣٠ ڕۆژ', ar: 'الامتثال ٣٠ يوم' })}
+                formatTooltip={(v) => `${v}`}
               />
             </div>
           </div>
@@ -821,38 +604,32 @@ export const HoldingOwnerDashboard: React.FC = () => {
 
       case 'gate_deliveries':
         return (
-          <div key={kpiId} className="bg-white border border-slate-200/80 rounded-2xl p-5 shadow-2xs hover:shadow-xs transition flex flex-col justify-between">
+          <div
+            key={kpiId}
+            onClick={() => setActiveTab('gate-scanner')}
+            className="bg-white border border-slate-200 hover:border-slate-300 rounded-xl p-5 transition cursor-pointer flex flex-col justify-between"
+          >
             <div>
-              <div className="flex items-center justify-between text-slate-500 mb-2">
-                <span className="text-xs font-bold uppercase tracking-wider">Gate Deliveries Scanned</span>
-                <div className="w-9 h-9 rounded-xl bg-emerald-50 border border-emerald-100 flex items-center justify-center text-emerald-600">
-                  <ScanLine className="w-4 h-4" />
-                </div>
+              <div className="flex items-center justify-between text-slate-500 mb-3">
+                <span className="text-xs font-medium">
+                  {getUIText(language, { en: 'Gate Deliveries Logged', ku: 'تۆمارەکانی دەروازە', ar: 'سجلات البوابة' })}
+                </span>
+                <ScanLine className="w-4 h-4 text-slate-400" />
               </div>
-              <div className="flex items-baseline justify-between gap-2">
-                <div className="text-2xl font-extrabold text-slate-900">
-                  {gateLogs.length} Trucks
-                </div>
-                <div className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200/80 shadow-2xs">
-                  <ArrowUpRight className="w-3 h-3 text-emerald-600 stroke-[2.5]" />
-                  <span>+9.4%</span>
-                  <span className="text-slate-400 font-normal hidden sm:inline">({language === 'ku' ? 'هاتووچۆ' : language === 'ar' ? 'تدفق الشاحنات' : 'flow'})</span>
-                </div>
+              <div className="text-2xl font-bold text-slate-900 tabular-nums tracking-tight">
+                {gateLogs.length}
               </div>
-              <div className="text-xs text-emerald-600 mt-2 flex items-center justify-between font-semibold">
-                <span>Triple-notified & synced</span>
-                <span className="text-[10px] text-slate-400 font-normal">Zero unauthorized</span>
+              <div className="text-xs text-slate-500 mt-1.5">
+                {getUIText(language, { en: 'Verified gate entries', ku: 'هاتووچۆی تۆمارکراوی مەیدانی', ar: 'دخول موثق عبر البوابة' })}
               </div>
             </div>
-
-            {/* Small Inline SVG Sparkline (30-Day Historical Trend) */}
-            <div className="mt-2.5 pt-2 border-t border-slate-100">
+            <div className="mt-3 pt-2.5 border-t border-slate-100">
               <SparklineChart
                 data={sparklineData.gateLogs30d}
                 color="emerald"
                 height={28}
-                trendLabel={getUIText(language, { en: '30-Day Gate Logistics', ku: 'ڕەوتی بارهەڵگر (٣٠ ڕۆژ)', ar: 'مسار الشاحنات ٣٠ يوم' })}
-                formatTooltip={(v) => `${v} Trucks`}
+                trendLabel={getUIText(language, { en: '30-Day Gate Traffic', ku: 'هاتووچۆی ٣٠ ڕۆژ', ar: 'حركة البوابة ٣٠ يوم' })}
+                formatTooltip={(v) => `${v}`}
               />
             </div>
           </div>
@@ -863,7 +640,7 @@ export const HoldingOwnerDashboard: React.FC = () => {
     }
   };
 
-  // RBAC Boundary: Holding Top Management & IT Admin (سەرەوە و ڕێکخستنی سیستم) vs Branch Subordinates (خوارەوە)
+  // RBAC Boundary: Holding Top Management & IT Admin vs Branch Subordinates
   const isTopManagement =
     currentUser.role === 'HOLDING_OWNER' ||
     currentUser.role === 'SUPER_ADMIN' ||
@@ -873,1058 +650,477 @@ export const HoldingOwnerDashboard: React.FC = () => {
     return <BranchProjectOperationalPortal />;
   }
 
-  return (
-    <div className="space-y-6 animate-in fade-in duration-300">
-      {/* Autonomous IT Administration Mode Banner (When logged in as Holding IT Admin) */}
-      {currentUser.role === 'IT_ADMIN' && (
-        <div className="bg-gradient-to-r from-indigo-900 via-slate-900 to-blue-900 text-white p-4 sm:p-5 rounded-3xl shadow-lg border border-indigo-400/40 flex items-center justify-between flex-wrap gap-4 animate-in fade-in">
-          <div className="flex items-center gap-3.5">
-            <div className="w-12 h-12 rounded-2xl bg-indigo-500/20 text-indigo-300 border border-indigo-400/30 flex items-center justify-center font-black shrink-0">
-              <Cpu className="w-6 h-6" />
-            </div>
-            <div>
-              <div className="flex items-center gap-2 flex-wrap">
-                <h3 className="font-black text-sm sm:text-base text-white">
-                  {language === 'ku'
-                    ? '🛠️ ناوەندی سەربەخۆی IT و ڕێکخستنەکانی هۆڵدینگ'
-                    : '🛠️ Autonomous Holding IT & System Configuration Mode'}
-                </h3>
-                <span className="text-[10px] font-black px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-400/40">
-                  {language === 'ku' ? 'دەسەڵاتی سەربەخۆ ✓' : 'FULL SETTINGS CONTROL'}
-                </span>
-              </div>
-              <p className="text-xs text-slate-300 mt-0.5">
-                {language === 'ku'
-                  ? 'وەک بەڕێوەبەری IT، دەسەڵاتی تەواوت هەیە بۆ ڕێکخستنی ناو و لۆگۆی هۆڵدینگ، بەکارهێنەران و دەسەڵاتەکان، کۆمپانیاکان، پرینتەر و سینک بەبێ گەڕانەوە بۆ خاوەن سەکۆ.'
-                  : 'Full autonomous control over Holding identity, RBAC users & roles, subsidiaries, cloud/mesh sync, printers, and local system license entry.'}
-              </p>
-            </div>
-          </div>
-          <div className="flex items-center gap-2 flex-wrap">
-            <button
-              onClick={() => setIsUserRolesModalOpen(true)}
-              className="px-3.5 py-2.5 rounded-xl bg-purple-600 hover:bg-purple-500 text-white font-black text-xs transition cursor-pointer shadow-sm flex items-center gap-1.5"
-            >
-              <Users className="w-4 h-4" />
-              <span>{language === 'ku' ? 'بەکارهێنەر و دەسەڵاتەکان (RBAC)' : 'Users & RBAC'}</span>
-            </button>
-            <button
-              onClick={() => setIsHoldingSetupOpen(true)}
-              className="px-3.5 py-2.5 rounded-xl bg-amber-400 hover:bg-amber-300 text-slate-950 font-black text-xs transition cursor-pointer shadow-sm flex items-center gap-1.5"
-            >
-              <Sliders className="w-4 h-4" />
-              <span>{language === 'ku' ? 'ڕێکخستنی هۆڵدینگ و داتا' : 'Holding Setup'}</span>
-            </button>
-            <button
-              onClick={() => setActiveTab('it-systems')}
-              className="px-4 py-2.5 rounded-xl bg-white text-slate-900 hover:bg-slate-100 font-black text-xs transition cursor-pointer shadow-md flex items-center gap-1.5"
-            >
-              <Activity className="w-4 h-4 text-indigo-600" />
-              <span>{language === 'ku' ? 'ناوەندی ڕێکخستنەکانی IT ➔' : 'Open IT Settings Hub ➔'}</span>
-            </button>
-          </div>
-        </div>
-      )}
+  const holdingDisplayName =
+    resolveEntityText(holding, 'name', language) ||
+    getUIText(language, {
+      en: 'Holding Group',
+      ku: 'ناوی هۆڵدینگ دیاری بکە',
+      ar: 'تحديد اسم المجموعة القابضة'
+    });
 
-      {/* Top Banner: Holding Owner Executive Overview */}
-      <div className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-slate-900 via-indigo-950 to-blue-950 border border-indigo-500/20 p-6 sm:p-8 shadow-md">
-        <div className="absolute top-0 right-0 w-96 h-96 bg-blue-500/10 rounded-full blur-3xl pointer-events-none" />
-        {/* Tier 1: Executive Brand & Symmetrical Live Macro Statuses */}
-        <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-6">
-          <div className="flex items-start gap-4">
-            {/* Holding Custom Logo or Platform Emblem */}
+  const remainingTrialDays = getRemainingTrialDays(systemLicense);
+  const licenseStatusText =
+    systemLicense.licenseType === 'LIFETIME'
+      ? getUIText(language, { en: 'Enterprise Lifetime', ku: 'مۆڵەتی هەمیشەیی', ar: 'ترخيص دائم' })
+      : systemLicense.licenseType === 'MONTHLY'
+        ? getUIText(language, { en: 'Active Subscription', ku: 'مۆڵەتی چالاک', ar: 'اشتراك نشط' })
+        : getUIText(language, {
+            en: `Trial (${remainingTrialDays}d left)`,
+            ku: `تاقیکردنەوە (${remainingTrialDays} ڕۆژ ماوە)`,
+            ar: `تجريبي (${remainingTrialDays} يوم)`
+          });
+
+  const isIdentityIncomplete = !holding.name?.trim() || !holding.chairmanName?.trim();
+
+  return (
+    <div className="space-y-6 animate-in fade-in duration-200">
+      {/* Calm Executive Header */}
+      <div className="bg-white border border-slate-200 rounded-2xl p-5 sm:p-6">
+        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+          <div className="flex items-start sm:items-center gap-4 min-w-0">
             {holding.logoUrl ? (
               <img
                 src={holding.logoUrl}
-                alt={holding.name || 'Holding Logo'}
-                className="w-16 h-16 sm:w-20 sm:h-20 rounded-2xl object-cover bg-white/10 p-1.5 border border-white/20 shadow-lg shrink-0"
+                alt={holdingDisplayName}
+                className="w-12 h-12 rounded-xl object-contain bg-slate-50 border border-slate-200 p-1.5 shrink-0"
               />
             ) : (
-              <div className="w-16 h-16 sm:w-20 sm:h-20 rounded-2xl bg-gradient-to-br from-amber-400/20 via-blue-500/20 to-indigo-600/30 border border-white/20 flex flex-col items-center justify-center text-amber-300 shadow-lg shrink-0 backdrop-blur-md">
-                <Crown className="w-7 h-7 text-amber-400" />
-                <span className="text-[9px] font-black tracking-wider text-slate-200 mt-0.5">SAS ERP</span>
+              <div className="w-12 h-12 rounded-xl bg-slate-900 text-white flex items-center justify-center font-bold text-lg shrink-0">
+                {(holding.name || 'S').charAt(0).toUpperCase()}
               </div>
             )}
-
-            <div>
-              {/* System Identifier & Owner Identity Badge */}
-              <div className="flex flex-wrap items-center gap-2 mb-2">
-                <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-blue-500/20 text-blue-200 border border-blue-400/30 text-xs font-bold font-mono">
-                  <span>⚡</span>
-                  <span>{getUIText(language, { en: 'SAS ERP System', ku: 'سیستەمی SAS ERP', ar: 'نظام SAS ERP' })}</span>
-                </span>
-
-                <button
-                  onClick={() => setIsHoldingSetupOpen(true)}
-                  className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border border-amber-500/40 text-xs font-bold transition cursor-pointer"
-                  title={getUIText(language, { en: 'Click to configure holding and owner identity', ku: 'کلیک بکە بۆ گۆڕینی ناوی خاوەنی هۆلدینگ', ar: 'انقر لضبط هوية المالك والهولدينغ' })}
-                >
-                  <Crown className="w-3.5 h-3.5 text-amber-400" />
-                  <span>{t('holdingOwner')}:</span>
-                  <span className="text-white font-extrabold underline decoration-amber-400 decoration-dotted underline-offset-2">
-                    {holding.chairmanName ? holding.chairmanName : t('setOwnerNamePrompt')}
-                  </span>
-                  <Edit3 className="w-3 h-3 text-amber-300" />
-                </button>
-              </div>
-
-              {/* Holding Name Title */}
-              <div className="flex items-center gap-3 flex-wrap">
-                <h1 className="text-2xl sm:text-3xl font-extrabold text-white tracking-tight">
-                  {resolveEntityText(holding, 'name', language) || (
-                    <span className="text-indigo-200 italic font-semibold">
-                      {t('setHoldingNamePrompt')}
-                    </span>
-                  )}
+            <div className="min-w-0">
+              <div className="flex items-center gap-2 flex-wrap">
+                <h1 className="text-xl sm:text-2xl font-bold text-slate-900 tracking-tight truncate">
+                  {holdingDisplayName}
                 </h1>
                 <button
+                  type="button"
                   onClick={() => setIsHoldingSetupOpen(true)}
-                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-white/10 hover:bg-white/20 text-amber-300 border border-white/20 text-xs font-bold transition cursor-pointer backdrop-blur-md"
-                  title={getUIText(language, { en: 'Edit holding name & logo', ku: 'دەستکاریکردنی ناوی هۆلدینگ و لۆگۆ', ar: 'تعديل اسم وشعار الهولدينغ' })}
+                  className="p-1.5 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition cursor-pointer"
+                  title={getUIText(language, {
+                    en: 'Edit Holding Profile',
+                    ku: 'دەستکاریکردنی زانیاری هۆڵدینگ',
+                    ar: 'تعديل بيانات المجموعة'
+                  })}
                 >
                   <Edit3 className="w-3.5 h-3.5" />
-                  <span>{getUIText(language, { en: 'Edit Identity', ku: 'دەستکاری ناو و لۆگۆ', ar: 'تعديل الهوية' })}</span>
                 </button>
               </div>
-
-              <p className="text-xs sm:text-sm text-slate-300 mt-2 max-w-2xl leading-relaxed">
-                <span className="font-bold text-amber-300">
-                  {getUIText(language, { en: 'SAS ERP: ', ku: 'سیستەمی SAS: ', ar: 'منصة SAS: ' })}
+              <div className="flex items-center flex-wrap gap-x-2.5 gap-y-1 text-xs text-slate-500 mt-1">
+                <span>
+                  {holding.chairmanName ||
+                    getUIText(language, {
+                      en: 'Chairman not configured',
+                      ku: 'ناوی خاوەن تۆمار نەکراوە',
+                      ar: 'اسم المالك غير محدد'
+                    })}
                 </span>
-                {t('tagline')} — {getUIText(language, {
-                  en: 'Central executive governance, subsidiary oversight, threshold approvals, and high-level communications.',
-                  ku: 'چاودێری ناوەندی بەڕێوەبردن، دابەشکاریی بودجەی کەرتی، پەسەندکردنی خاوەنی هۆلدینگ، و پەیوەندی بەڕێوەبەرانی گشتی.',
-                  ar: 'الرقابة المركزية للمجموعة، إدارة ميزانيات الشركات، موافقات الرئاسة، والتواصل المباشر.'
-                })}
-              </p>
-            </div>
-          </div>
-
-          {/* Symmetrical Executive Macro Badges on Trailing Side */}
-          <div className="flex items-center gap-2.5 sm:gap-3 flex-wrap shrink-0">
-            <div className="bg-white/5 border border-white/10 rounded-2xl px-3.5 py-2.5 backdrop-blur-md flex items-center gap-2.5">
-              <div className="w-8 h-8 rounded-xl bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 flex items-center justify-center font-bold">
-                <Building2 className="w-4 h-4" />
-              </div>
-              <div>
-                <span className="text-[10px] text-slate-400 font-bold uppercase block">{getUIText(language, { en: 'Subsidiaries', ku: 'کۆمپانیاکان', ar: 'الشركات' })}</span>
-                <span className="font-mono text-sm font-black text-white">{filteredCompanies.length} Active</span>
-              </div>
-            </div>
-
-            <div className="bg-white/5 border border-white/10 rounded-2xl px-3.5 py-2.5 backdrop-blur-md flex items-center gap-2.5">
-              <div className="w-8 h-8 rounded-xl bg-amber-500/20 text-amber-400 border border-amber-500/30 flex items-center justify-center font-bold">
-                <Crown className="w-4 h-4" />
-              </div>
-              <div>
-                <span className="text-[10px] text-slate-400 font-bold uppercase block">{getUIText(language, { en: 'Awaiting Sign', ku: 'چاوەڕوانی واژۆ', ar: 'بانتظار توقيع' })}</span>
-                <span className="font-mono text-sm font-black text-amber-400">{pendingPOs.length} POs</span>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {/* Tier 2: Symmetrical Full-Width Action Deck */}
-        <div className="relative z-10 mt-6 pt-5 border-t border-indigo-900/60 grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-8 gap-2.5">
-          <button
-            onClick={() => setIsHoldingSetupOpen(true)}
-            className="flex items-center justify-center gap-2 px-3 py-2.5 rounded-xl text-xs font-bold bg-amber-400 hover:bg-amber-300 text-slate-950 shadow-md transition transform active:scale-95 cursor-pointer text-center"
-            id="dashboard-holding-identity-btn"
-            title={getUIText(language, { en: 'Setup Holding Name, Logo & Owner', ku: 'ڕێکخستنی ناوی هۆلدینگ، لۆگۆ و خاوەن', ar: 'ضبط اسم وشعار ومالك الهولدينغ' })}
-          >
-            <Crown className="w-4 h-4 text-slate-950 shrink-0" />
-            <span className="truncate">{getUIText(language, { en: 'Holding Identity', ku: 'ناوی هۆلدینگ و خاوەن', ar: 'هوية الهولدينغ' })}</span>
-          </button>
-
-          <button
-            onClick={() => setIsSignatureModalOpen(true)}
-            className="flex items-center justify-center gap-2 px-3 py-2.5 rounded-xl text-xs font-bold bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border border-amber-500/40 shadow-sm transition transform active:scale-95 cursor-pointer text-center"
-            id="dashboard-e-signature-btn"
-            title={getUIText(language, { en: 'Electronic Signature Studio & Official Seal', ku: 'ستۆدیۆی واژۆی ئەلیکترۆنی و مۆری فەرمی', ar: 'استوديو التوقيع الإلكتروني والختم' })}
-          >
-            <PenTool className="w-4 h-4 text-amber-300 shrink-0" />
-            <span className="truncate">{getUIText(language, { en: 'E-Signature Studio', ku: 'واژۆی ئەلیکترۆنی', ar: 'التوقيع الإلكتروني' })}</span>
-          </button>
-
-          <button
-            onClick={() => setIsPrinterModalOpen(true)}
-            className="flex items-center justify-center gap-2 px-3 py-2.5 rounded-xl text-xs font-bold bg-slate-800 hover:bg-slate-700 text-white border border-slate-700 shadow-sm transition transform active:scale-95 cursor-pointer text-center"
-            id="dashboard-printer-station-btn"
-            title={getUIText(language, { en: 'Hardware Printer Station & Output Settings', ku: 'بەستنەوە بە پرینتەر و ڕێکخستنی چاپ', ar: 'محطة الطباعة المادية' })}
-          >
-            <Printer className="w-4 h-4 text-sky-400 shrink-0" />
-            <span className="truncate">{getUIText(language, { en: 'Printer Station', ku: 'بەستنەوە بە پرینتەر', ar: 'محطة الطباعة' })}</span>
-          </button>
-
-          <button
-            onClick={() => setIsConfigModalOpen(true)}
-            className="flex items-center justify-center gap-2 px-3 py-2.5 rounded-xl text-xs font-bold bg-white/10 hover:bg-white/20 text-white border border-white/20 shadow-sm transition transform active:scale-95 cursor-pointer backdrop-blur-md text-center"
-            id="dashboard-customize-btn"
-            title={t('customizeDashboard')}
-          >
-            <Sliders className="w-4 h-4 text-amber-300 shrink-0" />
-            <span className="truncate">{t('customizeDashboard')}</span>
-          </button>
-
-          <button
-            onClick={() => setIsMeetingModalOpen(true)}
-            className="flex items-center justify-center gap-2 px-3 py-2.5 rounded-xl text-xs font-bold bg-blue-600 hover:bg-blue-500 text-white shadow-sm transition transform active:scale-95 cursor-pointer text-center"
-            id="dashboard-start-meeting-btn"
-          >
-            <Video className="w-4 h-4 shrink-0" />
-            <span className="truncate">{t('startInstantMeeting')}</span>
-          </button>
-
-          <button
-            onClick={() => setIsGateScannerOpen(true)}
-            className="flex items-center justify-center gap-2 px-3 py-2.5 rounded-xl text-xs font-bold bg-emerald-600 hover:bg-emerald-500 text-white shadow-sm transition transform active:scale-95 cursor-pointer text-center"
-            id="dashboard-gate-scanner-btn"
-          >
-            <ScanLine className="w-4 h-4 animate-pulse shrink-0" />
-            <span className="truncate">{t('scanReceiptBtn')}</span>
-          </button>
-
-          <button
-            onClick={() => setIsMeshHubOpen(true)}
-            className="flex items-center justify-center gap-2 px-3 py-2.5 rounded-xl text-xs font-bold bg-indigo-600 hover:bg-indigo-500 text-white shadow-sm transition transform active:scale-95 cursor-pointer text-center"
-            id="dashboard-mesh-hub-btn"
-            title={getUIText(language, { en: 'Offline local mesh sync', ku: 'تۆڕی خۆجێیی میش بۆ کاتی نەبوونی ئینتەرنێت', ar: 'شبكة المش المحلية عند انقطاع الإنترنت' })}
-          >
-            <Radio className="w-4 h-4 animate-pulse shrink-0" />
-            <span className="truncate">{t('localMeshNetwork')}</span>
-          </button>
-
-          <button
-            onClick={() => window.print()}
-            className="flex items-center justify-center gap-2 px-3 py-2.5 rounded-xl text-xs font-bold bg-slate-900 hover:bg-slate-800 text-white border border-slate-700 shadow-sm transition transform active:scale-95 cursor-pointer text-center"
-            id="dashboard-export-pdf-btn"
-            title={getUIText(language, { en: 'Export and print dashboard report as PDF', ku: 'داگرتن و پرینتکردنی گشتگیری پێوەرەکان بە PDF', ar: 'تصدير وطباعة التقرير بصيغة PDF' })}
-          >
-            <Printer className="w-4 h-4 text-emerald-400 shrink-0" />
-            <span className="truncate">{getUIText(language, { en: 'Export PDF', ku: 'داگرتنی PDF', ar: 'تصدير PDF' })}</span>
-          </button>
-
-          {/* User Roles & Permissions Button (Holding Owner, Super Admin & IT Admin) */}
-          {checkIsHoldingOrItAdmin(currentUser) && (
-            <button
-              onClick={() => setIsUserRolesModalOpen(true)}
-              className="flex items-center justify-center gap-2 px-3 py-2.5 rounded-xl text-xs font-bold bg-purple-600 hover:bg-purple-500 text-white shadow-md transition transform active:scale-95 cursor-pointer text-center"
-              id="dashboard-user-roles-btn"
-              title={getUIText(language, {
-                en: 'User Roles & Access Permissions Management (RBAC)',
-                ku: 'بەڕێوەبردنی ڕۆڵی بەکارهێنەران و دەسەڵاتەکان',
-                ar: 'إدارة أدوار المستخدمين وصلاحيات الوصول'
-              })}
-            >
-              <Users className="w-4 h-4 text-purple-200 shrink-0" />
-              <span className="truncate">{getUIText(language, { en: 'Roles & RBAC', ku: 'ڕۆڵ و دەسەڵاتەکان', ar: 'الأدوار والصلاحيات' })}</span>
-            </button>
-          )}
-
-          {/* Direct IT & Holding Settings Hub Button */}
-          {checkIsHoldingOrItAdmin(currentUser) && (
-            <button
-              onClick={() => setActiveTab('it-systems')}
-              className="flex items-center justify-center gap-2 px-3 py-2.5 rounded-xl text-xs font-bold bg-teal-600 hover:bg-teal-500 text-white shadow-md transition transform active:scale-95 cursor-pointer text-center"
-              id="dashboard-it-settings-hub-btn"
-              title={getUIText(language, {
-                en: 'Autonomous IT & Holding Settings Center',
-                ku: 'ناوەندی ڕێکخستنەکانی هۆڵدینگ و IT',
-                ar: 'مركز إعدادات الهولدينغ و IT'
-              })}
-            >
-              <Cpu className="w-4 h-4 text-teal-100 shrink-0" />
-              <span className="truncate">{getUIText(language, { en: 'IT & Settings', ku: 'ڕێکخستنی IT', ar: 'إعدادات IT' })}</span>
-            </button>
-          )}
-
-
-
-          {/* Executive Manager File & Word <-> PDF Converter Button */}
-          <button
-            onClick={() => setIsUserManualOpen(true)}
-            className="flex items-center justify-center gap-2 px-3 py-2.5 rounded-xl text-xs font-bold bg-blue-700 hover:bg-blue-600 text-white shadow-md transition transform active:scale-95 cursor-pointer text-center"
-            id="dashboard-user-manual-btn"
-            title={getUIText(language, {
-              en: 'Executive Manager File & Two-Way Word ⇄ PDF Converter',
-              ku: 'فایلی فەرمی بەڕێوەبەر و گۆڕەری دوولایەنەی وۆرد ⇄ پی دی ئێف',
-              ar: 'ملف المدير ومحوّل المستندات المزدوج Word ⇄ PDF'
-            })}
-          >
-            <BookOpen className="w-4 h-4 text-blue-200 shrink-0" />
-            <span className="truncate">{getUIText(language, { en: 'Manager File (Word ⇄ PDF)', ku: 'فایلی بەڕێوەبەر (Word ⇄ PDF)', ar: 'ملف المدير (Word ⇄ PDF)' })}</span>
-          </button>
-        </div>
-
-        {/* Holding Owner Rule Highlight Banner */}
-        <div className="mt-6 pt-4 border-t border-indigo-900/60 flex items-center justify-between text-xs text-amber-200/90 font-medium">
-          <div className="flex items-center gap-3">
-            <ShieldCheck className="w-4 h-4 text-amber-400 shrink-0" />
-            <span>{t('holdingOwnerRuleBanner')}</span>
-          </div>
-          <span className="hidden sm:inline-block text-[11px] text-slate-400 font-mono">
-            {holding.legalRegistration || 'REG-SAS-2026'}
-          </span>
-        </div>
-      </div>
-
-      {/* =========================================================================
-          ULTRA-PROMINENT OFFICIAL SYSTEM USER MANUAL & DIFFERENTIATORS SHOWCASE
-          (پێویستە بە تەواوی دیار بێت لەسەر شاشەی مۆبایل و کۆمپیوتەر بە هەموو داواکارییەکانەوە)
-      ========================================================================= */}
-      <div className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-indigo-950 via-slate-900 to-blue-950 border-2 border-amber-400 p-5 sm:p-7 shadow-xl shadow-blue-950/50 text-white">
-        <div className="absolute top-0 right-0 w-80 h-80 bg-amber-400/10 rounded-full blur-3xl pointer-events-none" />
-        <div className="absolute bottom-0 left-0 w-80 h-80 bg-blue-500/15 rounded-full blur-3xl pointer-events-none" />
-
-        <div className="relative z-10 flex flex-col lg:flex-row lg:items-center justify-between gap-6 pb-5 border-b border-white/10">
-          <div className="flex items-start gap-4">
-            <div className="w-14 h-14 sm:w-16 sm:h-16 rounded-2xl bg-gradient-to-br from-amber-400 to-amber-600 text-slate-950 flex items-center justify-center font-black shadow-lg shadow-amber-400/30 shrink-0">
-              <BookOpen className="w-8 h-8 text-slate-950" />
-            </div>
-            <div>
-              <div className="flex flex-wrap items-center gap-2 mb-2">
-                <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-amber-400 text-slate-950 text-xs font-black shadow-sm">
-                  <span>★</span>
-                  <span>{language === 'ku' ? 'فایلی فەرمی ڕێبەری بەکارهێنان' : language === 'ar' ? 'الملف الرسمي لدليل الاستخدام' : 'Official User Manual & Dossier'}</span>
+                {holding.legalRegNo && (
+                  <>
+                    <span className="text-slate-300">·</span>
+                    <span className="font-mono text-slate-600">{holding.legalRegNo}</span>
+                  </>
+                )}
+                <span className="text-slate-300">·</span>
+                <span className="tabular-nums">
+                  {companies.length} {t('subsidiaryCompanies')}
                 </span>
-                <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-blue-500/30 text-blue-200 border border-blue-400/30 text-[11px] font-mono font-bold">
-                  Word (.docx) ⇄ PDF
-                </span>
-                <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 text-[11px] font-mono font-bold">
-                  3 Languages: کوردی • English • العربية
+                <span className="text-slate-300">·</span>
+                <span className="tabular-nums">
+                  {projects.length} {getUIText(language, { en: 'projects', ku: 'پڕۆژە', ar: 'مشاريع' })}
                 </span>
               </div>
-              <h2 className="text-xl sm:text-2xl font-black text-white tracking-tight">
-                {language === 'ku'
-                  ? '📖 ڕێبەری فەرمی کارپێکردنی SAS4ERP و دۆکیومێنتی "بۆچی ئەم سیستەمە بەکاربێنم؟"'
-                  : language === 'ar'
-                  ? '📖 الدليل الرسمي لتشغيل SAS4ERP وملف "لماذا تختار المنظومة؟" وجدول المقارنة'
-                  : '📖 SAS4ERP Official Operations Manual & "Why Choose SAS4ERP?" Dossier'}
-              </h2>
-              <p className="text-xs sm:text-sm text-slate-300 mt-1 max-w-3xl leading-relaxed">
-                {language === 'ku'
-                  ? 'ڕوونکردنەوەی تەواوی ٢١ بەش بە ٣ زمانی هاوکات لەناو یەک سیستەمدا، دروستبوونی خۆکارانەی ٩ بەش و کەمپ، هاوردەکردنی Drag & Drop بێ دووبارە نووسینەوە، دەستکاریکردنی تێبینی چەسپاو و ژمارەکانی بودجە، و خشتەی بەراوردی سیستەم لەگەڵ SAP، Oracle، و Odoo.'
-                  : language === 'ar'
-                  ? 'شرح شامل لكافة الأقسام الـ ٢١ بثلاث لغات متزامنة، التوليد التلقائي لـ ٩ أقسام وسكن العمال، استيراد السحب والإفلات، تعديل الملاحظات القيادية والميزانيات فورياً، ومقارنة المنظومة مع SAP و Oracle و Odoo.'
-                  : 'Full operations manual for 21 modules in Kurdish, English & Arabic, 0-second auto-provisioning of 9 departments, Drag & Drop zero-retyping ingestion, dynamic budget & sticky note editing, and comparison matrix vs SAP, Oracle, and Odoo.'}
-              </p>
             </div>
           </div>
 
-          {/* Primary 1-Click Action Buttons */}
-          <div className="flex flex-wrap lg:flex-nowrap items-center gap-2.5 shrink-0">
+          <div className="flex items-center gap-2.5 flex-wrap shrink-0">
             <button
-              onClick={handleDownloadManualDocx}
-              disabled={isDownloadingManualDocx}
-              id="banner-download-manual-docx"
-              className="flex-1 sm:flex-initial flex items-center justify-center gap-2 px-4 py-3 rounded-2xl text-xs font-black bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white shadow-lg shadow-blue-600/30 border border-blue-400/40 transition transform active:scale-95 cursor-pointer disabled:opacity-50"
+              type="button"
+              onClick={() => setIsConfigModalOpen(true)}
+              className="inline-flex items-center gap-2 px-3.5 py-2 rounded-lg text-xs font-semibold bg-white hover:bg-slate-50 text-slate-700 border border-slate-200 transition cursor-pointer"
             >
-              <Download className="w-4 h-4 text-blue-200" />
-              <span>{isDownloadingManualDocx ? (language === 'ku' ? 'ئامادەکردن...' : 'Generating...') : (language === 'ku' ? 'داگرتنی ڕێبەر (Word .docx)' : language === 'ar' ? 'تحميل الدليل (Word)' : 'Download Manual (Word)')}</span>
-            </button>
-
-            <button
-              onClick={() => openUserManualPrintView({ includeKurdish: true, includeEnglish: true, includeArabic: true })}
-              id="banner-download-manual-pdf"
-              className="flex-1 sm:flex-initial flex items-center justify-center gap-2 px-4 py-3 rounded-2xl text-xs font-black bg-slate-800 hover:bg-slate-700 text-white shadow-md border border-slate-600 transition transform active:scale-95 cursor-pointer"
-            >
-              <Printer className="w-4 h-4 text-emerald-400" />
-              <span>{language === 'ku' ? 'داگرتنی ڕێبەر (PDF)' : language === 'ar' ? 'تحميل الدليل (PDF)' : 'Print / Save PDF'}</span>
-            </button>
-
-            <button
-              onClick={handleDownloadWhyDocx}
-              disabled={isDownloadingWhyDocx}
-              id="banner-download-why-choose-docx"
-              className="flex-1 sm:flex-initial flex items-center justify-center gap-2 px-4 py-3 rounded-2xl text-xs font-black bg-gradient-to-r from-amber-400 to-amber-500 hover:from-amber-300 hover:to-amber-400 text-slate-950 shadow-lg shadow-amber-500/20 transition transform active:scale-95 cursor-pointer disabled:opacity-50"
-            >
-              <FileText className="w-4 h-4 text-slate-950" />
-              <span>{isDownloadingWhyDocx ? (language === 'ku' ? 'ئامادەکردن...' : 'Generating...') : (language === 'ku' ? 'بۆچی ئەم سیستەمە؟ (Word)' : language === 'ar' ? 'لماذا تختارنا؟ (Word)' : 'Why Choose Dossier')}</span>
-            </button>
-
-
-            <button
-              onClick={() => setIsUserManualOpen(true)}
-              id="banner-open-modal-hub"
-              className="flex-1 sm:flex-initial flex items-center justify-center gap-2 px-4 py-3 rounded-2xl text-xs font-black bg-white/15 hover:bg-white/25 text-white border border-white/25 backdrop-blur-md transition transform active:scale-95 cursor-pointer"
-            >
-              <Eye className="w-4 h-4 text-amber-300" />
-              <span>{language === 'ku' ? 'کردنەوە و خوێندنەوە' : language === 'ar' ? 'فتح واستعراض' : 'Read in App'}</span>
-            </button>
-          </div>
-        </div>
-
-        {/* Quick Feature Badges Row */}
-        <div className="relative z-10 pt-4 grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2.5 text-[11px]">
-          <div className="bg-white/5 border border-white/10 rounded-xl p-2.5 flex items-center gap-2">
-            <Globe className="w-4 h-4 text-blue-400 shrink-0" />
-            <div>
-              <span className="font-bold block text-white">{language === 'ku' ? '٣ زمانی هاوکات' : language === 'ar' ? '٣ لغات متزامنة' : 'Trilingual Simultaneous'}</span>
-              <span className="text-[10px] text-slate-400">{language === 'ku' ? 'لە یەک سیستەمدا' : 'Simultaneous'}</span>
-            </div>
-          </div>
-
-          <div className="bg-white/5 border border-white/10 rounded-xl p-2.5 flex items-center gap-2">
-            <Building2 className="w-4 h-4 text-emerald-400 shrink-0" />
-            <div>
-              <span className="font-bold block text-white">{language === 'ku' ? 'خۆکار ٩ بەش و کەمپ' : language === 'ar' ? 'توليد تلقائي ٩ أقسام' : 'Auto 9 Departments'}</span>
-              <span className="text-[10px] text-slate-400">{language === 'ku' ? 'بۆ هەر کۆمپانیا/پڕۆژەیەک' : 'Auto-Provisioning'}</span>
-            </div>
-          </div>
-
-          <div className="bg-white/5 border border-white/10 rounded-xl p-2.5 flex items-center gap-2">
-            <ArrowRightLeft className="w-4 h-4 text-amber-400 shrink-0" />
-            <div>
-              <span className="font-bold block text-white">{language === 'ku' ? 'گۆڕەری Word ⇄ PDF' : language === 'ar' ? 'محوّل Word ⇄ PDF' : 'Word ⇄ PDF Studio'}</span>
-              <span className="text-[10px] text-slate-400">{language === 'ku' ? 'دوولایەنە لە سیستەمدا' : 'Two-Way Converter'}</span>
-            </div>
-          </div>
-
-          <div className="bg-white/5 border border-white/10 rounded-xl p-2.5 flex items-center gap-2">
-            <Upload className="w-4 h-4 text-indigo-400 shrink-0" />
-            <div>
-              <span className="font-bold block text-white">{language === 'ku' ? 'Drag & Drop دۆکیومێنت' : language === 'ar' ? 'استيراد بالسحب والإفلات' : 'Drag & Drop Ingestion'}</span>
-              <span className="text-[10px] text-slate-400">{language === 'ku' ? 'بێ دووبارە نووسینەوە' : 'Zero Retyping'}</span>
-            </div>
-          </div>
-
-          <div className="bg-white/5 border border-white/10 rounded-xl p-2.5 flex items-center gap-2">
-            <Edit3 className="w-4 h-4 text-rose-400 shrink-0" />
-            <div>
-              <span className="font-bold block text-white">{language === 'ku' ? 'دەستکاری تێبینی و بودجە' : language === 'ar' ? 'تعديل الملاحظات والميزانية' : 'Live Notes & Budgets'}</span>
-              <span className="text-[10px] text-slate-400">{language === 'ku' ? 'دەستکاریکردنی ڕاستەوخۆ' : 'In-Place Dynamic'}</span>
-            </div>
-          </div>
-
-          <div className="bg-white/5 border border-white/10 rounded-xl p-2.5 flex items-center gap-2">
-            <ShieldCheck className="w-4 h-4 text-sky-400 shrink-0" />
-            <div>
-              <span className="font-bold block text-white">{language === 'ku' ? 'بەراورد لەگەڵ SAP/Odoo' : language === 'ar' ? 'مقارنة مع SAP و Odoo' : 'vs SAP, Oracle, Odoo'}</span>
-              <span className="text-[10px] text-slate-400">{language === 'ku' ? 'خشتەی بەراورد' : 'Comparison Matrix'}</span>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* =========================================================================
-          SYSTEM LICENSE KEY & STATUS CARD - WRITINGS CLEARLY VISIBLE UNDER THE KEY
-      ========================================================================= */}
-      <div className="bg-gradient-to-br from-slate-900 via-slate-900 to-indigo-950 border-2 border-amber-400/90 rounded-3xl p-5 sm:p-6 shadow-xl text-white space-y-4">
-        {/* Top Key Header */}
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-white/10 pb-4">
-          <div className="flex items-center gap-3.5">
-            <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-amber-500 to-amber-600 text-slate-950 flex items-center justify-center font-black shadow-lg shadow-amber-500/30 shrink-0">
-              <Key className="w-6 h-6 text-slate-950" />
-            </div>
-            <div>
-              <div className="flex items-center gap-2 flex-wrap">
-                <span className="text-[11px] font-black px-2.5 py-0.5 rounded-full bg-amber-400 text-slate-950 uppercase tracking-wide">
-                  {language === 'ku' ? 'کلیلی لایسنس و مۆڵەت' : 'System License & Node Lock'}
-                </span>
-                <span className="text-xs font-mono font-bold text-amber-300">
-                  {systemLicense?.licenseType === 'VIP_OWNER_GIFT' ? 'VIP Unlimited' : (systemLicense?.licenseType || 'TRIAL_14D')}
-                </span>
-              </div>
-              <h3 className="text-base sm:text-lg font-black text-white mt-1">
-                {language === 'ku'
-                  ? 'نووسین و زانیارییەکانی تایبەت بە کلیلی سیستەم'
-                  : language === 'ar'
-                  ? 'بيانات وتفاصيل مفتاح ترخيص المنظومة'
-                  : 'System License Key Details & Hardware Node Authorization'}
-              </h3>
-            </div>
-          </div>
-
-          <button
-            onClick={() => setIsLicenseModalOpen(true)}
-            className="px-4 py-2.5 rounded-xl bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-slate-950 font-black text-xs flex items-center justify-center gap-2 transition cursor-pointer shadow-md shrink-0 self-start sm:self-auto"
-          >
-            <Key className="w-4 h-4 text-slate-950" />
-            <span>{language === 'ku' ? 'کردنەوەی پەنجەرەی لایسنس' : 'Open License Window'}</span>
-          </button>
-        </div>
-
-        {/* The Key Display */}
-        <div className="p-3.5 rounded-2xl bg-white/5 border border-white/10 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-          <div className="space-y-0.5">
-            <span className="text-[11px] font-bold text-slate-400 block">
-              {language === 'ku' ? 'کۆدی کلیلی چالاککراو (Active Key Code):' : 'Active Key Code:'}
-            </span>
-            <span className="font-mono text-sm sm:text-base font-black text-amber-300 tracking-wider break-all select-all">
-              {systemLicense?.licenseKey || 'TRIAL-14D'}
-            </span>
-          </div>
-
-          <span className={`text-xs font-extrabold px-3 py-1.5 rounded-xl shrink-0 self-start sm:self-auto ${
-            systemLicense?.isPerpetual
-              ? 'bg-amber-400/20 text-amber-300 border border-amber-400/40'
-              : systemLicense?.licenseType === 'EXPIRED'
-              ? 'bg-rose-500/20 text-rose-300 border border-rose-500/40'
-              : 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40'
-          }`}>
-            {systemLicense?.isPerpetual
-              ? (language === 'ku' ? 'هەمیشەیی VIP' : 'Lifetime Perpetual')
-              : systemLicense?.licenseType === 'EXPIRED'
-              ? (language === 'ku' ? 'بەسەرچووە' : 'Expired')
-              : (language === 'ku' ? `${getRemainingTrialDays(systemLicense?.expiresAt || '')} ڕۆژی کارایی ماوە` : `${getRemainingTrialDays(systemLicense?.expiresAt || '')} days remaining`)}
-          </span>
-        </div>
-
-        {/* Writings & Specifications Clearly Visible UNDER the Key */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 pt-1 text-xs">
-          <div className="bg-white/5 border border-white/10 rounded-2xl p-3 space-y-1">
-            <span className="text-[11px] text-slate-400 font-bold block flex items-center gap-1.5">
-              <Building2 className="w-3.5 h-3.5 text-blue-400" />
-              <span>{language === 'ku' ? 'تۆمارکراو بەناوی:' : 'Licensed Holding:'}</span>
-            </span>
-            <span className="font-black text-white text-xs truncate block">
-              {systemLicense?.licensedToHolding || 'Holding Enterprise'}
-            </span>
-            <span className="text-[10px] text-slate-400 block">
-              {systemLicense?.licensedToEmail || 'holding@sas4erp.com'}
-            </span>
-          </div>
-
-          <div className="bg-white/5 border border-white/10 rounded-2xl p-3 space-y-1">
-            <span className="text-[11px] text-slate-400 font-bold block flex items-center gap-1.5">
-              <Clock className="w-3.5 h-3.5 text-amber-400" />
-              <span>{language === 'ku' ? 'نوێکردنەوە و کارایی:' : 'Renewal & Validity:'}</span>
-            </span>
-            <span className="font-black text-amber-300 text-xs block">
-              {systemLicense?.isPerpetual
-                ? (language === 'ku' ? 'مۆڵەتی بەردەوام (VIP)' : 'Perpetual Grant')
-                : (language === 'ku' ? 'نوێکردنەوەی مانگانە / بەردەوام' : 'Monthly Recurring Renewal')}
-            </span>
-            <span className="text-[10px] text-slate-400 block">
-              {systemLicense?.expiresAt ? new Date(systemLicense.expiresAt).toLocaleDateString() : ''}
-            </span>
-          </div>
-
-          <div className="bg-white/5 border border-white/10 rounded-2xl p-3 space-y-1">
-            <span className="text-[11px] text-slate-400 font-bold block flex items-center gap-1.5">
-              <Cpu className="w-3.5 h-3.5 text-indigo-400" />
-              <span>{language === 'ku' ? 'ناسنامەی ئامێر (Node Lock):' : 'Hardware Node Lock:'}</span>
-            </span>
-            <span className="font-mono font-bold text-amber-300 text-[11px] truncate block select-all">
-              {systemLicense?.hardwareFingerprint || 'SAS-NODE-LOCKED'}
-            </span>
-            <span className="text-[10px] text-slate-400 block">
-              {language === 'ku' ? 'پارێزراو لەسەر ئەم ئامێرە' : 'Bound to this workstation'}
-            </span>
-          </div>
-
-          <div className="bg-white/5 border border-white/10 rounded-2xl p-3 space-y-1">
-            <span className="text-[11px] text-slate-400 font-bold block flex items-center gap-1.5">
-              <ShieldCheck className="w-3.5 h-3.5 text-emerald-400" />
-              <span>{language === 'ku' ? 'مۆدیوڵە کاراکراوەکان:' : 'Unlocked Scope:'}</span>
-            </span>
-            <span className="font-black text-emerald-400 text-xs block">
-              {language === 'ku' ? 'تەواوی ٢١ بەش و ئەپەکان' : 'All 21 Enterprise Modules'}
-            </span>
-            <span className="text-[10px] text-slate-400 block">
-              {language === 'ku' ? 'پڕۆژە و بەڵگەنامەی بێسنوور' : 'Unlimited sites & Word/PDF'}
-            </span>
-          </div>
-        </div>
-
-        {/* Clear Policy Explanation Under the Key */}
-        <div className="p-3 rounded-2xl bg-amber-500/10 border border-amber-400/30 text-[11px] text-amber-200/90 leading-relaxed">
-          {language === 'ku'
-            ? '📌 نووسین و مەرجەکانی لایسنس: ئەم کلیلە مۆڵەتی فەرمی کارپێکردنی SAS4ERP دەبەخشێت. بەپێی یاسای سیستم، لایسنسەکان مانگانە نوێ دەکرێنەوە تا دڵنیایی لە کارکردنی بەردەوام و پاراستنی مافی سەروەری بدرێت. بۆ نوێکردنەوەی مانگانە یان گۆڕینی کلیل، ناسنامەی ئامێرەکەت بنێرە بۆ خاوەنی سەکۆ.'
-            : language === 'ar'
-            ? '📌 شروط وتفاصيل المفتاح: يمنح هذا المفتاح الترخيص الرسمي لتشغيل SAS4ERP. يتم تجديد التراخيص شهرياً لضمان استمرارية الخدمة وأمان البيانات. للتجديد الشهري، يرجى إرسال معرف العتاد إلى مالك المنصة.'
-            : '📌 License Key Terms & Policy: This cryptographic key authorizes full operational access. Licenses are renewed on a recurring monthly cycle bound to your workstation node ID to ensure zero-trust compliance.'}
-        </div>
-      </div>
-
-      <div className="bg-white border border-slate-200/90 rounded-3xl p-5 shadow-xs space-y-4">
-        <div className="flex items-center justify-between border-b border-slate-100 pb-3 flex-wrap gap-2">
-          <div className="flex items-center gap-2.5">
-            <div className="w-9 h-9 rounded-2xl bg-blue-50 border border-blue-200 text-blue-700 flex items-center justify-center font-bold">
-              <LayoutGrid className="w-4 h-4" />
-            </div>
-            <div>
-              <h3 className="text-sm font-extrabold text-slate-900 flex items-center gap-2">
-                <span>{language === 'ku' ? 'بەشەکانی سیستەم (مۆدیوڵە کارگێڕی و مەیدانییەکان)' : language === 'ar' ? 'أقسام النظام الشاملة' : 'Enterprise Modules Directory'}</span>
-                <span className="text-[10px] px-2 py-0.5 rounded-full bg-blue-100 text-blue-800 font-bold font-mono">
-                  All Modules
-                </span>
-              </h3>
-              <p className="text-[11px] text-slate-500">
-                {language === 'ku'
-                  ? 'دەستگەیشتنی خێرا بە سەرجەم بەشەکان بۆ هەردوو دیتنی مۆبایل و کۆمپیوتەر'
-                  : 'Instant one-tap navigation to every system module across mobile and desktop.'}
-              </p>
-            </div>
-          </div>
-          <span className="text-[11px] text-slate-400 font-mono hidden sm:inline">
-            {visibleModuleCards.length} {language === 'ku' ? 'بەشی ڕێگەپێدراو بۆ ئەم ڕۆڵە' : 'Accessible Modules'}
-          </span>
-        </div>
-
-        {/* Responsive Grid for Filtered System Sections */}
-        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-2.5">
-          {visibleModuleCards.map((m) => {
-            const Icon = m.icon;
-            return (
-              <button
-                key={m.id}
-                onClick={m.onClick}
-                id={`dashboard-nav-${m.id}`}
-                className="p-3 rounded-2xl bg-slate-50 hover:bg-indigo-50/80 border border-slate-200/80 hover:border-indigo-300 text-left transition flex flex-col justify-between group cursor-pointer shadow-2xs hover:shadow-xs"
-              >
-                <div className="flex items-center justify-between mb-2">
-                  <div className="w-8 h-8 rounded-xl bg-indigo-100 text-indigo-700 flex items-center justify-center group-hover:scale-105 transition-transform">
-                    <Icon className="w-4 h-4" />
-                  </div>
-                  <span className="text-[9px] px-1.5 py-0.5 rounded bg-slate-200/80 text-slate-700 font-bold border border-slate-300 font-mono">
-                    {m.badge}
-                  </span>
-                </div>
-                <div>
-                  <span className="text-xs font-bold text-slate-800 block truncate group-hover:text-indigo-700">
-                    {m.title}
-                  </span>
-                  <span className="text-[10px] text-slate-400 block truncate">
-                    {m.subtitle}
-                  </span>
-                </div>
-              </button>
-            );
-          })}
-        </div>
-      </div>
-
-      {/* Welcome Card if Holding Name or Owner Name Not Configured */}
-      {(!holding.name || !holding.chairmanName) && (
-        <div className="bg-gradient-to-r from-amber-500/10 via-blue-500/10 to-purple-500/10 border border-amber-400/40 rounded-3xl p-5 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 shadow-xs animate-in fade-in">
-          <div className="flex items-center gap-3.5">
-            <div className="w-11 h-11 rounded-2xl bg-amber-500/20 text-amber-400 flex items-center justify-center shrink-0 border border-amber-400/30">
-              <Crown className="w-6 h-6 text-amber-400" />
-            </div>
-            <div>
-              <h4 className="text-sm font-extrabold text-slate-900 dark:text-white flex items-center gap-2">
-                <span>{getUIText(language, { en: 'Welcome to SAS ERP Platform', ku: 'بەخێربێن بۆ سیستەمی SAS', ar: 'مرحباً بكم في نظام SAS ERP' })}</span>
-                <span className="text-[10px] px-2 py-0.5 rounded-full bg-amber-100 text-amber-900 font-bold">
-                  {getUIText(language, { en: 'Identity Setup Required', ku: 'پێویستی بە نووسینی ناوە', ar: 'مطلوب ضبط الهوية' })}
-                </span>
-              </h4>
-              <p className="text-xs text-slate-600 dark:text-slate-300 mt-1 leading-relaxed">
+              <Sliders className="w-3.5 h-3.5 text-slate-500" />
+              <span>
                 {getUIText(language, {
-                  en: 'SAS ERP is the enterprise management platform. Every holding can personalize their official holding name, upload their custom logo, and register the Chairman name for all official reports and stamps.',
-                  ku: 'سیستەمی SAS ناوی پلاتفۆرمەکەیە. هەموو هۆلدینگێک دەتوانێت ناوی فەرمی هۆلدینگ، لۆگۆ، و ناوی بەڕێز خاوەنی هۆلدینگ دابنێن بۆ ئەوەی لە سەرجەم راپۆرتەکان و مۆرە فەرمییەکاندا دەربکەوێت.',
-                  ar: 'نظام SAS هو المحرك الأساسي. يمكن لكل مجموعة قابضة تخصيص اسمها الرسمي وشعارها واسم المالك ليظهر في كافة التقارير والوثائق الرسمية.'
+                  en: 'Customize Layout',
+                  ku: 'ڕێکخستنی داشبۆرد',
+                  ar: 'تخصيص اللوحة'
+                })}
+              </span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setActiveTab(pendingPOs.length > 0 ? 'owner-approvals' : 'companies-projects')}
+              className="inline-flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-semibold bg-slate-900 hover:bg-slate-800 text-white transition cursor-pointer"
+            >
+              {pendingPOs.length > 0 ? (
+                <>
+                  <Crown className="w-3.5 h-3.5 text-amber-400" />
+                  <span>
+                    {getUIText(language, {
+                      en: 'Review Approvals',
+                      ku: 'پەسەندکردنەکان',
+                      ar: 'مراجعة الموافقات'
+                    })}
+                  </span>
+                  <span className="px-1.5 py-0.5 rounded bg-white/15 text-white font-mono text-[11px] tabular-nums">
+                    {pendingPOs.length}
+                  </span>
+                </>
+              ) : (
+                <>
+                  <Building2 className="w-3.5 h-3.5" />
+                  <span>
+                    {getUIText(language, {
+                      en: 'Companies & Projects',
+                      ku: 'کۆمپانیا و پڕۆژەکان',
+                      ar: 'الشركات والمشاريع'
+                    })}
+                  </span>
+                </>
+              )}
+            </button>
+          </div>
+        </div>
+      </div>
+
+      {/* Calm IT Admin Quick Bar (Only visible when logged in as Holding IT_ADMIN) */}
+      {currentUser.role === 'IT_ADMIN' && (
+        <div className="bg-white border border-slate-200 rounded-xl px-4 py-3.5 flex flex-col md:flex-row md:items-center justify-between gap-3">
+          <div className="flex items-center gap-3 min-w-0">
+            <div className="w-9 h-9 rounded-lg bg-slate-100 text-slate-700 flex items-center justify-center shrink-0">
+              <Cpu className="w-4 h-4" />
+            </div>
+            <div className="min-w-0">
+              <div className="text-xs font-bold text-slate-900">
+                {getUIText(language, {
+                  en: 'Holding IT Administration',
+                  ku: 'باری بەڕێوەبردنی سەربەخۆی IT و ڕێکخستنەکان',
+                  ar: 'وضع إدارة تقنية المعلومات المستقل'
+                })}
+              </div>
+              <p className="text-xs text-slate-500 truncate">
+                {getUIText(language, {
+                  en: 'Manage users, holding identity, subsidiaries, sync nodes, and local license keys independently.',
+                  ku: 'بەڕێوەبردنی تەواوی بەکارهێنەران، ناسنامەی هۆڵدینگ، کۆمپانیاکان، پرینتەر و کلیلی مۆڵەت بە سەربەخۆیی.',
+                  ar: 'إدارة المستخدمين والهوية والشركات والمزامنة ومفاتيح الترخيص باستقلالية تامة.'
                 })}
               </p>
             </div>
           </div>
+          <div className="flex items-center gap-2 flex-wrap shrink-0">
+            <button
+              type="button"
+              onClick={() => setIsUserRolesModalOpen(true)}
+              className="px-3 py-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-800 text-xs font-semibold transition cursor-pointer inline-flex items-center gap-1.5"
+            >
+              <Users className="w-3.5 h-3.5" />
+              <span>{getUIText(language, { en: 'Users & RBAC', ku: 'بەکارهێنەران (RBAC)', ar: 'المستخدمون' })}</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => setIsHoldingSetupOpen(true)}
+              className="px-3 py-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-800 text-xs font-semibold transition cursor-pointer inline-flex items-center gap-1.5"
+            >
+              <Sliders className="w-3.5 h-3.5" />
+              <span>{getUIText(language, { en: 'Holding Setup', ku: 'ڕێکخستنی هۆڵدینگ', ar: 'إعداد المجموعة' })}</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => setActiveTab('it-systems')}
+              className="px-3 py-1.5 rounded-lg bg-slate-900 hover:bg-slate-800 text-white text-xs font-semibold transition cursor-pointer inline-flex items-center gap-1.5"
+            >
+              <Activity className="w-3.5 h-3.5" />
+              <span>{getUIText(language, { en: 'IT Settings Hub', ku: 'ناوەندی IT', ar: 'مركز IT' })}</span>
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Subtle Identity Setup Prompt (Only when holding identity fields are blank) */}
+      {isIdentityIncomplete && (
+        <div className="bg-amber-50/70 border border-amber-200 rounded-xl px-4 py-3 flex items-center justify-between gap-3 flex-wrap">
+          <div className="flex items-center gap-2.5 text-xs text-amber-900">
+            <Edit3 className="w-4 h-4 text-amber-700 shrink-0" />
+            <span>
+              {getUIText(language, {
+                en: 'Complete your Holding name, chairman profile, and corporate logo to brand reports and vouchers.',
+                ku: 'ناوی هۆڵدینگ، ناوی خاوەن و لۆگۆ تۆمار بکە بۆ ئەوەی لەسەر پسوولە و ڕاپۆرتە فەرمییەکان دەربکەوێت.',
+                ar: 'أكمل اسم المجموعة القابضة واسم المالك والشعار لظهورها على التقارير والسندات الرسمية.'
+              })}
+            </span>
+          </div>
           <button
+            type="button"
             onClick={() => setIsHoldingSetupOpen(true)}
-            className="px-5 py-2.5 rounded-xl bg-amber-400 hover:bg-amber-300 text-slate-950 text-xs font-bold shadow-md cursor-pointer transition shrink-0 flex items-center gap-2"
+            className="px-3 py-1.5 rounded-lg bg-amber-900 hover:bg-amber-800 text-white text-xs font-semibold transition cursor-pointer"
           >
-            <Edit3 className="w-4 h-4" />
-            <span>{getUIText(language, { en: 'Set Holding & Owner Identity', ku: 'نووسینی ناوی هۆلدینگ و خاوەن', ar: 'ضبط اسم الهولدينغ والمالك' })}</span>
+            {getUIText(language, { en: 'Complete Setup', ku: 'تەواوکردنی زانیاری', ar: 'إكمال الإعداد' })}
           </button>
         </div>
       )}
 
-      {/* Interactive Controls & Filters Strip */}
-      <div className="bg-white border border-slate-200/80 rounded-2xl p-4 shadow-2xs flex flex-col lg:flex-row lg:items-center justify-between gap-4">
-        
-        {/* Executive Focus Presets */}
-        <div className="flex items-center gap-1.5 overflow-x-auto pb-1 lg:pb-0">
-          <span className="text-xs font-bold uppercase tracking-wider text-slate-400 mr-2 shrink-0">
-            {t('executiveFocus')}:
-          </span>
-          <button
-            type="button"
-            onClick={() => handlePresetSelect('ALL')}
-            className={`px-3 py-1.5 rounded-xl text-xs font-bold transition cursor-pointer shrink-0 ${
-              settings.preset === 'ALL'
-                ? 'bg-blue-600 text-white shadow-2xs'
-                : 'bg-slate-100 hover:bg-slate-200 text-slate-700'
-            }`}
-          >
-            {t('presetAll')}
-          </button>
-          <button
-            type="button"
-            onClick={() => handlePresetSelect('FINANCE')}
-            className={`px-3 py-1.5 rounded-xl text-xs font-bold transition cursor-pointer shrink-0 ${
-              settings.preset === 'FINANCE'
-                ? 'bg-blue-600 text-white shadow-2xs'
-                : 'bg-slate-100 hover:bg-slate-200 text-slate-700'
-            }`}
-          >
-            {t('presetFinance')}
-          </button>
-          <button
-            type="button"
-            onClick={() => handlePresetSelect('PROJECTS')}
-            className={`px-3 py-1.5 rounded-xl text-xs font-bold transition cursor-pointer shrink-0 ${
-              settings.preset === 'PROJECTS'
-                ? 'bg-blue-600 text-white shadow-2xs'
-                : 'bg-slate-100 hover:bg-slate-200 text-slate-700'
-            }`}
-          >
-            {t('presetProjects')}
-          </button>
-          <button
-            type="button"
-            onClick={() => handlePresetSelect('RISK')}
-            className={`px-3 py-1.5 rounded-xl text-xs font-bold transition cursor-pointer shrink-0 ${
-              settings.preset === 'RISK'
-                ? 'bg-blue-600 text-white shadow-2xs'
-                : 'bg-slate-100 hover:bg-slate-200 text-slate-700'
-            }`}
-          >
-            {t('presetRisk')}
-          </button>
+      {/* Segmented Focus Presets, Company Scope & Currency Switcher */}
+      <div className="bg-white border border-slate-200 rounded-xl p-2.5 flex flex-col md:flex-row md:items-center justify-between gap-3">
+        <div className="inline-flex items-center bg-slate-100 p-1 rounded-lg flex-wrap gap-0.5">
+          {(
+            [
+              { id: 'ALL', label: getUIText(language, { en: 'Overview', ku: 'پوختەی گشتی', ar: 'نظرة عامة' }) },
+              { id: 'FINANCE', label: getUIText(language, { en: 'Finance', ku: 'دارایی', ar: 'المالية' }) },
+              { id: 'PROJECTS', label: getUIText(language, { en: 'Projects', ku: 'پڕۆژەکان', ar: 'المشاريع' }) },
+              { id: 'RISK', label: getUIText(language, { en: 'Risk & Compliance', ku: 'مەترسی و کۆنترۆڵ', ar: 'المخاطر والامتثال' }) }
+            ] as { id: ExecutiveFocusPreset; label: string }[]
+          ).map((preset) => (
+            <button
+              key={preset.id}
+              type="button"
+              onClick={() => handlePresetSelect(preset.id)}
+              className={`px-3 py-1.5 rounded-md text-xs font-semibold transition cursor-pointer ${
+                settings.preset === preset.id
+                  ? 'bg-white text-slate-900 shadow-2xs'
+                  : 'text-slate-600 hover:text-slate-900'
+              }`}
+            >
+              {preset.label}
+            </button>
+          ))}
         </div>
 
-        {/* Subsidiary Scope Filter & Currency Switcher */}
-        <div className="flex flex-wrap items-center gap-3">
-          <div className="flex items-center gap-2">
-            <Filter className="w-3.5 h-3.5 text-slate-400" />
-            <select
-              value={settings.selectedCompanyFilter}
-              onChange={(e) => setSettings(prev => ({ ...prev, selectedCompanyFilter: e.target.value }))}
-              className="bg-slate-50 border border-slate-200 text-slate-800 rounded-xl px-3 py-1.5 text-xs font-bold focus:outline-none focus:ring-1 focus:ring-blue-500 cursor-pointer"
-            >
-              <option value="ALL">
-                {getUIText(language, {
-                  en: `All Holding Companies (${companies.length})`,
-                  ku: `سەرجەم کۆمپانیاکانی هۆلدینگ (${companies.length})`,
-                  ar: `كافة شركات المجموعة (${companies.length})`
-                })}
+        <div className="flex items-center gap-2.5 flex-wrap">
+          <select
+            value={settings.selectedCompanyFilter}
+            onChange={(e) => setSettings(prev => ({ ...prev, selectedCompanyFilter: e.target.value }))}
+            aria-label={getUIText(language, { en: 'Filter by company', ku: 'فلتەری کۆمپانیا', ar: 'تصفية حسب الشركة' })}
+            className="text-xs font-medium text-slate-700 bg-white border border-slate-200 hover:border-slate-300 rounded-lg px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-slate-900/10 cursor-pointer"
+          >
+            <option value="ALL">
+              {getUIText(language, { en: 'All Subsidiaries', ku: 'هەموو کۆمپانیاکان', ar: 'جميع الشركات التابعة' })}
+            </option>
+            {companies.map(c => (
+              <option key={c.id} value={c.id}>
+                {c.code} — {resolveEntityText(c, 'name', language)}
               </option>
-              {companies.map(c => (
-                <option key={c.id} value={c.id}>
-                  {c.code} — {resolveEntityText(c, 'name', language)}
-                </option>
-              ))}
-            </select>
-          </div>
+            ))}
+          </select>
 
-          <div className="flex items-center bg-slate-100 p-0.5 rounded-xl border border-slate-200 text-xs font-bold">
+          <div className="inline-flex items-center bg-slate-100 p-0.5 rounded-lg text-xs font-semibold">
             <button
               type="button"
               onClick={() => setSettings(prev => ({ ...prev, currencyDisplay: 'USD' }))}
-              className={`px-2.5 py-1 rounded-lg transition cursor-pointer ${
-                settings.currencyDisplay === 'USD' ? 'bg-white text-blue-600 shadow-2xs' : 'text-slate-500'
+              className={`px-2.5 py-1 rounded-md transition cursor-pointer ${
+                settings.currencyDisplay === 'USD' ? 'bg-white text-slate-900 shadow-2xs' : 'text-slate-500 hover:text-slate-800'
               }`}
             >
-              $ USD
+              USD
             </button>
             <button
               type="button"
               onClick={() => setSettings(prev => ({ ...prev, currencyDisplay: 'IQD' }))}
-              className={`px-2.5 py-1 rounded-lg transition cursor-pointer ${
-                settings.currencyDisplay === 'IQD' ? 'bg-white text-blue-600 shadow-2xs' : 'text-slate-500'
+              className={`px-2.5 py-1 rounded-md transition cursor-pointer ${
+                settings.currencyDisplay === 'IQD' ? 'bg-white text-slate-900 shadow-2xs' : 'text-slate-500 hover:text-slate-800'
               }`}
             >
               IQD
             </button>
           </div>
         </div>
-
       </div>
 
-      {/* ML Sentinel Anomaly Alert Banner (Procurement, Financial, Attendance) */}
+      {/* Calm Critical Anomaly Alert Banner (Only when critical alerts exist) */}
       {criticalMlAlerts.length > 0 && (
-        <div className="bg-gradient-to-r from-purple-950 via-slate-900 to-indigo-950 border-2 border-purple-400 rounded-3xl p-4 sm:p-5 shadow-lg text-white flex flex-col md:flex-row items-start md:items-center justify-between gap-4 animate-in fade-in">
-          <div className="flex items-start gap-3.5">
-            <div className="w-10 h-10 rounded-2xl bg-purple-600 text-white flex items-center justify-center shrink-0 shadow-md shadow-purple-500/20">
-              <BrainCircuit className="w-5 h-5 text-white animate-pulse" />
+        <div className="bg-rose-50/70 border border-rose-200 rounded-xl p-4 flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
+          <div className="flex items-start gap-3">
+            <div className="w-9 h-9 rounded-lg bg-rose-100 text-rose-700 flex items-center justify-center shrink-0">
+              <BrainCircuit className="w-4 h-4" />
             </div>
             <div>
-              <div className="flex items-center gap-2">
-                <span className="text-[10px] px-2 py-0.5 rounded-full bg-purple-500/30 text-purple-200 border border-purple-400/30 font-black uppercase tracking-wider">
-                  {t('mlSentinelAlert')}
-                </span>
-                <span className="text-xs font-mono font-bold text-rose-300">
-                  {criticalMlAlerts.length} {getUIText(language, { en: 'Critical Risks Detected', ku: 'مەترسی نائاسایی دەستنیشانکراو', ar: 'مخاطر شذوذ محددة' })}
+              <div className="flex items-center gap-2 flex-wrap">
+                <h3 className="text-sm font-bold text-slate-900">{t('mlAlertUrgentTitle')}</h3>
+                <span className="text-xs font-semibold text-rose-700 tabular-nums">
+                  ({criticalMlAlerts.length}{' '}
+                  {getUIText(language, { en: 'critical', ku: 'مەترسی گرنگ', ar: 'حرج' })})
                 </span>
               </div>
-              <h3 className="text-sm sm:text-base font-black text-white mt-1">
-                {t('mlAlertUrgentTitle')}
-              </h3>
-              <p className="text-xs text-slate-300 mt-0.5 max-w-3xl leading-relaxed">
+              <p className="text-xs text-slate-600 mt-0.5 max-w-3xl leading-relaxed">
                 {t('mlAlertUrgentDesc')}
               </p>
-              <div className="flex flex-wrap gap-2 mt-2">
-                {criticalMlAlerts.map(ca => (
-                  <span key={ca.id} className="text-[11px] font-bold bg-slate-800 text-purple-200 px-2.5 py-1 rounded-lg border border-purple-500/40 shadow-2xs">
-                    {resolveEntityText(ca, 'title', language)} (Score: {ca.score})
-                  </span>
-                ))}
-              </div>
             </div>
           </div>
 
-          <div className="flex items-center gap-2 shrink-0">
-            <button
-              onClick={() => setActiveTab('ml-anomaly-detection')}
-              className="px-4 py-2.5 rounded-xl text-xs font-black bg-purple-600 hover:bg-purple-500 text-white shadow-md transition cursor-pointer flex items-center gap-1.5"
-            >
-              <span>{t('inspectRisks')}</span>
-              <ChevronRight className="w-3.5 h-3.5" />
-            </button>
-          </div>
+          <button
+            type="button"
+            onClick={() => setActiveTab('ml-anomaly-detection')}
+            className="px-3.5 py-2 rounded-lg text-xs font-semibold bg-rose-700 hover:bg-rose-800 text-white transition cursor-pointer inline-flex items-center gap-1.5 shrink-0"
+          >
+            <span>{t('inspectRisks')}</span>
+            <ChevronRight className="w-3.5 h-3.5" />
+          </button>
         </div>
       )}
 
-      {/* Top-Level KPI Summary Card Row Complementing Recharts Visualizations */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        
-        {/* Card 1: Total Projects */}
-        <div
-          onClick={() => setActiveTab('companies-projects')}
-          className="bg-white border border-slate-200/90 hover:border-blue-300 rounded-3xl p-5 shadow-xs transition cursor-pointer group flex flex-col justify-between"
-        >
-          <div>
-            <div className="flex items-center justify-between text-slate-500 mb-2">
-              <span className="text-xs font-bold uppercase tracking-wider text-slate-500">
-                {t('totalProjectsKPI')}
-              </span>
-              <div className="w-10 h-10 rounded-2xl bg-blue-50 border border-blue-100 flex items-center justify-center text-blue-600 group-hover:bg-blue-600 group-hover:text-white transition">
-                <FolderKanban className="w-5 h-5" />
+      {/* Unified 4-Column Executive KPI Strip (Single Source of Truth — Zero Duplication) */}
+      {settings.preset === 'ALL' ? (
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+          {/* KPI 1: Consolidated Budget & Portfolio */}
+          <div
+            onClick={() => setActiveTab('companies-projects')}
+            className="bg-white border border-slate-200 hover:border-slate-300 rounded-xl p-5 transition cursor-pointer group flex flex-col justify-between"
+          >
+            <div>
+              <div className="flex items-center justify-between text-slate-500 mb-3">
+                <span className="text-xs font-medium">{t('totalBudget')}</span>
+                <Building2 className="w-4 h-4 text-slate-400 group-hover:text-slate-700 transition" />
+              </div>
+              <div className="text-2xl font-bold text-slate-900 tabular-nums tracking-tight">
+                {formatCurrency(totalHoldingBudget)}
+              </div>
+              <div className="text-xs text-slate-500 mt-1.5 tabular-nums">
+                {filteredCompanies.length} {t('subsidiaryCompanies')} · {filteredProjects.length}{' '}
+                {getUIText(language, { en: 'projects', ku: 'پڕۆژە', ar: 'مشاريع' })}
               </div>
             </div>
-            <div className="flex items-baseline justify-between gap-2">
-              <div className="text-2xl sm:text-3xl font-black text-slate-900 font-mono">
-                {filteredProjects.length}
-              </div>
-              <div className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-bold bg-emerald-50 text-emerald-700 border border-emerald-200/80 shadow-2xs">
-                <ArrowUpRight className="w-3.5 h-3.5 text-emerald-600 stroke-[2.5]" />
-                <span>+14.3%</span>
-                <span className="text-[10px] text-emerald-600/80 font-normal">({language === 'ku' ? 'vs پێشوو' : language === 'ar' ? 'vs السابق' : 'vs prev'})</span>
-              </div>
-            </div>
-            <div className="text-xs text-blue-600 mt-2 font-bold flex items-center gap-1">
-              <span>{filteredCompanies.length} {t('subsidiaryCompanies')}</span>
-            </div>
-
-            {/* Small Inline SVG Sparkline (30-Day Historical Trend) */}
             <div className="mt-3 pt-2.5 border-t border-slate-100">
               <SparklineChart
-                data={sparklineData.projects30d}
+                data={sparklineData.budget30d}
                 color="blue"
-                height={34}
-                trendLabel={getUIText(language, { en: '30-Day Project Trend', ku: 'ڕەوتی ٣٠ ڕۆژ', ar: 'مسار ٣٠ يوم' })}
-                formatTooltip={(v) => `${v} ${getUIText(language, { en: 'Projects', ku: 'پڕۆژە', ar: 'مشاريع' })}`}
+                height={28}
+                trendLabel={getUIText(language, { en: '30-Day Budget', ku: 'ڕەوتی بودجەی ٣٠ ڕۆژ', ar: 'مسار الميزانية ٣٠ يوم' })}
+                formatTooltip={(v) => formatCurrency(v)}
               />
             </div>
           </div>
-          <div className="pt-3 border-t border-slate-100 mt-2 flex items-center justify-between text-[11px] text-slate-400">
-            <span>{t('underDirectSupervision')}</span>
-            <ChevronRight className="w-3.5 h-3.5 text-slate-400 group-hover:translate-x-[-2px] transition" />
-          </div>
-        </div>
 
-        {/* Card 2: Active Budget Utilization (With 90% Threshold Warning) */}
-        <div className={`rounded-3xl p-5 shadow-xs transition flex flex-col justify-between border ${
-          highBurnProjects.length > 0 
-            ? 'bg-rose-50/40 border-rose-300 shadow-rose-500/10' 
-            : 'bg-white border-slate-200/90'
-        }`}>
-          <div>
-            <div className="flex items-center justify-between text-slate-500 mb-2">
-              <span className="text-xs font-bold uppercase tracking-wider text-slate-500">
-                {t('budgetUtilizationKPI')}
-              </span>
-              <div className={`w-10 h-10 rounded-2xl flex items-center justify-center font-bold ${
-                highBurnProjects.length > 0
-                  ? 'bg-rose-100 text-rose-600 border border-rose-200'
-                  : 'bg-emerald-50 text-emerald-600 border border-emerald-100'
+          {/* KPI 2: Budget Utilization */}
+          <div
+            onClick={() => setActiveTab('finance')}
+            className={`border rounded-xl p-5 transition cursor-pointer flex flex-col justify-between ${
+              highBurnProjects.length > 0
+                ? 'bg-rose-50/40 border-rose-200 hover:border-rose-300'
+                : 'bg-white border-slate-200 hover:border-slate-300'
+            }`}
+          >
+            <div>
+              <div className="flex items-center justify-between text-slate-500 mb-3">
+                <span className="text-xs font-medium">{t('budgetUtilizationKPI')}</span>
+                <TrendingUp className={`w-4 h-4 ${utilizationNumeric >= 90 ? 'text-rose-600' : 'text-slate-400'}`} />
+              </div>
+              <div className={`text-2xl font-bold tabular-nums tracking-tight ${
+                utilizationNumeric >= 90 ? 'text-rose-700' : 'text-slate-900'
               }`}>
-                {highBurnProjects.length > 0 ? (
-                  <TrendingUp className="w-5 h-5 text-rose-600" />
-                ) : (
-                  <TrendingUp className="w-5 h-5" />
-                )}
+                {activeBudgetUtilizationRate}%
+              </div>
+              <div className="text-xs text-slate-500 mt-1.5 tabular-nums">
+                {formatCurrency(totalProjectSpent || totalHoldingSpent)} /{' '}
+                {formatCurrency(totalProjectBudget || totalHoldingBudget)}
               </div>
             </div>
-            <div className="flex items-baseline justify-between gap-2">
-              <div className="flex items-baseline gap-2">
-                <div className={`text-2xl sm:text-3xl font-black font-mono ${
-                  Number(activeBudgetUtilizationRate) >= 90 ? 'text-rose-600' : 'text-slate-900'
-                }`}>
-                  {activeBudgetUtilizationRate}%
-                </div>
-                {highBurnProjects.length > 0 && (
-                  <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-rose-100 text-rose-800 border border-rose-300 animate-pulse">
-                    {t('thresholdWarning90')}
-                  </span>
-                )}
+            <div className="mt-3 pt-2.5 border-t border-slate-200/60 space-y-1.5">
+              <div className="w-full bg-slate-100 rounded-full h-1.5 overflow-hidden">
+                <div
+                  className={`h-full rounded-full transition-all duration-500 ${
+                    utilizationNumeric >= 90
+                      ? 'bg-rose-600'
+                      : utilizationNumeric >= 75
+                        ? 'bg-amber-500'
+                        : 'bg-slate-800'
+                  }`}
+                  style={{ width: `${Math.min(100, utilizationNumeric)}%` }}
+                />
               </div>
-              <div className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-bold border shadow-2xs ${
-                Number(activeBudgetUtilizationRate) >= 90
-                  ? 'bg-rose-50 text-rose-700 border-rose-200'
-                  : 'bg-emerald-50 text-emerald-700 border-emerald-200/80'
-              }`}>
-                {Number(activeBudgetUtilizationRate) >= 90 ? (
-                  <ArrowUpRight className="w-3.5 h-3.5 text-rose-600 stroke-[2.5]" />
-                ) : (
-                  <ArrowUpRight className="w-3.5 h-3.5 text-emerald-600 stroke-[2.5]" />
-                )}
-                <span>{Number(activeBudgetUtilizationRate) >= 90 ? '+5.4%' : '+2.8%'}</span>
-                <span className="text-[10px] opacity-75 font-normal">({language === 'ku' ? 'مانگانە' : language === 'ar' ? 'شهري' : 'MoM'})</span>
+              <div className="flex items-center justify-between text-[11px] text-slate-500 tabular-nums">
+                <span>{getUIText(language, { en: 'Remaining', ku: 'ماوە', ar: 'المتبقي' })}</span>
+                <span>
+                  {100 - utilizationNumeric > 0
+                    ? `${(100 - utilizationNumeric).toFixed(1)}%`
+                    : t('budgetDepleted')}
+                </span>
               </div>
-            </div>
-            <div className="text-xs text-slate-500 mt-2 font-mono">
-              {t('spentOf')} {formatCurrency(totalProjectSpent || totalHoldingSpent)} / {formatCurrency(totalProjectBudget || totalHoldingBudget)}
-            </div>
-
-            {/* Small Inline SVG Sparkline (30-Day Historical Trend) */}
-            <div className="mt-3 pt-2.5 border-t border-slate-100">
-              <SparklineChart
-                data={sparklineData.utilization30d}
-                color={Number(activeBudgetUtilizationRate) >= 90 ? 'rose' : 'emerald'}
-                height={34}
-                trendLabel={getUIText(language, { en: '30-Day Burn Trajectory', ku: 'ڕەوتی سوودوەرگرتن (٣٠ ڕۆژ)', ar: 'مسار الاستهلاك (٣٠ يوم)' })}
-                formatTooltip={(v) => `${v}%`}
-              />
             </div>
           </div>
-          
-          <div className="pt-3 border-t border-slate-100 mt-2 space-y-1">
-            <div className="w-full bg-slate-100 rounded-full h-2 overflow-hidden border border-slate-200/70">
-              <div
-                className={`h-full rounded-full transition-all duration-700 ${
-                  Number(activeBudgetUtilizationRate) >= 90 
-                    ? 'bg-rose-500' 
-                    : Number(activeBudgetUtilizationRate) >= 75 
-                      ? 'bg-amber-500' 
-                      : 'bg-emerald-500'
-                }`}
-                style={{ width: `${Math.min(100, Number(activeBudgetUtilizationRate))}%` }}
-              />
-            </div>
-            <div className="flex justify-between text-[10px] text-slate-400">
-              <span>{getUIText(language, { en: 'Burn Rate', ku: 'ڕێژەی خەرجکردن', ar: 'نسبة الصرف' })}</span>
-              <span>{100 - Number(activeBudgetUtilizationRate) > 0 ? `${(100 - Number(activeBudgetUtilizationRate)).toFixed(1)}% ${t('remainingBudget')}` : t('budgetDepleted')}</span>
-            </div>
-          </div>
-        </div>
 
-        {/* Card 3: Pending Approval Count */}
-        <div
-          onClick={() => setActiveTab('owner-approvals')}
-          className="bg-white border border-amber-300 hover:border-amber-400 rounded-3xl p-5 shadow-xs transition cursor-pointer group flex flex-col justify-between"
-        >
-          <div>
-            <div className="flex items-center justify-between text-slate-500 mb-2">
-              <span className="text-xs font-bold uppercase tracking-wider text-amber-800">
-                {t('pendingApprovalsKPI')}
-              </span>
-              <div className="w-10 h-10 rounded-2xl bg-amber-50 border border-amber-200 flex items-center justify-center text-amber-600 group-hover:bg-amber-500 group-hover:text-white transition">
-                <Crown className="w-5 h-5" />
+          {/* KPI 3: Pending Owner Approvals */}
+          <div
+            onClick={() => setActiveTab('owner-approvals')}
+            className={`border rounded-xl p-5 transition cursor-pointer group flex flex-col justify-between ${
+              pendingPOs.length > 0
+                ? 'bg-amber-50/40 border-amber-200 hover:border-amber-300'
+                : 'bg-white border-slate-200 hover:border-slate-300'
+            }`}
+          >
+            <div>
+              <div className="flex items-center justify-between text-slate-500 mb-3">
+                <span className="text-xs font-medium">{t('pendingApprovalsKPI')}</span>
+                <Crown className={`w-4 h-4 ${pendingPOs.length > 0 ? 'text-amber-600' : 'text-slate-400'}`} />
+              </div>
+              <div className="text-2xl font-bold text-slate-900 tabular-nums tracking-tight">
+                {pendingPOs.length}{' '}
+                <span className="text-sm font-medium text-slate-500">
+                  {getUIText(language, { en: 'POs', ku: 'داواکاری', ar: 'طلبات' })}
+                </span>
+              </div>
+              <div className="text-xs text-slate-600 mt-1.5 tabular-nums font-medium">
+                ${pendingPOsTotalUSD.toLocaleString()}{' '}
+                {getUIText(language, { en: 'pending value', ku: 'بەهای چاوەڕوانکراو', ar: 'قيمة معلقة' })}
               </div>
             </div>
-            <div className="flex items-baseline justify-between gap-2">
-              <div className="text-2xl sm:text-3xl font-black text-amber-950 font-mono">
-                {pendingPOs.length} {getUIText(language, { en: 'POs', ku: 'داواکاری', ar: 'طلبات' })}
-              </div>
-              <div className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-bold bg-emerald-50 text-emerald-700 border border-emerald-200/80 shadow-2xs">
-                <ArrowDownRight className="w-3.5 h-3.5 text-emerald-600 stroke-[2.5]" />
-                <span>-18.2%</span>
-                <span className="text-[10px] text-emerald-600/80 font-normal">({language === 'ku' ? 'خێرایی کار' : language === 'ar' ? 'تسريع الدورة' : 'cleared'})</span>
-              </div>
-            </div>
-            <div className="text-xs text-amber-700 mt-2 font-bold font-mono">
-              ${pendingPOs.reduce((acc, p) => acc + p.totalAmountUSD, 0).toLocaleString()} USD {getUIText(language, { en: 'Pending Value', ku: 'بەهای چاوەڕوانکراو', ar: 'قيمة معلقة' })}
-            </div>
-
-            {/* Small Inline SVG Sparkline (30-Day Historical Trend) */}
-            <div className="mt-3 pt-2.5 border-t border-amber-100">
+            <div className="mt-3 pt-2.5 border-t border-slate-200/60">
               <SparklineChart
                 data={sparklineData.approvals30d}
                 color="amber"
-                height={34}
-                trendLabel={getUIText(language, { en: '30-Day Approvals Trend', ku: 'ڕەوتی چاوەڕوانی (٣٠ ڕۆژ)', ar: 'مسار المعلقات (٣٠ يوم)' })}
-                formatTooltip={(v) => `${v} ${getUIText(language, { en: 'POs', ku: 'داواکاری', ar: 'طلبات' })}`}
+                height={28}
+                trendLabel={getUIText(language, { en: '30-Day Queue', ku: 'ڕەوتی چاوەڕوانی ٣٠ ڕۆژ', ar: 'مسار المعلقات ٣٠ يوم' })}
+                formatTooltip={(v) => `${v}`}
               />
             </div>
           </div>
-          <div className="pt-3 border-t border-amber-100 mt-2 flex items-center justify-between text-[11px] text-amber-800 font-bold">
-            <span>{t('directOwnerAuthority')}</span>
-            <span className="px-2 py-0.5 rounded bg-amber-100 text-amber-900 group-hover:bg-amber-200 transition">
-              {t('approveAction')}
-            </span>
-          </div>
-        </div>
 
-        {/* Card 4: Threshold Health & Risk Monitoring */}
-        <div className={`rounded-3xl p-5 shadow-xs transition flex flex-col justify-between border ${
-          highBurnProjects.length > 0 
-            ? 'bg-rose-50/70 border-rose-300' 
-            : 'bg-emerald-50/50 border-emerald-200'
-        }`}>
-          <div>
-            <div className="flex items-center justify-between mb-2">
-              <span className="text-xs font-bold uppercase tracking-wider text-slate-600">
-                {t('thresholdHealthKPI')}
-              </span>
-              <div className={`w-10 h-10 rounded-2xl flex items-center justify-center font-bold ${
-                highBurnProjects.length > 0 ? 'bg-rose-100 text-rose-600' : 'bg-emerald-100 text-emerald-600'
+          {/* KPI 4: Threshold & Compliance Health */}
+          <div
+            onClick={() => setActiveTab(highBurnProjects.length > 0 ? 'companies-projects' : 'foreign-workers')}
+            className={`border rounded-xl p-5 transition cursor-pointer flex flex-col justify-between ${
+              highBurnProjects.length > 0
+                ? 'bg-rose-50/40 border-rose-200 hover:border-rose-300'
+                : 'bg-white border-slate-200 hover:border-slate-300'
+            }`}
+          >
+            <div>
+              <div className="flex items-center justify-between text-slate-500 mb-3">
+                <span className="text-xs font-medium">{t('thresholdHealthKPI')}</span>
+                <ShieldCheck className={`w-4 h-4 ${highBurnProjects.length > 0 ? 'text-rose-600' : 'text-emerald-600'}`} />
+              </div>
+              <div className={`text-2xl font-bold tabular-nums tracking-tight ${
+                highBurnProjects.length > 0 ? 'text-rose-700' : 'text-emerald-700'
               }`}>
-                <ShieldCheck className="w-5 h-5" />
+                {highBurnProjects.length > 0 ? `${highBurnProjects.length} ${t('atRisk')}` : t('optimalHealth')}
+              </div>
+              <div className="text-xs text-slate-500 mt-1.5 tabular-nums">
+                {totalEmployees.toLocaleString()} {getUIText(language, { en: 'staff', ku: 'کارمەند', ar: 'موظف' })} ·{' '}
+                {expiringIqamas.length}{' '}
+                {getUIText(language, { en: 'visa alerts', ku: 'ئاگاداری ڤیزا', ar: 'تنبيهات إقامة' })}
               </div>
             </div>
-            <div className="flex items-baseline justify-between gap-2">
-              <div className="text-xl sm:text-2xl font-black font-mono">
-                {highBurnProjects.length > 0 ? (
-                  <span className="text-rose-700">{highBurnProjects.length} {t('atRisk')}</span>
-                ) : (
-                  <span className="text-emerald-700">{t('optimalHealth')}</span>
-                )}
-              </div>
-              {highBurnProjects.length > 0 ? (
-                <div className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-bold bg-rose-100 text-rose-800 border border-rose-300 shadow-2xs">
-                  <ArrowUpRight className="w-3.5 h-3.5 text-rose-600 stroke-[2.5]" />
-                  <span>+{highBurnProjects.length} {getUIText(language, { en: 'Risk Alert', ku: 'مەترسی', ar: 'تنبيه خطر' })}</span>
-                </div>
-              ) : (
-                <div className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-bold bg-emerald-100 text-emerald-800 border border-emerald-300 shadow-2xs">
-                  <ArrowDownRight className="w-3.5 h-3.5 text-emerald-600 stroke-[2.5]" />
-                  <span>-100% {getUIText(language, { en: 'Risk Free', ku: 'پارێزراو', ar: 'آمن' })}</span>
-                </div>
-              )}
-            </div>
-            <p className="text-xs text-slate-600 mt-2">
-              {highBurnProjects.length > 0 
-                ? t('projectsRequiringIntervention')
-                : t('allProjectsUnderThreshold')}
-            </p>
-
-            {/* Small Inline SVG Sparkline (30-Day Historical Trend) */}
             <div className="mt-3 pt-2.5 border-t border-slate-200/60">
               <SparklineChart
                 data={sparklineData.risk30d}
                 color={highBurnProjects.length > 0 ? 'rose' : 'emerald'}
-                height={34}
-                trendLabel={getUIText(language, { en: '30-Day Risk Sentinel', ku: 'دۆخی مەترسی (٣٠ ڕۆژ)', ar: 'مسار المخاطر (٣٠ يوم)' })}
-                formatTooltip={(v) => v > 0 ? `${v} ${getUIText(language, { en: 'High Burn Alert', ku: 'هۆشداری خەرجی بەرز', ar: 'تنبيه استهلاك عالي' })}` : getUIText(language, { en: 'Optimal Safe (0)', ku: 'تەواو سەقامگیر (٠)', ar: 'مثالي وآمن (٠)' })}
+                height={28}
+                trendLabel={getUIText(language, { en: '30-Day Threshold', ku: 'چاودێری سنوور ٣٠ ڕۆژ', ar: 'مراقبة الحدود ٣٠ يوم' })}
+                formatTooltip={(v) => (v > 0 ? `${v}` : '0')}
               />
             </div>
           </div>
-          <div className="pt-3 border-t border-slate-200/60 mt-2 flex items-center justify-between text-[11px]">
-            <span className="font-bold text-slate-600">{getUIText(language, { en: 'Waste Prevention:', ku: 'ڕێگری لە بەفیڕۆدان:', ar: 'منع الهدر المالي:' })}</span>
-            <span className={`font-bold font-mono px-2 py-0.5 rounded ${
-              highBurnProjects.length > 0 ? 'bg-rose-200/80 text-rose-900' : 'bg-emerald-200/80 text-emerald-900'
-            }`}>
-              {highBurnProjects.length > 0 ? getUIText(language, { en: 'ACTIVE ALERT', ku: 'هۆشداری چالاک', ar: 'تنبيه نشط' }) : getUIText(language, { en: 'SECURE', ku: 'پارێزراو', ar: 'آمن' })}
-            </span>
-          </div>
         </div>
+      ) : (
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+          {settings.selectedMacroKpis.map(kpiId => renderMacroKpiCard(kpiId))}
+        </div>
+      )}
 
-      </div>
-
-      {/* Balanced Executive Layout Blocks */}
+      {/* Balanced Executive Widgets Grid */}
       {(() => {
         const fullWidthSet = new Set<WidgetId>([
-          'macro_kpis',
           'kpi_overview',
           'project_expenditure_chart',
           'departmental_operations'
@@ -1932,13 +1128,6 @@ export const HoldingOwnerDashboard: React.FC = () => {
 
         const renderSingleWidget = (widgetId: WidgetId) => {
           switch (widgetId) {
-            case 'macro_kpis':
-              return (
-                <div key="macro_kpis" className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 w-full">
-                  {settings.selectedMacroKpis.map(kpiId => renderMacroKpiCard(kpiId))}
-                </div>
-              );
-
             case 'kpi_overview':
               return (
                 <KpiOverviewWidget
@@ -1949,11 +1138,7 @@ export const HoldingOwnerDashboard: React.FC = () => {
               );
 
             case 'ml_anomaly_monitor':
-              return (
-                <MLAnomalyMonitorWidget
-                  key="ml_anomaly_monitor"
-                />
-              );
+              return <MLAnomalyMonitorWidget key="ml_anomaly_monitor" />;
 
             case 'project_expenditure_chart':
               return (
@@ -1965,89 +1150,94 @@ export const HoldingOwnerDashboard: React.FC = () => {
               );
 
             case 'general_managers':
-              return (
-                <GeneralManagersWidget
-                  key="general_managers"
-                />
-              );
+              return <GeneralManagersWidget key="general_managers" />;
 
             case 'pending_approvals':
               return (
-                <div key="pending_approvals" className="bg-white border border-amber-300 rounded-3xl p-6 shadow-xs relative overflow-hidden h-full flex flex-col justify-between">
+                <div
+                  key="pending_approvals"
+                  className="bg-white border border-slate-200 rounded-2xl p-5 sm:p-6 h-full flex flex-col justify-between"
+                >
                   <div>
-                    <div className="flex items-center justify-between gap-4 mb-4">
-                      <div className="flex items-center gap-2.5">
-                        <div className="w-9 h-9 rounded-xl bg-amber-100 border border-amber-200 flex items-center justify-center text-amber-600 font-bold shrink-0">
+                    <div className="flex items-center justify-between gap-4 mb-4 pb-3 border-b border-slate-100">
+                      <div className="flex items-center gap-2.5 min-w-0">
+                        <div className="w-8 h-8 rounded-lg bg-amber-50 border border-amber-200 flex items-center justify-center text-amber-700 shrink-0">
                           <Crown className="w-4 h-4" />
                         </div>
-                        <div>
-                          <h2 className="text-base font-extrabold text-slate-900">
-                            {t('pendingOwnerApproval')} ({pendingPOs.length})
+                        <div className="min-w-0">
+                          <h2 className="text-sm font-bold text-slate-900 truncate">
+                            {t('pendingOwnerApproval')}{' '}
+                            <span className="font-mono text-slate-500 tabular-nums">({pendingPOs.length})</span>
                           </h2>
-                          <p className="text-xs text-slate-500">
-                            {t('holdingOwnerRuleBanner')}
-                          </p>
+                          <p className="text-xs text-slate-500 truncate">{t('holdingOwnerRuleBanner')}</p>
                         </div>
                       </div>
                       <button
+                        type="button"
                         onClick={() => setActiveTab('owner-approvals')}
-                        className="text-xs font-bold text-blue-600 hover:text-blue-700 flex items-center gap-1 cursor-pointer shrink-0"
+                        className="text-xs font-semibold text-slate-700 hover:text-slate-900 flex items-center gap-1 cursor-pointer shrink-0"
                       >
-                        <span>{getUIText(language, { en: 'View Queue', ku: 'بینینی تەواوی ڕیز', ar: 'عرض القائمة' })}</span>
-                        <ChevronRight className="w-4 h-4" />
+                        <span>{getUIText(language, { en: 'View Queue', ku: 'هەموو ڕیزەکە', ar: 'عرض الكل' })}</span>
+                        <ChevronRight className="w-3.5 h-3.5" />
                       </button>
                     </div>
 
                     {pendingPOs.length === 0 ? (
-                      <div className="p-6 text-center rounded-2xl bg-emerald-50/60 border border-emerald-200 text-xs text-emerald-800 font-bold space-y-1">
-                        <CheckCircle2 className="w-6 h-6 text-emerald-600 mx-auto mb-1" />
-                        <div>
+                      <div className="p-6 text-center rounded-xl bg-slate-50 border border-slate-200/80 text-xs text-slate-600 space-y-1.5">
+                        <CheckCircle2 className="w-5 h-5 text-emerald-600 mx-auto" />
+                        <div className="font-medium text-slate-700">
                           {getUIText(language, {
-                            en: 'All clear: No pending purchase orders awaiting Owner signature.',
-                            ku: 'تەواوی داواکارییەکان سەقامگیرن: هیچ داواکارییەکی کڕین لە چاوەڕوانیدا نەماوەتەوە.',
-                            ar: 'لا توجد طلبات شراء معلقة تتطلب توقيع المالك.'
+                            en: 'All clear: No purchase orders awaiting owner signature.',
+                            ku: 'هیچ داواکارییەکی کڕین لە چاوەڕوانی واژۆدا نییە.',
+                            ar: 'لا توجد طلبات شراء معلقة تتطلب التوقيع.'
                           })}
                         </div>
                       </div>
                     ) : (
-                      <div className="space-y-3">
-                        {pendingPOs.slice(0, 3).map((po) => {
+                      <div className="divide-y divide-slate-100">
+                        {pendingPOs.slice(0, 4).map((po) => {
                           const comp = companies.find(c => c.id === po.companyId);
                           return (
                             <div
                               key={po.id}
-                              className="bg-slate-50 border border-slate-200/90 rounded-2xl p-3.5 flex flex-col sm:flex-row sm:items-center justify-between gap-3"
+                              className="py-3 first:pt-0 last:pb-0 flex flex-col sm:flex-row sm:items-center justify-between gap-3"
                             >
-                              <div className="space-y-1 min-w-0">
+                              <div className="space-y-0.5 min-w-0">
                                 <div className="flex items-center gap-2 flex-wrap">
-                                  <span className="font-bold text-slate-900 text-xs sm:text-sm font-mono">{po.poNumber}</span>
-                                  <span className="text-[10px] px-2 py-0.5 rounded-md bg-blue-100 text-blue-800 font-semibold truncate max-w-[140px]">
-                                    {comp ? resolveEntityText(comp, 'name', language) : 'Holding Subsidiary'}
+                                  <span className="font-semibold text-slate-900 text-xs font-mono tabular-nums">
+                                    {po.poNumber}
                                   </span>
-                                  <span className="text-xs font-extrabold text-emerald-600 font-mono">
+                                  <span className="text-[11px] text-slate-500 truncate max-w-[160px]">
+                                    {comp ? resolveEntityText(comp, 'name', language) : 'Subsidiary'}
+                                  </span>
+                                  <span className="text-xs font-bold text-slate-900 font-mono tabular-nums">
                                     ${po.totalAmountUSD.toLocaleString()} {po.currency}
                                   </span>
                                 </div>
-                                <p className="text-[11px] text-slate-600 truncate">
-                                  <strong>{getUIText(language, { en: 'Supplier:', ku: 'دابینکەر:', ar: 'المورّد:' })}</strong> {po.supplierName} • <strong>{getUIText(language, { en: 'By:', ku: 'لەلایەن:', ar: 'بواسطة:' })}</strong> {po.requestedBy}
+                                <p className="text-[11px] text-slate-500 truncate">
+                                  {po.supplierName} · {po.requestedBy}
                                 </p>
-                                <p className="text-[11px] text-slate-500 italic truncate">
-                                  "{po.purpose}"
-                                </p>
+                                <p className="text-[11px] text-slate-500 truncate">{po.purpose}</p>
                               </div>
 
-                              <div className="flex items-center gap-2 shrink-0">
+                              <div className="flex items-center gap-1.5 shrink-0">
                                 <button
-                                  onClick={() => approvePurchaseByOwner(po.id, 'Holding Owner Approved directly from dashboard')}
-                                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold bg-emerald-600 hover:bg-emerald-700 text-white shadow-2xs transition transform active:scale-95 cursor-pointer"
+                                  type="button"
+                                  onClick={() =>
+                                    approvePurchaseByOwner(po.id, 'Holding Owner Approved directly from dashboard')
+                                  }
+                                  className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-semibold bg-emerald-600 hover:bg-emerald-700 text-white transition cursor-pointer"
                                   id={`owner-quick-approve-${po.id}`}
                                 >
                                   <CheckCircle2 className="w-3.5 h-3.5" />
                                   <span>{t('approvePurchase')}</span>
                                 </button>
                                 <button
-                                  onClick={() => rejectPurchaseByOwner(po.id, 'Holding Owner rejected: Budget limit exceeded')}
-                                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold bg-rose-600 hover:bg-rose-700 text-white transition transform active:scale-95 cursor-pointer"
+                                  type="button"
+                                  onClick={() =>
+                                    rejectPurchaseByOwner(po.id, 'Holding Owner rejected: Budget limit exceeded')
+                                  }
+                                  className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-semibold bg-white hover:bg-rose-50 text-rose-700 border border-slate-200 hover:border-rose-200 transition cursor-pointer"
                                   id={`owner-quick-reject-${po.id}`}
                                 >
                                   <XCircle className="w-3.5 h-3.5" />
@@ -2061,9 +1251,17 @@ export const HoldingOwnerDashboard: React.FC = () => {
                     )}
                   </div>
 
-                  <div className="mt-4 pt-3 border-t border-slate-100 flex items-center justify-between text-[11px] text-slate-400">
-                    <span>{getUIText(language, { en: 'Threshold Gate: $5,000+ USD', ku: 'سنووری پەسەندکردن: سەروو $٥,٠٠٠ دۆلار', ar: 'حد الموافقة: أكثر من 5000 دولار' })}</span>
-                    <span className="font-mono text-amber-700 font-bold">${pendingPOs.reduce((acc, p) => acc + p.totalAmountUSD, 0).toLocaleString()} Total</span>
+                  <div className="mt-4 pt-3 border-t border-slate-100 flex items-center justify-between text-[11px] text-slate-500">
+                    <span>
+                      {getUIText(language, {
+                        en: 'Approval Threshold: $5,000+ USD',
+                        ku: 'سنووری پەسەندکردن: سەروو $٥,٠٠٠ دۆلار',
+                        ar: 'حد الموافقة: أكثر من 5,000 دولار'
+                      })}
+                    </span>
+                    <span className="font-mono text-slate-900 font-semibold tabular-nums">
+                      ${pendingPOsTotalUSD.toLocaleString()}
+                    </span>
                   </div>
                 </div>
               );
@@ -2086,50 +1284,42 @@ export const HoldingOwnerDashboard: React.FC = () => {
               );
 
             case 'subsidiary_matrix':
-              return (
-                <SubsidiaryEfficiencyWidget
-                  key="subsidiary_matrix"
-                />
-              );
+              return <SubsidiaryEfficiencyWidget key="subsidiary_matrix" />;
 
             case 'departmental_operations':
-              return (
-                <DepartmentOperationsMatrixWidget
-                  key="departmental_operations"
-                />
-              );
+              return <DepartmentOperationsMatrixWidget key="departmental_operations" />;
 
             case 'recent_activities':
-              return (
-                <LiveActivityFeedWidget
-                  key="recent_activities"
-                />
-              );
+              return <LiveActivityFeedWidget key="recent_activities" />;
 
             case 'directors_directory':
               return (
-                <div key="directors_directory" className="bg-white border border-slate-200/80 rounded-3xl p-6 shadow-xs h-full flex flex-col justify-between">
+                <div
+                  key="directors_directory"
+                  className="bg-white border border-slate-200 rounded-2xl p-5 sm:p-6 h-full flex flex-col justify-between"
+                >
                   <div>
-                    <div className="flex items-center justify-between gap-4 mb-4">
-                      <div>
-                        <h2 className="text-base font-extrabold text-slate-900 flex items-center gap-2">
-                          <PhoneCall className="w-4 h-4 text-blue-600" />
+                    <div className="flex items-center justify-between gap-4 mb-4 pb-3 border-b border-slate-100">
+                      <div className="min-w-0">
+                        <h2 className="text-sm font-bold text-slate-900 flex items-center gap-2">
+                          <PhoneCall className="w-4 h-4 text-slate-500" />
                           <span>{t('navContactManagers')}</span>
                         </h2>
-                        <p className="text-xs text-slate-500 mt-0.5 line-clamp-1">
+                        <p className="text-xs text-slate-500 mt-0.5 truncate">
                           {getUIText(language, {
-                            en: 'Direct hotlines and high-priority holding directive dispatch to all Subsidiary GMs.',
-                            ku: 'هێڵی ڕاستەوخۆ و ناردنی ڕاسپاردەی خێرای سەرۆکایەتی هۆلدینگ بۆ بەڕێوەبەرانی گشتی.',
-                            ar: 'خط مباشر وتوجيهات عليا فورية لكافة المدراء العامين للشركات التابعة.'
+                            en: 'Direct communication with Subsidiary General Managers.',
+                            ku: 'پەیوەندی ڕاستەوخۆ لەگەڵ بەڕێوەبەرانی گشتی کۆمپانیاکان.',
+                            ar: 'تواصل مباشر مع المدراء العامين للشركات التابعة.'
                           })}
                         </p>
                       </div>
                       <button
+                        type="button"
                         onClick={() => setActiveTab('direct-comms')}
-                        className="text-xs font-bold text-blue-600 hover:text-blue-700 flex items-center gap-1 cursor-pointer shrink-0"
+                        className="text-xs font-semibold text-slate-700 hover:text-slate-900 flex items-center gap-1 cursor-pointer shrink-0"
                       >
-                        <span>{getUIText(language, { en: 'Comms Hub', ku: 'ناوەندی پەیوەندی', ar: 'مركز الاتصالات' })}</span>
-                        <ChevronRight className="w-4 h-4" />
+                        <span>{getUIText(language, { en: 'Directory', ku: 'پەیوەندییەکان', ar: 'الدليل' })}</span>
+                        <ChevronRight className="w-3.5 h-3.5" />
                       </button>
                     </div>
 
@@ -2137,41 +1327,50 @@ export const HoldingOwnerDashboard: React.FC = () => {
                       {filteredCompanies.slice(0, 4).map((comp) => (
                         <div
                           key={comp.id}
-                          className="bg-slate-50 border border-slate-200 hover:border-blue-400 rounded-2xl p-3 flex flex-col justify-between transition group shadow-2xs"
+                          className="bg-slate-50/70 border border-slate-200 hover:border-slate-300 rounded-xl p-3.5 flex flex-col justify-between transition"
                         >
                           <div>
                             <div className="flex items-center justify-between mb-1.5">
-                              <span className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-white text-slate-700 border border-slate-200 shadow-2xs font-mono">
+                              <span className="text-[11px] font-mono font-semibold text-slate-600">
                                 {comp.code}
                               </span>
-                              <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" title="Online" />
+                              <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
                             </div>
-                            <h3 className="font-bold text-slate-900 text-xs sm:text-sm truncate">{comp.generalManager}</h3>
-                            <p className="text-[11px] text-slate-500 truncate mt-0.5">{resolveEntityText(comp, 'name', language)}</p>
-                            <p className="text-[11px] text-blue-600 font-mono mt-1 font-semibold">{comp.gmPhone}</p>
+                            <h3 className="font-semibold text-slate-900 text-xs sm:text-sm truncate">
+                              {comp.generalManager}
+                            </h3>
+                            <p className="text-[11px] text-slate-500 truncate mt-0.5">
+                              {resolveEntityText(comp, 'name', language)}
+                            </p>
+                            <p className="text-[11px] text-slate-600 font-mono mt-1 tabular-nums">
+                              {comp.gmPhone}
+                            </p>
                           </div>
 
-                          <div className="flex items-center gap-2 mt-3 pt-2.5 border-t border-slate-200">
+                          <div className="flex items-center gap-1.5 mt-3 pt-2.5 border-t border-slate-200/80">
                             <button
-                              onClick={() => startCallWithManager({
-                                name: comp.generalManager,
-                                role: 'General Manager',
-                                phone: comp.gmPhone,
-                                company: resolveEntityText(comp, 'name', language),
-                                avatar: '👔'
-                              })}
-                              className="flex-1 flex items-center justify-center gap-1.5 py-1.5 rounded-xl text-xs font-bold bg-blue-50 hover:bg-blue-600 text-blue-700 hover:text-white border border-blue-200 hover:border-blue-600 transition cursor-pointer"
-                              title={getUIText(language, { en: 'Call GM', ku: 'پەیوەندی بەڕێوەبەر', ar: 'اتصال بالمدير' })}
+                              type="button"
+                              onClick={() =>
+                                startCallWithManager({
+                                  name: comp.generalManager,
+                                  role: 'General Manager',
+                                  phone: comp.gmPhone,
+                                  company: resolveEntityText(comp, 'name', language),
+                                  avatar: comp.generalManager.charAt(0).toUpperCase()
+                                })
+                              }
+                              className="flex-1 inline-flex items-center justify-center gap-1.5 py-1.5 rounded-lg text-xs font-semibold bg-white hover:bg-slate-900 text-slate-700 hover:text-white border border-slate-200 hover:border-slate-900 transition cursor-pointer"
                             >
                               <PhoneCall className="w-3.5 h-3.5" />
-                              <span>{getUIText(language, { en: 'Call GM', ku: 'پەیوەندی', ar: 'اتصال' })}</span>
+                              <span>{getUIText(language, { en: 'Call', ku: 'پەیوەندی', ar: 'اتصال' })}</span>
                             </button>
                             <button
+                              type="button"
                               onClick={() => {
                                 setSelectedCompanyId(comp.id);
                                 setActiveTab('companies-projects');
                               }}
-                              className="px-2.5 py-1.5 rounded-xl text-xs font-medium bg-white hover:bg-slate-100 text-slate-700 border border-slate-200 transition cursor-pointer"
+                              className="px-2.5 py-1.5 rounded-lg text-xs font-medium bg-white hover:bg-slate-100 text-slate-600 border border-slate-200 transition cursor-pointer"
                               title={getUIText(language, { en: 'View Subsidiary', ku: 'بینینی کۆمپانیا', ar: 'عرض الشركة' })}
                             >
                               <Building2 className="w-3.5 h-3.5" />
@@ -2185,20 +1384,18 @@ export const HoldingOwnerDashboard: React.FC = () => {
               );
 
             case 'risk_compliance':
-              return (
-                <RiskComplianceWidget
-                  key="risk_compliance"
-                />
-              );
+              return <RiskComplianceWidget key="risk_compliance" />;
 
             default:
               return null;
           }
         };
 
-        // Group into balanced blocks
+        // Group into balanced full-width and 2-column blocks (skip macro_kpis since top KPI row already renders it)
         const blocks: { type: 'full' | 'pair'; widgets: WidgetId[] }[] = [];
-        const activeWidgets = settings.widgetOrder.filter(wId => settings.visibleWidgets.includes(wId));
+        const activeWidgets = settings.widgetOrder.filter(
+          wId => wId !== 'macro_kpis' && settings.visibleWidgets.includes(wId)
+        );
         let currentPair: WidgetId[] = [];
 
         for (const wId of activeWidgets) {
@@ -2246,6 +1443,110 @@ export const HoldingOwnerDashboard: React.FC = () => {
         });
       })()}
 
+      {/* Compact Executive Resources & License Strip (Replaces heavy bottom billboards) */}
+      <div className="bg-white border border-slate-200 rounded-2xl p-4 sm:p-5 flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+        {/* License Summary */}
+        <div className="flex items-center gap-3 flex-wrap">
+          <div className="w-9 h-9 rounded-lg bg-slate-100 text-slate-700 flex items-center justify-center shrink-0">
+            <Key className="w-4 h-4" />
+          </div>
+          <div className="text-xs">
+            <div className="font-semibold text-slate-900 flex items-center gap-2">
+              <span>{licenseStatusText}</span>
+              {systemLicense.licenseKey && (
+                <span className="font-mono text-[11px] text-slate-500">
+                  {systemLicense.licenseKey.slice(0, 12)}…
+                </span>
+              )}
+            </div>
+            <div className="text-slate-500 mt-0.5">
+              {getUIText(language, {
+                en: 'Holding ERP License & Offline Mesh Status',
+                ku: 'باری مۆڵەتی هۆڵدینگ و بەستنەوەی ئۆفلاین',
+                ar: 'حالة ترخيص المجموعة والمزامنة المحلية'
+              })}
+            </div>
+          </div>
+          <div className="flex items-center gap-1.5">
+            <button
+              type="button"
+              onClick={() => openLicenseModal('activate')}
+              className="px-3 py-1.5 rounded-lg text-xs font-semibold bg-slate-100 hover:bg-slate-200 text-slate-800 transition cursor-pointer"
+            >
+              {getUIText(language, { en: 'License Key', ku: 'کلیلی مۆڵەت', ar: 'مفتاح الترخيص' })}
+            </button>
+            <button
+              type="button"
+              onClick={() => setIsMeshHubOpen(true)}
+              className="px-3 py-1.5 rounded-lg text-xs font-semibold bg-slate-100 hover:bg-slate-200 text-slate-800 transition cursor-pointer inline-flex items-center gap-1.5"
+            >
+              <Radio className="w-3.5 h-3.5 text-slate-600" />
+              <span>{getUIText(language, { en: 'Mesh Sync', ku: 'سینکی لۆکاڵ', ar: 'المزامنة المحلية' })}</span>
+            </button>
+            {isMasterVendorOwner && (
+              <button
+                type="button"
+                onClick={() => setActiveTab('license-admin')}
+                className="px-3 py-1.5 rounded-lg text-xs font-semibold bg-white hover:bg-slate-50 text-slate-600 border border-slate-200 transition cursor-pointer inline-flex items-center gap-1"
+              >
+                <span>{getUIText(language, { en: 'Vendor Portal', ku: 'سیستەمی ٢', ar: 'بوابة المنصة' })}</span>
+                <ArrowUpRight className="w-3 h-3" />
+              </button>
+            )}
+          </div>
+        </div>
+
+        {/* Executive Documentation Downloads */}
+        <div className="flex items-center gap-1.5 flex-wrap border-t lg:border-t-0 pt-3 lg:pt-0 border-slate-100">
+          <button
+            type="button"
+            onClick={() => setIsUserManualOpen(true)}
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium bg-white hover:bg-slate-50 text-slate-700 border border-slate-200 transition cursor-pointer"
+          >
+            <BookOpen className="w-3.5 h-3.5 text-slate-500" />
+            <span>{getUIText(language, { en: 'User Manual', ku: 'ڕێبەری سیستەم', ar: 'دليل النظام' })}</span>
+          </button>
+          <button
+            type="button"
+            onClick={handleDownloadManualDocx}
+            disabled={isDownloadingManualDocx}
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium bg-white hover:bg-slate-50 text-slate-700 border border-slate-200 transition cursor-pointer disabled:opacity-50"
+          >
+            <Download className="w-3.5 h-3.5 text-slate-500" />
+            <span>{isDownloadingManualDocx ? '...' : 'Manual (.docx)'}</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => openUserManualPrintView(language)}
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium bg-white hover:bg-slate-50 text-slate-700 border border-slate-200 transition cursor-pointer"
+          >
+            <Printer className="w-3.5 h-3.5 text-slate-500" />
+            <span>PDF</span>
+          </button>
+          <button
+            type="button"
+            onClick={handleDownloadWhyDocx}
+            disabled={isDownloadingWhyDocx}
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium bg-white hover:bg-slate-50 text-slate-700 border border-slate-200 transition cursor-pointer disabled:opacity-50"
+          >
+            <FileText className="w-3.5 h-3.5 text-slate-500" />
+            <span>
+              {isDownloadingWhyDocx
+                ? '...'
+                : getUIText(language, { en: 'Brief (.docx)', ku: 'بۆچی SAS4ERP', ar: 'ملف المقارنة' })}
+            </span>
+          </button>
+          <button
+            type="button"
+            onClick={() => openWhyChooseSAS4ERPPdfView(language)}
+            className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium bg-white hover:bg-slate-50 text-slate-500 border border-slate-200 transition cursor-pointer"
+            title={getUIText(language, { en: 'Print Comparison Brief', ku: 'چاپکردنی پۆرتفۆلیۆ', ar: 'طباعة ملف المقارنة' })}
+          >
+            <Printer className="w-3.5 h-3.5" />
+          </button>
+        </div>
+      </div>
+
       {/* Dashboard Configuration Modal */}
       <DashboardConfigModal
         isOpen={isConfigModalOpen}
@@ -2254,7 +1555,7 @@ export const HoldingOwnerDashboard: React.FC = () => {
         onSaveSettings={handleSaveSettings}
       />
 
-      {/* Floating Executive Sticky Note Widget (Session Draft Reminders) */}
+      {/* Floating Executive Sticky Note Widget */}
       <ExecutiveStickyNoteWidget />
 
       {/* Holding Local Mesh & Offline Sync Hub Modal */}
@@ -2262,7 +1563,6 @@ export const HoldingOwnerDashboard: React.FC = () => {
         isOpen={isMeshHubOpen}
         onClose={() => setIsMeshHubOpen(false)}
       />
-
     </div>
   );
 };

@@ -35,12 +35,14 @@ interface ManagerFileDropdownProps {
   isOpen: boolean;
   onToggle: () => void;
   onClose: () => void;
+  hideTriggerButton?: boolean;
 }
 
 export const ManagerFileDropdown: React.FC<ManagerFileDropdownProps> = ({
   isOpen,
   onToggle,
-  onClose
+  onClose,
+  hideTriggerButton = false
 }) => {
   const { language, isRtl } = useLanguage();
   const { currentUser } = useERP();
@@ -77,14 +79,16 @@ export const ManagerFileDropdown: React.FC<ManagerFileDropdownProps> = ({
     };
   }, [isOpen, onClose]);
 
-  // Restrict access: Only for executive managers
+  // Restrict access: Only for executive managers and IT Admin
   const isManager =
     currentUser.role === 'HOLDING_OWNER' ||
     currentUser.role === 'SUPER_ADMIN' ||
+    currentUser.role === 'IT_ADMIN' ||
     currentUser.role === 'COMPANY_GM' ||
     currentUser.role === 'PROJECT_MANAGER';
 
   if (!isManager) return null;
+  if (hideTriggerButton && !isOpen) return null;
 
   const showNotification = (msg: string) => {
     setNoticeMessage(msg);
@@ -176,71 +180,62 @@ export const ManagerFileDropdown: React.FC<ManagerFileDropdownProps> = ({
 
   return (
     <div className="relative" ref={containerRef} dir={isRtl ? 'rtl' : 'ltr'}>
-      {/* Trigger Button - Replaces "فایلی ڕێبەر" with "فایلی بەڕێوەبەر" */}
-      <button
-        onClick={onToggle}
-        className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-black transition cursor-pointer transform active:scale-95 shrink-0 shadow-md border ${
-          isOpen
-            ? 'bg-amber-400 text-slate-950 border-amber-300 ring-2 ring-amber-300/50'
-            : 'bg-gradient-to-r from-blue-700 via-indigo-800 to-slate-900 hover:from-blue-800 hover:to-slate-950 text-white border-amber-400/90'
-        }`}
-        id="user-manual-word-btn"
-        title={
-          language === 'ku'
-            ? 'فایلی تایبەتی بەڕێوەبەر: ڕێنماییەکان، دەسەڵاتەکان و دۆکیومێنتە فەرمییەکان'
-            : 'Executive Manager File: Powers, Guidelines & Official Documentation'
-        }
-      >
-        <FileText className={`w-4 h-4 ${isOpen ? 'text-slate-950' : 'text-amber-300 animate-pulse'}`} />
-        <span className="font-black">
-          {language === 'ku' ? '📁 فایلی بەڕێوەبەر' : language === 'ar' ? '📁 ملف المدير' : '📁 Manager File'}
-        </span>
-        <span className="text-[10px] px-1.5 py-0.2 rounded-md bg-amber-400 text-slate-950 font-mono font-black shadow-2xs">
-          {currentUser.role === 'HOLDING_OWNER' ? 'OWNER' : currentUser.role === 'COMPANY_GM' ? 'GM' : 'PM'}
-        </span>
-        <ChevronDown className={`w-3.5 h-3.5 transition-transform duration-200 ${isOpen ? 'rotate-180 text-slate-950' : 'text-amber-300'}`} />
-      </button>
+      {!hideTriggerButton && (
+        <button
+          onClick={onToggle}
+          className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium border transition cursor-pointer shrink-0 ${
+            isOpen
+              ? 'bg-slate-900 text-white border-slate-900'
+              : 'bg-white hover:bg-slate-50 text-slate-700 border-slate-200'
+          }`}
+          id="user-manual-word-btn"
+          title={
+            language === 'ku'
+              ? 'فایلی تایبەتی بەڕێوەبەر: ڕێنماییەکان، دەسەڵاتەکان و دۆکیومێنتە فەرمییەکان'
+              : 'Executive Manager File: Powers, Guidelines & Official Documentation'
+          }
+        >
+          <FileText className="w-3.5 h-3.5" />
+          <span>{language === 'ku' ? 'فایلی بەڕێوەبەر' : language === 'ar' ? 'ملف المدير' : 'Manager File'}</span>
+          <ChevronDown className={`w-3.5 h-3.5 transition-transform duration-150 ${isOpen ? 'rotate-180' : ''}`} />
+        </button>
+      )}
 
-      {/* Anchored Dropdown Popover Panel Directly Underneath */}
+      {/* Anchored Dropdown or Centered Panel */}
       {isOpen && (
         <div
-          className={`absolute top-full mt-2.5 z-50 w-[92vw] sm:w-[580px] max-w-[620px] bg-white border-2 border-amber-400/90 rounded-3xl shadow-2xl overflow-hidden text-slate-900 animate-in fade-in zoom-in-95 duration-150 ${
-            isRtl ? 'left-0 sm:left-0' : 'right-0 sm:right-0'
-          }`}
-          style={{ maxHeight: 'calc(100vh - 90px)' }}
+          className={`${
+            hideTriggerButton
+              ? 'fixed top-16 left-1/2 -translate-x-1/2'
+              : `absolute top-full mt-2 ${isRtl ? 'left-0' : 'right-0'}`
+          } z-50 w-[92vw] sm:w-[600px] max-w-[640px] bg-white border border-slate-200 rounded-2xl shadow-2xl overflow-hidden text-slate-900 animate-in fade-in duration-150`}
+          style={{ maxHeight: 'calc(100vh - 96px)' }}
         >
-          {/* Header Strip with Manager Badge */}
-          <div className="bg-gradient-to-r from-slate-950 via-indigo-950 to-blue-950 text-white p-4.5 border-b border-indigo-900 flex items-center justify-between">
+          {/* Header Strip */}
+          <div className="bg-slate-900 text-white px-5 py-4 border-b border-slate-800 flex items-center justify-between">
             <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-2xl bg-amber-400 text-slate-950 flex items-center justify-center font-black shadow-md shrink-0">
+              <div className="w-9 h-9 rounded-lg bg-white/10 text-white flex items-center justify-center shrink-0">
                 {currentUser.role === 'HOLDING_OWNER' ? (
-                  <Crown className="w-5 h-5" />
+                  <Crown className="w-4 h-4" />
                 ) : currentUser.role === 'COMPANY_GM' ? (
-                  <Building2 className="w-5 h-5" />
+                  <Building2 className="w-4 h-4" />
                 ) : (
-                  <FileCheck2 className="w-5 h-5" />
+                  <FileCheck2 className="w-4 h-4" />
                 )}
               </div>
               <div>
-                <div className="flex items-center gap-2 flex-wrap">
-                  <h3 className="font-black text-sm sm:text-base text-white">
-                    {language === 'ku' ? '📁 فایلی تایبەتی بەڕێوەبەر' : language === 'ar' ? '📁 ملف المدير التنفيذي' : '📁 Executive Manager Dossier'}
-                  </h3>
-                  <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-400 text-slate-950 font-mono">
-                    {currentUser.role === 'HOLDING_OWNER' ? '👑 HOLDING OWNER' : currentUser.role === 'COMPANY_GM' ? '🏢 GENERAL MANAGER' : '🏗️ PROJECT MANAGER'}
-                  </span>
-                </div>
-                <p className="text-[11px] text-slate-300 mt-0.5 font-medium">
-                  {language === 'ku'
-                    ? `بەخێربێیت بەڕێز (${currentUser.name}) • تایبەت بە کادیرانی باڵای بەڕێوەبردن`
-                    : `Active Manager: ${currentUser.name} (${currentUser.title || currentUser.role})`}
+                <h3 className="font-semibold text-sm text-white">
+                  {language === 'ku' ? 'فایلی فەرمی بەڕێوەبەر و گۆڕەری دۆکیومێنت' : language === 'ar' ? 'ملف المدير التنفيذي والتوثيق' : 'Executive Manager Dossier & Converter'}
+                </h3>
+                <p className="text-xs text-slate-400 mt-0.5">
+                  {currentUser.name} · {currentUser.role}
                 </p>
               </div>
             </div>
 
             <button
               onClick={onClose}
-              className="p-1.5 rounded-xl bg-white/10 hover:bg-white/20 text-slate-300 hover:text-white transition cursor-pointer"
+              className="p-1.5 rounded-lg hover:bg-white/10 text-slate-400 hover:text-white transition cursor-pointer"
             >
               <X className="w-4 h-4" />
             </button>

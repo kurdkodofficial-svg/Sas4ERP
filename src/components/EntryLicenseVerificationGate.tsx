@@ -331,33 +331,28 @@ export const EntryLicenseVerificationGate: React.FC<EntryLicenseVerificationGate
   return (
     <>
       {license.licenseType === 'TRIAL_14D' && remainingDays <= 14 && (
-        <div className="bg-gradient-to-r from-blue-900/90 via-indigo-900/90 to-slate-900/90 text-white text-xs px-4 py-2 border-b border-indigo-500/30 flex items-center justify-between gap-3 relative z-50">
-          <div className="flex items-center gap-2 flex-wrap">
-            <span className="px-2 py-0.5 rounded-full bg-blue-500/20 text-blue-200 border border-blue-400/40 text-[10px] font-bold font-mono">
-              FREE TRIAL
-            </span>
-            <span className="font-semibold">
+        <div className="bg-slate-900 text-slate-200 text-xs px-4 sm:px-6 h-9 border-b border-slate-800 flex items-center justify-between gap-3 relative z-50">
+          <div className="flex items-center gap-2 min-w-0">
+            <span className="font-medium truncate">
               {language === 'ku'
-                ? `ماوەی تاقیکردنەوەی ١٤ ڕۆژەی خۆڕایی کارایە: تەنها (${remainingDays}) ڕۆژ ماوە.`
-                : `14-Day Free Evaluation Active: ${remainingDays} days remaining.`}
+                ? `ماوەی تاقیکردنەوە: ${remainingDays} ڕۆژ ماوە`
+                : `Evaluation period: ${remainingDays} days remaining`}
+            </span>
+            <span className="text-slate-600 hidden sm:inline" aria-hidden="true">·</span>
+            <span className="text-slate-400 hidden sm:inline truncate">
+              {language === 'ku' ? 'مۆڵەتی بازرگانی بۆ بەردەوامبوون پێویستە' : 'Commercial license required after trial'}
             </span>
           </div>
 
-          <div className="flex items-center gap-2">
-            <span className="text-[11px] text-slate-300 hidden md:inline">
-              {language === 'ku' ? 'ئەم ئەپە پێویستی بە مۆڵەتی بەکارهێنانە' : 'Commercial license required after trial'}
-            </span>
-            <button
-              onClick={() => {
-                const triggerBtn = document.getElementById('system-license-header-btn');
-                if (triggerBtn) triggerBtn.click();
-              }}
-              className="px-2.5 py-1 rounded-xl bg-amber-400 hover:bg-amber-300 text-slate-950 font-black text-[11px] flex items-center gap-1 transition cursor-pointer shadow-xs"
-            >
-              <Key className="w-3 h-3" />
-              <span>{language === 'ku' ? 'داخڵکردنی کلیل' : 'Enter Key'}</span>
-            </button>
-          </div>
+          <button
+            onClick={() => {
+              const triggerBtn = document.getElementById('system-license-header-btn');
+              if (triggerBtn) triggerBtn.click();
+            }}
+            className="text-xs font-semibold text-white hover:text-slate-200 underline underline-offset-4 whitespace-nowrap shrink-0 cursor-pointer"
+          >
+            {language === 'ku' ? 'داخڵکردنی کلیل' : 'Enter License Key'}
+          </button>
         </div>
       )}
 
