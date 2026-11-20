@@ -1,0 +1,506 @@
+{
+  "entities": {
+    "AdminRecord": {
+      "title": "AdminRecord",
+      "description": "Platform administrator authorization record",
+      "type": "object",
+      "properties": {
+        "uid": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "email": {
+          "type": "string",
+          "format": "email",
+          "minLength": 3,
+          "maxLength": 160
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": ["uid", "email", "createdAt"]
+    },
+    "UserProfile": {
+      "title": "UserProfile",
+      "description": "Private authenticated user profile with isolated PII",
+      "type": "object",
+      "properties": {
+        "uid": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "email": {
+          "type": "string",
+          "format": "email",
+          "minLength": 3,
+          "maxLength": 160
+        },
+        "displayName": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 120
+        },
+        "photoURL": {
+          "type": "string",
+          "maxLength": 500
+        },
+        "defaultHoldingId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": ["uid", "email", "displayName", "defaultHoldingId", "createdAt", "updatedAt"]
+    },
+    "Holding": {
+      "title": "Holding",
+      "description": "Holding group enterprise root entity",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "ownerId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "name": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 160
+        },
+        "nameKu": {
+          "type": "string",
+          "maxLength": 160
+        },
+        "nameAr": {
+          "type": "string",
+          "maxLength": 160
+        },
+        "chairmanName": {
+          "type": "string",
+          "maxLength": 120
+        },
+        "chairmanEmail": {
+          "type": "string",
+          "maxLength": 160
+        },
+        "legalRegNo": {
+          "type": "string",
+          "maxLength": 80
+        },
+        "currency": {
+          "type": "string",
+          "enum": ["USD", "IQD"]
+        },
+        "totalRevenueUSD": {
+          "type": "number"
+        },
+        "totalExpensesUSD": {
+          "type": "number"
+        },
+        "logoUrl": {
+          "type": "string",
+          "maxLength": 600
+        },
+        "updatedBy": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": ["id", "ownerId", "name", "currency", "totalRevenueUSD", "totalExpensesUSD", "updatedBy", "createdAt", "updatedAt"]
+    },
+    "HoldingMember": {
+      "title": "HoldingMember",
+      "description": "Authorized team member inside a holding",
+      "type": "object",
+      "properties": {
+        "uid": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "holdingId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "email": {
+          "type": "string",
+          "format": "email",
+          "minLength": 3,
+          "maxLength": 160
+        },
+        "displayName": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 120
+        },
+        "role": {
+          "type": "string",
+          "enum": ["HOLDING_OWNER", "IT_ADMIN", "COMPANY_GM", "PROJECT_MANAGER", "FINANCE_HEAD", "WAREHOUSE_OFFICER", "EMPLOYEE"]
+        },
+        "status": {
+          "type": "string",
+          "enum": ["ACTIVE", "REVOKED"]
+        },
+        "addedBy": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": ["uid", "holdingId", "email", "displayName", "role", "status", "addedBy", "createdAt", "updatedAt"]
+    },
+    "Company": {
+      "title": "Company",
+      "description": "Subsidiary company under a holding group",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "holdingId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "ownerId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "code": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 40
+        },
+        "name": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 160
+        },
+        "nameKu": {
+          "type": "string",
+          "maxLength": 160
+        },
+        "nameAr": {
+          "type": "string",
+          "maxLength": 160
+        },
+        "sector": {
+          "type": "string",
+          "maxLength": 100
+        },
+        "generalManager": {
+          "type": "string",
+          "maxLength": 120
+        },
+        "gmPhone": {
+          "type": "string",
+          "maxLength": 40
+        },
+        "annualBudgetUSD": {
+          "type": "number"
+        },
+        "spentUSD": {
+          "type": "number"
+        },
+        "employeeCount": {
+          "type": "number"
+        },
+        "status": {
+          "type": "string",
+          "enum": ["ACTIVE", "INACTIVE", "ARCHIVED"]
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": ["id", "holdingId", "ownerId", "code", "name", "annualBudgetUSD", "spentUSD", "employeeCount", "status", "createdAt", "updatedAt"]
+    },
+    "Project": {
+      "title": "Project",
+      "description": "Operational project belonging to a subsidiary company",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "holdingId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "companyId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "ownerId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "code": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 40
+        },
+        "name": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 160
+        },
+        "nameKu": {
+          "type": "string",
+          "maxLength": 160
+        },
+        "nameAr": {
+          "type": "string",
+          "maxLength": 160
+        },
+        "location": {
+          "type": "string",
+          "maxLength": 160
+        },
+        "manager": {
+          "type": "string",
+          "maxLength": 120
+        },
+        "budgetUSD": {
+          "type": "number"
+        },
+        "spentUSD": {
+          "type": "number"
+        },
+        "progress": {
+          "type": "number"
+        },
+        "status": {
+          "type": "string",
+          "enum": ["PLANNING", "ACTIVE", "ON_HOLD", "COMPLETED"]
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": ["id", "holdingId", "companyId", "ownerId", "code", "name", "budgetUSD", "spentUSD", "progress", "status", "createdAt", "updatedAt"]
+    },
+    "PurchaseOrder": {
+      "title": "PurchaseOrder",
+      "description": "Procurement purchase order with executive approval workflow",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "holdingId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "companyId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "ownerId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "poNumber": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 60
+        },
+        "supplierName": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 160
+        },
+        "purpose": {
+          "type": "string",
+          "maxLength": 500
+        },
+        "totalAmountUSD": {
+          "type": "number"
+        },
+        "currency": {
+          "type": "string",
+          "enum": ["USD", "IQD"]
+        },
+        "requestedBy": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 120
+        },
+        "status": {
+          "type": "string",
+          "enum": ["DRAFT", "PENDING_GM_APPROVAL", "PENDING_OWNER_APPROVAL", "APPROVED_BY_OWNER", "REJECTED_BY_OWNER", "CLOSED"]
+        },
+        "ownerDecisionNote": {
+          "type": "string",
+          "maxLength": 400
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": ["id", "holdingId", "companyId", "ownerId", "poNumber", "supplierName", "totalAmountUSD", "currency", "requestedBy", "status", "createdAt", "updatedAt"]
+    },
+    "ActivityLog": {
+      "title": "ActivityLog",
+      "description": "Immutable executive and IT audit trail event",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "holdingId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "ownerId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "actorEmail": {
+          "type": "string",
+          "minLength": 3,
+          "maxLength": 160
+        },
+        "action": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 80
+        },
+        "summary": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 400
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": ["id", "holdingId", "ownerId", "actorEmail", "action", "summary", "createdAt"]
+    }
+  },
+  "firestore": {
+    "/admins/{adminId}": {
+      "schema": { "$ref": "#/entities/AdminRecord" },
+      "description": "Platform administrator authorization registry"
+    },
+    "/users/{userId}": {
+      "schema": { "$ref": "#/entities/UserProfile" },
+      "description": "Private user account profiles with isolated PII"
+    },
+    "/holdings/{holdingId}": {
+      "schema": { "$ref": "#/entities/Holding" },
+      "description": "Root holding group metadata and executive metrics"
+    },
+    "/holdings/{holdingId}/members/{memberId}": {
+      "schema": { "$ref": "#/entities/HoldingMember" },
+      "description": "Holding RBAC member roster controlling subcollection access"
+    },
+    "/holdings/{holdingId}/companies/{companyId}": {
+      "schema": { "$ref": "#/entities/Company" },
+      "description": "Subsidiary companies belonging to a holding group"
+    },
+    "/holdings/{holdingId}/projects/{projectId}": {
+      "schema": { "$ref": "#/entities/Project" },
+      "description": "Projects belonging to a holding group and subsidiary company"
+    },
+    "/holdings/{holdingId}/purchaseOrders/{poId}": {
+      "schema": { "$ref": "#/entities/PurchaseOrder" },
+      "description": "Purchase orders and executive approval decisions"
+    },
+    "/holdings/{holdingId}/activityLogs/{logId}": {
+      "schema": { "$ref": "#/entities/ActivityLog" },
+      "description": "Immutable holding audit log entries"
+    }
+  }
+}

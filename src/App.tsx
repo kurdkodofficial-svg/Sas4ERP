@@ -1,6 +1,8 @@
 import React from 'react';
 import { LanguageProvider } from './context/LanguageContext';
+import { FirebaseProvider } from './context/FirebaseContext';
 import { ERPProvider, useERP } from './context/ERPContext';
+import { FirebaseBridgeSync } from './components/FirebaseBridgeSync';
 import { EntryLicenseVerificationGate } from './components/EntryLicenseVerificationGate';
 import { Header } from './components/Header';
 import { Sidebar } from './components/Sidebar';
@@ -221,11 +223,14 @@ export function App() {
   return (
     <AppErrorBoundary>
       <LanguageProvider>
-        <ERPProvider>
-          <EntryLicenseVerificationGate>
-            <MainContent />
-          </EntryLicenseVerificationGate>
-        </ERPProvider>
+        <FirebaseProvider>
+          <ERPProvider>
+            <FirebaseBridgeSync />
+            <EntryLicenseVerificationGate>
+              <MainContent />
+            </EntryLicenseVerificationGate>
+          </ERPProvider>
+        </FirebaseProvider>
       </LanguageProvider>
     </AppErrorBoundary>
   );

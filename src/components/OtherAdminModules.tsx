@@ -58,6 +58,7 @@ import { HardwareAssetTrackingView } from './it/HardwareAssetTrackingView';
 import { HardwareMaintenanceView } from './it/HardwareMaintenanceView';
 import { AssetUtilizationDashboardView } from './it/AssetUtilizationDashboardView';
 import { HardwareAlertThresholdView } from './it/HardwareAlertThresholdView';
+import { FirebaseOneClickConnect } from './FirebaseOneClickConnect';
 
 // 1. Owner Approvals Dedicated View
 export const OwnerApprovalsView: React.FC = () => {
@@ -483,6 +484,9 @@ export const ItSystemsView: React.FC = () => {
 
   return (
     <div className="space-y-6 animate-in fade-in duration-200">
+      {/* 1-Click Official Firebase Cloud Database Card */}
+      <FirebaseOneClickConnect variant="card" />
+
       {/* Autonomous Holding & IT Control Center */}
       <div className="bg-white border border-slate-200 rounded-2xl p-5 sm:p-6 space-y-5">
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 border-b border-slate-100 pb-4">

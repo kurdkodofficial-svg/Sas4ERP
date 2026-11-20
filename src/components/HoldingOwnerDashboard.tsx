@@ -716,10 +716,10 @@ export const HoldingOwnerDashboard: React.FC = () => {
                       ar: 'اسم المالك غير محدد'
                     })}
                 </span>
-                {holding.legalRegNo && (
+                {holding.legalRegistration && (
                   <>
                     <span className="text-slate-300">·</span>
-                    <span className="font-mono text-slate-600">{holding.legalRegNo}</span>
+                    <span className="font-mono text-slate-600">{holding.legalRegistration}</span>
                   </>
                 )}
                 <span className="text-slate-300">·</span>

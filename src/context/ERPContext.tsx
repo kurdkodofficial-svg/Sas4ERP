@@ -423,6 +423,56 @@ interface ERPContextType {
   triggerForceSync: () => Promise<void>;
   holdingSyncKey: string;
   setHoldingSyncKey: (key: string) => void;
+  applyFirebaseSnapshot: (snapshot: {
+    holding?: {
+      name?: string;
+      nameKu?: string;
+      nameAr?: string;
+      chairmanName?: string;
+      legalRegNo?: string;
+      totalRevenueUSD?: number;
+      totalExpensesUSD?: number;
+      logoUrl?: string;
+    } | null;
+    companies?: {
+      id: string;
+      code: string;
+      name: string;
+      nameKu?: string;
+      nameAr?: string;
+      sector?: string;
+      generalManager?: string;
+      gmPhone?: string;
+      annualBudgetUSD: number;
+      spentUSD: number;
+      employeeCount: number;
+    }[];
+    projects?: {
+      id: string;
+      companyId: string;
+      code: string;
+      name: string;
+      nameKu?: string;
+      nameAr?: string;
+      location?: string;
+      manager?: string;
+      budgetUSD: number;
+      spentUSD: number;
+      progress: number;
+      status: 'PLANNING' | 'ACTIVE' | 'ON_HOLD' | 'COMPLETED';
+    }[];
+    purchaseOrders?: {
+      id: string;
+      companyId: string;
+      poNumber: string;
+      supplierName: string;
+      purpose?: string;
+      totalAmountUSD: number;
+      currency: 'USD' | 'IQD';
+      requestedBy: string;
+      status: string;
+    }[];
+  }) => void;
 }
 
 const ERPContext = createContext<ERPContextType | undefined>(undefined);
@@ -1371,6 +1421,215 @@ export const ERPProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setHoldingSyncKey(newKey);
     holdingCloudSyncService.setNodeProfile({ holdingKey: newKey });
   }, []);
+
+  const applyFirebaseSnapshot = useCallback(
+    (snapshot: {
+      holding?: {
+        name?: string;
+        nameKu?: string;
+        nameAr?: string;
+        chairmanName?: string;
+        legalRegNo?: string;
+        totalRevenueUSD?: number;
+        totalExpensesUSD?: number;
+        logoUrl?: string;
+      } | null;
+      companies?: {
+        id: string;
+        code: string;
+        name: string;
+        nameKu?: string;
+        nameAr?: string;
+        sector?: string;
+        generalManager?: string;
+        gmPhone?: string;
+        annualBudgetUSD: number;
+        spentUSD: number;
+        employeeCount: number;
+      }[];
+      projects?: {
+        id: string;
+        companyId: string;
+        code: string;
+        name: string;
+        nameKu?: string;
+        nameAr?: string;
+        location?: string;
+        manager?: string;
+        budgetUSD: number;
+        spentUSD: number;
+        progress: number;
+        status: 'PLANNING' | 'ACTIVE' | 'ON_HOLD' | 'COMPLETED';
+      }[];
+      purchaseOrders?: {
+        id: string;
+        companyId: string;
+        poNumber: string;
+        supplierName: string;
+        purpose?: string;
+        totalAmountUSD: number;
+        currency: 'USD' | 'IQD';
+        requestedBy: string;
+        status: string;
+      }[];
+    }) => {
+      if (snapshot.holding && typeof snapshot.holding === 'object') {
+        setHolding((prev) => ({
+          ...prev,
+          name: snapshot.holding?.name || prev.name,
+          nameKu: snapshot.holding?.nameKu ?? prev.nameKu,
+          nameAr: snapshot.holding?.nameAr ?? prev.nameAr,
+          chairmanName: snapshot.holding?.chairmanName ?? prev.chairmanName,
+          legalRegistration: snapshot.holding?.legalRegNo || prev.legalRegistration,
+          totalRevenueUSD:
+            typeof snapshot.holding?.totalRevenueUSD === 'number'
+              ? snapshot.holding.totalRevenueUSD
+              : prev.totalRevenueUSD,
+          totalExpensesUSD:
+            typeof snapshot.holding?.totalExpensesUSD === 'number'
+              ? snapshot.holding.totalExpensesUSD
+              : prev.totalExpensesUSD,
+          logoUrl: snapshot.holding?.logoUrl || prev.logoUrl,
+        }));
+      }
+
+      if (Array.isArray(snapshot.companies) && snapshot.companies.length > 0) {
+        setCompanies((prev) => {
+          const prevMap = new Map<string, Company>(prev.map((c) => [c.id, c]));
+          return snapshot.companies!.map((remote) => {
+            const id = remote.id || `comp-${Date.now()}`;
+            const existing = prevMap.get(id);
+            if (existing) {
+              return {
+                ...existing,
+                code: remote.code || existing.code,
+                name: remote.name || existing.name,
+                nameKu: remote.nameKu ?? existing.nameKu,
+                nameAr: remote.nameAr ?? existing.nameAr,
+                industry: remote.sector || existing.industry,
+                generalManager: remote.generalManager ?? existing.generalManager,
+                gmPhone: remote.gmPhone ?? existing.gmPhone,
+                annualBudgetUSD:
+                  typeof remote.annualBudgetUSD === 'number' ? remote.annualBudgetUSD : existing.annualBudgetUSD,
+                spentUSD: typeof remote.spentUSD === 'number' ? remote.spentUSD : existing.spentUSD,
+                employeeCount:
+                  typeof remote.employeeCount === 'number' ? remote.employeeCount : existing.employeeCount,
+              };
+            }
+            const newComp: Company = {
+              id,
+              code: remote.code || 'CMP',
+              name: remote.name || 'Subsidiary',
+              nameKu: remote.nameKu || remote.name || 'کۆمپانیا',
+              nameAr: remote.nameAr || remote.name || 'شركة',
+              industry: remote.sector || 'General',
+              generalManager: remote.generalManager || '',
+              gmPhone: remote.gmPhone || '',
+              gmEmail: '',
+              location: 'Erbil, KRI',
+              annualBudgetUSD: remote.annualBudgetUSD || 0,
+              spentUSD: remote.spentUSD || 0,
+              activeProjectsCount: 0,
+              employeeCount: remote.employeeCount || 0,
+              establishedDate: new Date().toISOString().split('T')[0],
+              color: 'blue',
+              iconName: 'Building2',
+              departments: generateDefaultDepartments('COMPANY', remote.name || 'Subsidiary', remote.generalManager || ''),
+            };
+            return newComp;
+          });
+        });
+      }
+
+      if (Array.isArray(snapshot.projects) && snapshot.projects.length > 0) {
+        setProjects((prev) => {
+          const prevMap = new Map<string, Project>(prev.map((p) => [p.id, p]));
+          return snapshot.projects!.map((remote) => {
+            const id = remote.id || `proj-${Date.now()}`;
+            const existing = prevMap.get(id);
+            if (existing) {
+              return {
+                ...existing,
+                companyId: remote.companyId || existing.companyId,
+                code: remote.code || existing.code,
+                name: remote.name || existing.name,
+                nameKu: remote.nameKu ?? existing.nameKu,
+                nameAr: remote.nameAr ?? existing.nameAr,
+                location: remote.location ?? existing.location,
+                manager: remote.manager || existing.manager,
+                budgetUSD: typeof remote.budgetUSD === 'number' ? remote.budgetUSD : existing.budgetUSD,
+                spentUSD: typeof remote.spentUSD === 'number' ? remote.spentUSD : existing.spentUSD,
+                progressPercentage:
+                  typeof remote.progress === 'number' ? remote.progress : existing.progressPercentage,
+                status: remote.status || existing.status,
+              };
+            }
+            const newProj: Project = {
+              id,
+              companyId: remote.companyId || 'comp-1',
+              code: remote.code || 'PRJ',
+              name: remote.name || 'Project',
+              nameKu: remote.nameKu || remote.name || 'پڕۆژە',
+              nameAr: remote.nameAr || remote.name || 'مشروع',
+              location: remote.location || 'Erbil',
+              manager: remote.manager || '',
+              managerPhone: '',
+              budgetUSD: remote.budgetUSD || 0,
+              spentUSD: remote.spentUSD || 0,
+              progressPercentage: remote.progress || 0,
+              engineersCount: 0,
+              workersCount: 0,
+              status: remote.status || 'ACTIVE',
+              startDate: new Date().toISOString().split('T')[0],
+              targetCompletionDate: new Date().toISOString().split('T')[0],
+              departments: generateDefaultDepartments('PROJECT', remote.name || 'Project', remote.manager || ''),
+            };
+            return newProj;
+          });
+        });
+      }
+
+      if (Array.isArray(snapshot.purchaseOrders) && snapshot.purchaseOrders.length > 0) {
+        setPurchaseOrders((prev) => {
+          const prevMap = new Map<string, PurchaseOrder>(prev.map((po) => [po.id, po]));
+          const updatedIds = new Set<string>();
+          const mergedRemote = snapshot.purchaseOrders!.map((remote) => {
+            const id = remote.id || `po-${Date.now()}`;
+            updatedIds.add(id);
+            const existing = prevMap.get(id);
+            if (existing) {
+              return {
+                ...existing,
+                status: (remote.status as POStatus) || existing.status,
+                totalAmountUSD:
+                  typeof remote.totalAmountUSD === 'number' ? remote.totalAmountUSD : existing.totalAmountUSD,
+              };
+            }
+            return {
+              id,
+              poNumber: remote.poNumber || 'PO-CLOUD',
+              companyId: remote.companyId || 'comp-1',
+              requestedBy: remote.requestedBy || 'Staff',
+              requesterRole: 'Procurement',
+              supplierName: remote.supplierName || 'Vendor',
+              items: [],
+              subtotalUSD: remote.totalAmountUSD || 0,
+              taxUSD: 0,
+              totalAmountUSD: remote.totalAmountUSD || 0,
+              currency: remote.currency === 'IQD' ? 'IQD' : 'USD',
+              purpose: remote.purpose || '',
+              originalLanguage: 'en',
+              createdDate: new Date().toISOString(),
+              status: (remote.status as POStatus) || 'PENDING_OWNER_APPROVAL',
+            } as PurchaseOrder;
+          });
+          const localOnly = prev.filter((po) => !updatedIds.has(po.id));
+          return [...mergedRemote, ...localOnly];
+        });
+      }
+    },
+    []
+  );
 
   useEffect(() => {
     // 1. Subscribe to sync status updates
@@ -4726,6 +4985,7 @@ export const ERPProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         triggerForceSync,
         holdingSyncKey,
         setHoldingSyncKey: handleUpdateHoldingSyncKey,
+        applyFirebaseSnapshot,
       }}
     >
       {children}

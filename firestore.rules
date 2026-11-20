@@ -1,0 +1,508 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Pillar 0: Global Safety Net (Default-Deny)
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // =========================================================================
+    // Phase 3: Global Hardened Primitives
+    // =========================================================================
+
+    function isValidId(id) {
+      return id is string && id.size() >= 1 && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isVerified() {
+      return isSignedIn() && request.auth.token.email_verified == true;
+    }
+
+    function isBootstrappedAdmin() {
+      return isVerified() && request.auth.token.email == 'kurdkodofficial@gmail.com';
+    }
+
+    function isAdmin() {
+      return isBootstrappedAdmin() || (
+        isVerified() && exists(/databases/$(database)/documents/admins/$(request.auth.uid))
+      );
+    }
+
+    function isOptionalString(data, key, maxLen) {
+      return !(key in data) || (data[key] is string && data[key].size() <= maxLen);
+    }
+
+    function holdingExists(holdingId) {
+      return exists(/databases/$(database)/documents/holdings/$(holdingId));
+    }
+
+    function isHoldingOwner(holdingId) {
+      return holdingExists(holdingId) &&
+        get(/databases/$(database)/documents/holdings/$(holdingId)).data.ownerId == request.auth.uid;
+    }
+
+    function isActiveHoldingMember(holdingId) {
+      return holdingExists(holdingId) &&
+        exists(/databases/$(database)/documents/holdings/$(holdingId)/members/$(request.auth.uid)) &&
+        get(/databases/$(database)/documents/holdings/$(holdingId)/members/$(request.auth.uid)).data.status == 'ACTIVE';
+    }
+
+    function isHoldingManager(holdingId) {
+      return isAdmin() || isHoldingOwner(holdingId) || (
+        isActiveHoldingMember(holdingId) &&
+        get(/databases/$(database)/documents/holdings/$(holdingId)/members/$(request.auth.uid)).data.role in ['HOLDING_OWNER', 'IT_ADMIN']
+      );
+    }
+
+    // =========================================================================
+    // Pillar 2: Standalone Validation Blueprints (Synced to firebase-blueprint.json)
+    // =========================================================================
+
+    function isValidAdminRecord(data, adminId) {
+      return data.keys().hasAll(['uid', 'email', 'createdAt']) &&
+        data.keys().hasOnly(['uid', 'email', 'createdAt']) &&
+        isValidId(data.uid) &&
+        data.uid == adminId &&
+        data.email is string && data.email.size() >= 3 && data.email.size() <= 160 &&
+        data.createdAt is timestamp;
+    }
+
+    function isValidUserProfile(data, userId) {
+      return data.keys().hasAll(['uid', 'email', 'displayName', 'defaultHoldingId', 'createdAt', 'updatedAt']) &&
+        data.keys().hasOnly(['uid', 'email', 'displayName', 'photoURL', 'defaultHoldingId', 'createdAt', 'updatedAt']) &&
+        isValidId(data.uid) &&
+        data.uid == userId &&
+        data.email is string && data.email.size() >= 3 && data.email.size() <= 160 &&
+        data.displayName is string && data.displayName.size() >= 1 && data.displayName.size() <= 120 &&
+        isOptionalString(data, 'photoURL', 500) &&
+        isValidId(data.defaultHoldingId) &&
+        data.createdAt is timestamp &&
+        data.updatedAt is timestamp;
+    }
+
+    function isValidHolding(data, holdingId) {
+      return data.keys().hasAll(['id', 'ownerId', 'name', 'currency', 'totalRevenueUSD', 'totalExpensesUSD', 'updatedBy', 'createdAt', 'updatedAt']) &&
+        data.keys().hasOnly(['id', 'ownerId', 'name', 'nameKu', 'nameAr', 'chairmanName', 'chairmanEmail', 'legalRegNo', 'currency', 'totalRevenueUSD', 'totalExpensesUSD', 'logoUrl', 'updatedBy', 'createdAt', 'updatedAt']) &&
+        isValidId(data.id) &&
+        data.id == holdingId &&
+        isValidId(data.ownerId) &&
+        data.name is string && data.name.size() >= 1 && data.name.size() <= 160 &&
+        isOptionalString(data, 'nameKu', 160) &&
+        isOptionalString(data, 'nameAr', 160) &&
+        isOptionalString(data, 'chairmanName', 120) &&
+        isOptionalString(data, 'chairmanEmail', 160) &&
+        isOptionalString(data, 'legalRegNo', 80) &&
+        data.currency in ['USD', 'IQD'] &&
+        data.totalRevenueUSD is number && data.totalRevenueUSD >= 0 &&
+        data.totalExpensesUSD is number && data.totalExpensesUSD >= 0 &&
+        isOptionalString(data, 'logoUrl', 600) &&
+        isValidId(data.updatedBy) &&
+        data.createdAt is timestamp &&
+        data.updatedAt is timestamp;
+    }
+
+    function isValidHoldingMember(data, holdingId, memberId) {
+      return data.keys().hasAll(['uid', 'holdingId', 'email', 'displayName', 'role', 'status', 'addedBy', 'createdAt', 'updatedAt']) &&
+        data.keys().hasOnly(['uid', 'holdingId', 'email', 'displayName', 'role', 'status', 'addedBy', 'createdAt', 'updatedAt']) &&
+        isValidId(data.uid) &&
+        data.uid == memberId &&
+        isValidId(data.holdingId) &&
+        data.holdingId == holdingId &&
+        data.email is string && data.email.size() >= 3 && data.email.size() <= 160 &&
+        data.displayName is string && data.displayName.size() >= 1 && data.displayName.size() <= 120 &&
+        data.role in ['HOLDING_OWNER', 'IT_ADMIN', 'COMPANY_GM', 'PROJECT_MANAGER', 'FINANCE_HEAD', 'WAREHOUSE_OFFICER', 'EMPLOYEE'] &&
+        data.status in ['ACTIVE', 'REVOKED'] &&
+        isValidId(data.addedBy) &&
+        data.createdAt is timestamp &&
+        data.updatedAt is timestamp;
+    }
+
+    function isValidCompany(data, holdingId, companyId) {
+      return data.keys().hasAll(['id', 'holdingId', 'ownerId', 'code', 'name', 'annualBudgetUSD', 'spentUSD', 'employeeCount', 'status', 'createdAt', 'updatedAt']) &&
+        data.keys().hasOnly(['id', 'holdingId', 'ownerId', 'code', 'name', 'nameKu', 'nameAr', 'sector', 'generalManager', 'gmPhone', 'annualBudgetUSD', 'spentUSD', 'employeeCount', 'status', 'createdAt', 'updatedAt']) &&
+        isValidId(data.id) &&
+        data.id == companyId &&
+        isValidId(data.holdingId) &&
+        data.holdingId == holdingId &&
+        isValidId(data.ownerId) &&
+        data.code is string && data.code.size() >= 1 && data.code.size() <= 40 &&
+        data.name is string && data.name.size() >= 1 && data.name.size() <= 160 &&
+        isOptionalString(data, 'nameKu', 160) &&
+        isOptionalString(data, 'nameAr', 160) &&
+        isOptionalString(data, 'sector', 100) &&
+        isOptionalString(data, 'generalManager', 120) &&
+        isOptionalString(data, 'gmPhone', 40) &&
+        data.annualBudgetUSD is number && data.annualBudgetUSD >= 0 &&
+        data.spentUSD is number && data.spentUSD >= 0 &&
+        data.employeeCount is number && data.employeeCount >= 0 &&
+        data.status in ['ACTIVE', 'INACTIVE', 'ARCHIVED'] &&
+        data.createdAt is timestamp &&
+        data.updatedAt is timestamp;
+    }
+
+    function isValidProject(data, holdingId, projectId) {
+      return data.keys().hasAll(['id', 'holdingId', 'companyId', 'ownerId', 'code', 'name', 'budgetUSD', 'spentUSD', 'progress', 'status', 'createdAt', 'updatedAt']) &&
+        data.keys().hasOnly(['id', 'holdingId', 'companyId', 'ownerId', 'code', 'name', 'nameKu', 'nameAr', 'location', 'manager', 'budgetUSD', 'spentUSD', 'progress', 'status', 'createdAt', 'updatedAt']) &&
+        isValidId(data.id) &&
+        data.id == projectId &&
+        isValidId(data.holdingId) &&
+        data.holdingId == holdingId &&
+        isValidId(data.companyId) &&
+        isValidId(data.ownerId) &&
+        data.code is string && data.code.size() >= 1 && data.code.size() <= 40 &&
+        data.name is string && data.name.size() >= 1 && data.name.size() <= 160 &&
+        isOptionalString(data, 'nameKu', 160) &&
+        isOptionalString(data, 'nameAr', 160) &&
+        isOptionalString(data, 'location', 160) &&
+        isOptionalString(data, 'manager', 120) &&
+        data.budgetUSD is number && data.budgetUSD >= 0 &&
+        data.spentUSD is number && data.spentUSD >= 0 &&
+        data.progress is number && data.progress >= 0 && data.progress <= 100 &&
+        data.status in ['PLANNING', 'ACTIVE', 'ON_HOLD', 'COMPLETED'] &&
+        data.createdAt is timestamp &&
+        data.updatedAt is timestamp;
+    }
+
+    function isValidPurchaseOrder(data, holdingId, poId) {
+      return data.keys().hasAll(['id', 'holdingId', 'companyId', 'ownerId', 'poNumber', 'supplierName', 'totalAmountUSD', 'currency', 'requestedBy', 'status', 'createdAt', 'updatedAt']) &&
+        data.keys().hasOnly(['id', 'holdingId', 'companyId', 'ownerId', 'poNumber', 'supplierName', 'purpose', 'totalAmountUSD', 'currency', 'requestedBy', 'status', 'ownerDecisionNote', 'createdAt', 'updatedAt']) &&
+        isValidId(data.id) &&
+        data.id == poId &&
+        isValidId(data.holdingId) &&
+        data.holdingId == holdingId &&
+        isValidId(data.companyId) &&
+        isValidId(data.ownerId) &&
+        data.poNumber is string && data.poNumber.size() >= 1 && data.poNumber.size() <= 60 &&
+        data.supplierName is string && data.supplierName.size() >= 1 && data.supplierName.size() <= 160 &&
+        isOptionalString(data, 'purpose', 500) &&
+        data.totalAmountUSD is number && data.totalAmountUSD >= 0 &&
+        data.currency in ['USD', 'IQD'] &&
+        data.requestedBy is string && data.requestedBy.size() >= 1 && data.requestedBy.size() <= 120 &&
+        data.status in ['DRAFT', 'PENDING_GM_APPROVAL', 'PENDING_OWNER_APPROVAL', 'APPROVED_BY_OWNER', 'REJECTED_BY_OWNER', 'CLOSED'] &&
+        isOptionalString(data, 'ownerDecisionNote', 400) &&
+        data.createdAt is timestamp &&
+        data.updatedAt is timestamp;
+    }
+
+    function isValidActivityLog(data, holdingId, logId) {
+      return data.keys().hasAll(['id', 'holdingId', 'ownerId', 'actorEmail', 'action', 'summary', 'createdAt']) &&
+        data.keys().hasOnly(['id', 'holdingId', 'ownerId', 'actorEmail', 'action', 'summary', 'createdAt']) &&
+        isValidId(data.id) &&
+        data.id == logId &&
+        isValidId(data.holdingId) &&
+        data.holdingId == holdingId &&
+        isValidId(data.ownerId) &&
+        data.actorEmail is string && data.actorEmail.size() >= 3 && data.actorEmail.size() <= 160 &&
+        data.action is string && data.action.size() >= 1 && data.action.size() <= 80 &&
+        data.summary is string && data.summary.size() >= 1 && data.summary.size() <= 400 &&
+        data.createdAt is timestamp;
+    }
+
+    // =========================================================================
+    // Collection 1: /admins/{adminId}
+    // =========================================================================
+    match /admins/{adminId} {
+      allow get: if isVerified() && isValidId(adminId) && (request.auth.uid == adminId || isAdmin());
+      allow list: if isVerified() && resource.data.uid == request.auth.uid;
+      allow create: if isVerified() && isValidId(adminId) &&
+        isValidAdminRecord(incoming(), adminId) &&
+        incoming().createdAt == request.time &&
+        isBootstrappedAdmin();
+      allow update: if false;
+      allow delete: if isVerified() && isValidId(adminId) && isBootstrappedAdmin();
+    }
+
+    // =========================================================================
+    // Collection 2: /users/{userId} (PII Isolated)
+    // =========================================================================
+    match /users/{userId} {
+      allow get: if isVerified() && isValidId(userId) && (request.auth.uid == userId || isAdmin());
+      allow list: if isVerified() && resource.data.uid == request.auth.uid;
+
+      allow create: if isVerified() && isValidId(userId) &&
+        isValidUserProfile(incoming(), userId) &&
+        incoming().uid == request.auth.uid &&
+        incoming().email == request.auth.token.email &&
+        incoming().createdAt == request.time &&
+        incoming().updatedAt == request.time;
+
+      allow update: if isVerified() && isValidId(userId) &&
+        isValidUserProfile(incoming(), userId) &&
+        incoming().uid == existing().uid &&
+        incoming().email == existing().email &&
+        incoming().createdAt == existing().createdAt &&
+        incoming().updatedAt == request.time && (
+          isAdmin() || (
+            request.auth.uid == userId &&
+            incoming().diff(existing()).affectedKeys().hasOnly(['displayName', 'photoURL', 'defaultHoldingId', 'updatedAt'])
+          )
+        );
+
+      allow delete: if isVerified() && isValidId(userId) && isAdmin();
+    }
+
+    // =========================================================================
+    // Collection 3: /holdings/{holdingId}
+    // =========================================================================
+    match /holdings/{holdingId} {
+      allow get: if isVerified() && isValidId(holdingId) && (
+        existing().ownerId == request.auth.uid ||
+        isAdmin() ||
+        isActiveHoldingMember(holdingId)
+      );
+
+      allow list: if isVerified() && (
+        resource.data.ownerId == request.auth.uid ||
+        isBootstrappedAdmin()
+      );
+
+      allow create: if isVerified() && isValidId(holdingId) &&
+        isValidHolding(incoming(), holdingId) &&
+        incoming().ownerId == request.auth.uid &&
+        incoming().updatedBy == request.auth.uid &&
+        incoming().createdAt == request.time &&
+        incoming().updatedAt == request.time;
+
+      allow update: if isVerified() && isValidId(holdingId) &&
+        isValidHolding(incoming(), holdingId) &&
+        incoming().id == existing().id &&
+        incoming().ownerId == existing().ownerId &&
+        incoming().createdAt == existing().createdAt &&
+        incoming().updatedAt == request.time &&
+        incoming().updatedBy == request.auth.uid && (
+          isAdmin() || (
+            existing().ownerId == request.auth.uid &&
+            incoming().diff(existing()).affectedKeys().hasOnly([
+              'name', 'nameKu', 'nameAr', 'chairmanName', 'chairmanEmail',
+              'legalRegNo', 'currency', 'totalRevenueUSD', 'totalExpensesUSD',
+              'logoUrl', 'updatedBy', 'updatedAt'
+            ])
+          )
+        );
+
+      allow delete: if isVerified() && isValidId(holdingId) && (
+        existing().ownerId == request.auth.uid || isAdmin()
+      );
+
+      // -----------------------------------------------------------------------
+      // Subcollection 3a: /holdings/{holdingId}/members/{memberId}
+      // -----------------------------------------------------------------------
+      match /members/{memberId} {
+        allow get: if isVerified() && isValidId(holdingId) && isValidId(memberId) && (
+          request.auth.uid == memberId || isHoldingManager(holdingId)
+        );
+
+        allow list: if isVerified() && (
+          resource.data.uid == request.auth.uid ||
+          resource.data.addedBy == request.auth.uid ||
+          isBootstrappedAdmin()
+        );
+
+        allow create: if isVerified() && isValidId(holdingId) && isValidId(memberId) &&
+          isValidHoldingMember(incoming(), holdingId, memberId) &&
+          incoming().addedBy == request.auth.uid &&
+          incoming().createdAt == request.time &&
+          incoming().updatedAt == request.time &&
+          holdingExists(holdingId) &&
+          isHoldingManager(holdingId);
+
+        allow update: if isVerified() && isValidId(holdingId) && isValidId(memberId) &&
+          isValidHoldingMember(incoming(), holdingId, memberId) &&
+          incoming().uid == existing().uid &&
+          incoming().holdingId == existing().holdingId &&
+          incoming().addedBy == existing().addedBy &&
+          incoming().createdAt == existing().createdAt &&
+          incoming().updatedAt == request.time && (
+            isAdmin() || (
+              isHoldingManager(holdingId) &&
+              incoming().diff(existing()).affectedKeys().hasOnly(['displayName', 'role', 'status', 'updatedAt'])
+            )
+          );
+
+        allow delete: if isVerified() && isValidId(holdingId) && isValidId(memberId) &&
+          isHoldingManager(holdingId);
+      }
+
+      // -----------------------------------------------------------------------
+      // Subcollection 3b: /holdings/{holdingId}/companies/{companyId}
+      // -----------------------------------------------------------------------
+      match /companies/{companyId} {
+        allow get: if isVerified() && isValidId(holdingId) && isValidId(companyId) && (
+          existing().ownerId == request.auth.uid ||
+          isAdmin() ||
+          isActiveHoldingMember(holdingId)
+        );
+
+        allow list: if isVerified() && (
+          resource.data.ownerId == request.auth.uid ||
+          isBootstrappedAdmin()
+        );
+
+        allow create: if isVerified() && isValidId(holdingId) && isValidId(companyId) &&
+          isValidCompany(incoming(), holdingId, companyId) &&
+          incoming().ownerId == request.auth.uid &&
+          incoming().createdAt == request.time &&
+          incoming().updatedAt == request.time &&
+          holdingExists(holdingId) &&
+          isHoldingManager(holdingId);
+
+        allow update: if isVerified() && isValidId(holdingId) && isValidId(companyId) &&
+          isValidCompany(incoming(), holdingId, companyId) &&
+          incoming().id == existing().id &&
+          incoming().holdingId == existing().holdingId &&
+          incoming().ownerId == existing().ownerId &&
+          incoming().createdAt == existing().createdAt &&
+          incoming().updatedAt == request.time && (
+            isAdmin() || (
+              isHoldingManager(holdingId) &&
+              incoming().diff(existing()).affectedKeys().hasOnly([
+                'code', 'name', 'nameKu', 'nameAr', 'sector', 'generalManager',
+                'gmPhone', 'annualBudgetUSD', 'spentUSD', 'employeeCount', 'status', 'updatedAt'
+              ])
+            )
+          );
+
+        allow delete: if isVerified() && isValidId(holdingId) && isValidId(companyId) &&
+          isHoldingManager(holdingId);
+      }
+
+      // -----------------------------------------------------------------------
+      // Subcollection 3c: /holdings/{holdingId}/projects/{projectId}
+      // -----------------------------------------------------------------------
+      match /projects/{projectId} {
+        allow get: if isVerified() && isValidId(holdingId) && isValidId(projectId) && (
+          existing().ownerId == request.auth.uid ||
+          isAdmin() ||
+          isActiveHoldingMember(holdingId)
+        );
+
+        allow list: if isVerified() && (
+          resource.data.ownerId == request.auth.uid ||
+          isBootstrappedAdmin()
+        );
+
+        allow create: if isVerified() && isValidId(holdingId) && isValidId(projectId) &&
+          isValidProject(incoming(), holdingId, projectId) &&
+          incoming().ownerId == request.auth.uid &&
+          incoming().createdAt == request.time &&
+          incoming().updatedAt == request.time &&
+          holdingExists(holdingId) &&
+          isHoldingManager(holdingId);
+
+        allow update: if isVerified() && isValidId(holdingId) && isValidId(projectId) &&
+          isValidProject(incoming(), holdingId, projectId) &&
+          incoming().id == existing().id &&
+          incoming().holdingId == existing().holdingId &&
+          incoming().ownerId == existing().ownerId &&
+          incoming().createdAt == existing().createdAt &&
+          incoming().updatedAt == request.time && (
+            isAdmin() || (
+              isHoldingManager(holdingId) &&
+              incoming().diff(existing()).affectedKeys().hasOnly([
+                'companyId', 'code', 'name', 'nameKu', 'nameAr', 'location',
+                'manager', 'budgetUSD', 'spentUSD', 'progress', 'status', 'updatedAt'
+              ])
+            ) || (
+              isActiveHoldingMember(holdingId) &&
+              incoming().diff(existing()).affectedKeys().hasOnly(['progress', 'spentUSD', 'updatedAt'])
+            )
+          );
+
+        allow delete: if isVerified() && isValidId(holdingId) && isValidId(projectId) &&
+          isHoldingManager(holdingId);
+      }
+
+      // -----------------------------------------------------------------------
+      // Subcollection 3d: /holdings/{holdingId}/purchaseOrders/{poId}
+      // -----------------------------------------------------------------------
+      match /purchaseOrders/{poId} {
+        allow get: if isVerified() && isValidId(holdingId) && isValidId(poId) && (
+          existing().ownerId == request.auth.uid ||
+          isAdmin() ||
+          isActiveHoldingMember(holdingId)
+        );
+
+        allow list: if isVerified() && (
+          resource.data.ownerId == request.auth.uid ||
+          isBootstrappedAdmin()
+        );
+
+        allow create: if isVerified() && isValidId(holdingId) && isValidId(poId) &&
+          isValidPurchaseOrder(incoming(), holdingId, poId) &&
+          incoming().ownerId == request.auth.uid &&
+          incoming().createdAt == request.time &&
+          incoming().updatedAt == request.time &&
+          holdingExists(holdingId) &&
+          (isHoldingManager(holdingId) || isActiveHoldingMember(holdingId));
+
+        allow update: if isVerified() && isValidId(holdingId) && isValidId(poId) &&
+          isValidPurchaseOrder(incoming(), holdingId, poId) &&
+          incoming().id == existing().id &&
+          incoming().holdingId == existing().holdingId &&
+          incoming().ownerId == existing().ownerId &&
+          incoming().createdAt == existing().createdAt &&
+          incoming().updatedAt == request.time && (
+            isAdmin() || (
+              !(existing().status in ['APPROVED_BY_OWNER', 'REJECTED_BY_OWNER', 'CLOSED']) && (
+                (
+                  isHoldingManager(holdingId) &&
+                  incoming().diff(existing()).affectedKeys().hasOnly(['status', 'ownerDecisionNote', 'updatedAt'])
+                ) || (
+                  isHoldingManager(holdingId) &&
+                  existing().status == 'DRAFT' &&
+                  incoming().diff(existing()).affectedKeys().hasOnly([
+                    'supplierName', 'purpose', 'totalAmountUSD', 'currency', 'status', 'updatedAt'
+                  ])
+                )
+              )
+            )
+          );
+
+        allow delete: if isVerified() && isValidId(holdingId) && isValidId(poId) &&
+          isHoldingManager(holdingId) &&
+          !(existing().status in ['APPROVED_BY_OWNER', 'CLOSED']);
+      }
+
+      // -----------------------------------------------------------------------
+      // Subcollection 3e: /holdings/{holdingId}/activityLogs/{logId}
+      // -----------------------------------------------------------------------
+      match /activityLogs/{logId} {
+        allow get: if isVerified() && isValidId(holdingId) && isValidId(logId) && (
+          existing().ownerId == request.auth.uid ||
+          isAdmin() ||
+          isActiveHoldingMember(holdingId)
+        );
+
+        allow list: if isVerified() && (
+          resource.data.ownerId == request.auth.uid ||
+          isBootstrappedAdmin()
+        );
+
+        allow create: if isVerified() && isValidId(holdingId) && isValidId(logId) &&
+          isValidActivityLog(incoming(), holdingId, logId) &&
+          incoming().ownerId == request.auth.uid &&
+          incoming().actorEmail == request.auth.token.email &&
+          incoming().createdAt == request.time &&
+          holdingExists(holdingId) &&
+          (isHoldingManager(holdingId) || isActiveHoldingMember(holdingId));
+
+        allow update: if false;
+        allow delete: if isVerified() && isValidId(holdingId) && isValidId(logId) && isAdmin();
+      }
+    }
+  }
+}

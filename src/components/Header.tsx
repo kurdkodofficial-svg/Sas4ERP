@@ -42,6 +42,7 @@ import { KelegramApp } from './kelegram/KelegramApp';
 import { checkIsMasterVendorOwner, checkIsHoldingOrItAdmin } from '../utils/rbacPermissions';
 import { PLATFORM_VENDOR_OWNER_PROFILE } from '../data/initialData';
 import { getApiUrl } from '../utils/apiConfig';
+import { FirebaseOneClickConnect } from './FirebaseOneClickConnect';
 
 export const Header: React.FC = () => {
   const {
@@ -319,6 +320,9 @@ export const Header: React.FC = () => {
               <span>{language === 'ku' ? 'سیستەمی ٢ (خاوەن سەکۆ)' : 'System 2 (Vendor)'}</span>
             </button>
           )}
+
+          {/* 1-Click Firebase Cloud Connect & Real-Time Sync */}
+          <FirebaseOneClickConnect variant="header" />
 
           {/* Pending Owner Approvals Quick Counter (Clean semantic indicator when > 0) */}
           {!isMasterVendorOwner && pendingApprovalsCount > 0 && (
